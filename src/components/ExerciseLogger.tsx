@@ -10,7 +10,7 @@ import { TrendBadge } from "@/components/TrendBadge";
 import { Card, ErrorMessage, cx } from "@/components/ui";
 import type { TrackingMode } from "@/db/schema";
 import { describeSet } from "@/lib/describe";
-import { formatDuration, formatKg } from "@/lib/format";
+import { formatDuration, formatKg, parseDurationInput } from "@/lib/format";
 import type { FormState } from "@/lib/result";
 import { compareSets, setVolume } from "@/lib/training";
 
@@ -64,6 +64,9 @@ function Stepper({
   max,
   name,
   suffix,
+  format = formatValue,
+  parse = toNumber,
+  inputMode = "decimal",
 }: {
   label: string;
   value: string;
@@ -73,10 +76,19 @@ function Stepper({
   max: number;
   name: string;
   suffix?: string;
+  /** Wie der Wert nach einem +/- Klick angezeigt wird. Default: Gewichts-Notation. */
+  format?: (value: number) => string;
+  /** Wie der angezeigte Text in eine Zahl übersetzt wird. Default: Dezimalzahl. */
+  parse?: (value: string) => number;
+  /**
+   * "decimal" blendet auf dem Handy die Doppelpunkt-Taste aus – für "mm:ss"
+   * (Dauer) braucht es deshalb die normale Texttastatur.
+   */
+  inputMode?: "decimal" | "text";
 }) {
   const nudge = (direction: 1 | -1) => {
-    const next = Math.min(max, Math.max(min, toNumber(value) + direction * step));
-    onChange(formatValue(next));
+    const next = Math.min(max, Math.max(min, parse(value) + direction * step));
+    onChange(format(next));
   };
 
   const buttonClass =
@@ -101,7 +113,7 @@ function Stepper({
           value={value}
           onChange={(event) => onChange(event.target.value)}
           onFocus={(event) => event.target.select()}
-          inputMode="decimal"
+          inputMode={inputMode}
           enterKeyHint="done"
           aria-label={label}
           className="h-12 w-full min-w-0 rounded-xl border border-line bg-surface-2 px-2 text-center text-lg font-semibold tnum text-fg focus:border-accent focus:outline-none"
@@ -167,7 +179,7 @@ export function ExerciseLogger({
           target?.targetRepsMin ??
           10,
       ),
-      duration: String(
+      duration: formatDuration(
         previousSameSet?.durationSeconds ??
           lastThisSession?.durationSeconds ??
           target?.targetDurationSeconds ??
@@ -317,17 +329,33 @@ export function ExerciseLogger({
       <form action={formAction} className="mt-4">
         <input type="hidden" name="exerciseId" value={exercise.id} />
 
-        <div className="grid grid-cols-2 gap-3">
-          {isTimed ? (
+        {isTimed ? (
+          // Eigene Zeile für die Dauer: "20:00" oder "1:05:30" braucht mehr
+          // Platz, als eine von zwei Spalten hergibt - in der 2-Spalten-Reihe
+          // wurde der Text zuvor abgeschnitten.
+          <div className="space-y-3">
             <Stepper
-              label="Dauer (Sekunden)"
+              label="Dauer (Min:Sek)"
               name="durationSeconds"
               value={duration}
               onChange={setDuration}
-              step={5}
+              step={15}
               max={36_000}
+              format={formatDuration}
+              parse={parseDurationInput}
+              inputMode="text"
             />
-          ) : (
+            <Stepper
+              label="Zusatzgewicht (kg)"
+              name="weightKg"
+              value={weight}
+              onChange={setWeight}
+              step={exercise.weightStepKg}
+              max={1000}
+            />
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
             <Stepper
               label={
                 exercise.trackingMode === "bodyweight_reps"
@@ -347,18 +375,6 @@ export function ExerciseLogger({
                   : undefined
               }
             />
-          )}
-
-          {isTimed ? (
-            <Stepper
-              label="Zusatzgewicht (kg)"
-              name="weightKg"
-              value={weight}
-              onChange={setWeight}
-              step={exercise.weightStepKg}
-              max={1000}
-            />
-          ) : (
             <Stepper
               label="Wiederholungen"
               name="reps"
@@ -372,8 +388,8 @@ export function ExerciseLogger({
                   : undefined
               }
             />
-          )}
-        </div>
+          </div>
+        )}
 
         {isTimed ? null : <input type="hidden" name="durationSeconds" value="" />}
 

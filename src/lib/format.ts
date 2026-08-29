@@ -21,6 +21,24 @@ export function formatDuration(seconds: number): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
+/**
+ * Gegenstück zu formatDuration: "10:30" → 630, aber auch reine Sekunden wie
+ * "45" bleiben gültig – ein 45-Sekunden-Plank tippt man eher als "45" statt
+ * "0:45". Wird sowohl im Browser (Dauer-Stepper) als auch serverseitig beim
+ * Validieren des abgesendeten Formulars verwendet.
+ */
+export function parseDurationInput(value: string): number {
+  const trimmed = value.trim();
+  if (trimmed.includes(":")) {
+    const [minutePart, secondPart = "0"] = trimmed.split(":");
+    const minutes = Number(minutePart.replace(",", ".")) || 0;
+    const seconds = Number(secondPart.replace(",", ".")) || 0;
+    return Math.max(0, minutes * 60 + seconds);
+  }
+  const parsed = Number(trimmed.replace(",", "."));
+  return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+}
+
 /** Kurze Dauer für Fließtext: "1 h 12 min". */
 export function formatDurationLong(seconds: number): string {
   const total = Math.max(0, Math.round(seconds));

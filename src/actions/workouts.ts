@@ -8,6 +8,7 @@ import { z } from "zod";
 import { db } from "@/db";
 import { exercises, plans, workouts, workoutSets } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
+import { parseDurationInput } from "@/lib/format";
 import { optionalText, text } from "@/lib/formdata";
 import { newId } from "@/lib/ids";
 import { getActiveWorkout } from "@/lib/queries";
@@ -21,11 +22,17 @@ const decimal = z.preprocess((value) => {
   return normalized === "" ? 0 : Number(normalized);
 }, z.number());
 
+/** Akzeptiert "mm:ss" (z. B. "10:30") genauso wie reine Sekunden ("45"). */
+const duration = z.preprocess((value) => {
+  if (typeof value !== "string") return value;
+  return Math.round(parseDurationInput(value));
+}, z.number());
+
 const setInput = z.object({
   exerciseId: z.string().min(1),
   weightKg: decimal.pipe(z.number().min(0).max(1000)),
   reps: decimal.pipe(z.number().int().min(0).max(500)),
-  durationSeconds: decimal.pipe(z.number().int().min(0).max(36_000)).optional(),
+  durationSeconds: duration.pipe(z.number().int().min(0).max(36_000)).optional(),
   isWarmup: z.coerce.boolean().optional(),
 });
 
