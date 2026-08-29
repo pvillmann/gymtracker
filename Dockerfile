@@ -3,8 +3,12 @@
 # --- Abhängigkeiten -----------------------------------------------------------
 FROM node:22-bookworm-slim AS deps
 WORKDIR /app
+# better-sqlite3 kompiliert sich bei Bedarf selbst gegen die Node-ABI dieses
+# Images – ohne Compiler bricht "npm ci" mit einem node-gyp-Fehler ab.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      python3 make g++ \
+    && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json ./
-# better-sqlite3 bringt fertige Linux-Binaries mit, es wird nichts kompiliert.
 RUN npm ci
 
 # --- Build --------------------------------------------------------------------

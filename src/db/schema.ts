@@ -97,6 +97,8 @@ export const planExercises = sqliteTable(
     targetSets: integer("target_sets").notNull().default(3),
     targetRepsMin: integer("target_reps_min").notNull().default(8),
     targetRepsMax: integer("target_reps_max").notNull().default(12),
+    /** Nur relevant, wenn die Übung im Zeit-Modus getrackt wird. */
+    targetDurationSeconds: integer("target_duration_seconds"),
     restSeconds: integer("rest_seconds").notNull().default(90),
     notes: text("notes"),
   },

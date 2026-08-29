@@ -86,6 +86,7 @@ export type PlanItem = {
   targetSets: number;
   targetRepsMin: number;
   targetRepsMax: number;
+  targetDurationSeconds: number | null;
   restSeconds: number;
   notes: string | null;
   exerciseName: string;
@@ -104,6 +105,7 @@ export async function listPlanItems(planId: string): Promise<PlanItem[]> {
       targetSets: planExercises.targetSets,
       targetRepsMin: planExercises.targetRepsMin,
       targetRepsMax: planExercises.targetRepsMax,
+      targetDurationSeconds: planExercises.targetDurationSeconds,
       restSeconds: planExercises.restSeconds,
       notes: planExercises.notes,
       exerciseName: exercises.name,

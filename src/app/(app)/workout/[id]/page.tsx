@@ -128,6 +128,7 @@ export default async function WorkoutPage({
                         targetSets: target.targetSets,
                         targetRepsMin: target.targetRepsMin,
                         targetRepsMax: target.targetRepsMax,
+                        targetDurationSeconds: target.targetDurationSeconds,
                         restSeconds: target.restSeconds,
                         notes: target.notes,
                       }

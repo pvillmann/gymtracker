@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { db } from "@/db";
-import { exercises, planExercises, plans } from "@/db/schema";
+import { exercises, planExercises, plans, type TrackingMode } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
 import { optionalText, text } from "@/lib/formdata";
 import { newId } from "@/lib/ids";
@@ -26,6 +26,13 @@ const itemInput = z.object({
   targetSets: z.coerce.number().int().min(1).max(20),
   targetRepsMin: z.coerce.number().int().min(1).max(200),
   targetRepsMax: z.coerce.number().int().min(1).max(200),
+  // Leeres Feld ("" bei fehlender Eingabe) darf nicht zu 0 kollabieren -
+  // sonst würde Number("") als gültige Dauer 0 durchrutschen.
+  targetDurationSeconds: z
+    .string()
+    .optional()
+    .transform((v) => (v ? Number(v) : undefined))
+    .pipe(z.number().int().min(1).max(36_000).optional()),
   restSeconds: z.coerce.number().int().min(0).max(900),
   notes: z
     .string()
@@ -34,6 +41,41 @@ const itemInput = z.object({
     .optional()
     .transform((v) => (v ? v : null)),
 });
+
+type ResolvedTargetFields = Omit<z.infer<typeof itemInput>, "targetDurationSeconds"> & {
+  targetDurationSeconds: number | null;
+};
+
+type ResolveResult =
+  | { ok: true; fields: ResolvedTargetFields }
+  | { ok: false; error: string };
+
+/**
+ * Baut die zu speichernden Zielwerte je nach Tracking-Modus: Zeit-Übungen
+ * bekommen eine Zieldauer statt eines Wiederholungsbereichs, damit z. B. beim
+ * Laufband nicht sinnlos "8-12 Wdh." im Plan steht.
+ */
+function resolveTargetFields(
+  trackingMode: TrackingMode,
+  data: z.infer<typeof itemInput>,
+): ResolveResult {
+  if (trackingMode === "time") {
+    if (!data.targetDurationSeconds) {
+      return { ok: false, error: "Bitte eine Zieldauer angeben." };
+    }
+    return {
+      ok: true,
+      fields: { ...data, targetDurationSeconds: data.targetDurationSeconds },
+    };
+  }
+  if (data.targetRepsMin > data.targetRepsMax) {
+    return {
+      ok: false,
+      error: "Die Mindest-Wiederholungen dürfen nicht größer sein als das Maximum.",
+    };
+  }
+  return { ok: true, fields: { ...data, targetDurationSeconds: null } };
+}
 
 /** Wirft, wenn der Plan nicht dem angemeldeten Nutzer gehört. */
 async function assertPlanOwner(userId: string, planId: string): Promise<void> {
@@ -52,9 +94,11 @@ async function getOwnedItem(userId: string, itemId: string) {
       id: planExercises.id,
       planId: planExercises.planId,
       position: planExercises.position,
+      trackingMode: exercises.trackingMode,
     })
     .from(planExercises)
     .innerJoin(plans, eq(plans.id, planExercises.planId))
+    .innerJoin(exercises, eq(exercises.id, planExercises.exerciseId))
     .where(and(eq(planExercises.id, itemId), eq(plans.userId, userId)))
     .limit(1);
 
@@ -149,23 +193,25 @@ export async function addPlanExerciseAction(
   if (!exerciseId) return fail("Bitte eine Übung auswählen.");
 
   const owned = await db
-    .select({ id: exercises.id })
+    .select({ id: exercises.id, trackingMode: exercises.trackingMode })
     .from(exercises)
     .where(and(eq(exercises.id, exerciseId), eq(exercises.userId, user.id)))
     .limit(1);
-  if (owned.length === 0) return fail("Diese Übung gibt es nicht.");
+  const exercise = owned[0];
+  if (!exercise) return fail("Diese Übung gibt es nicht.");
 
   const parsed = itemInput.safeParse({
     targetSets: text(formData, "targetSets", "3"),
     targetRepsMin: text(formData, "targetRepsMin", "8"),
     targetRepsMax: text(formData, "targetRepsMax", "12"),
+    targetDurationSeconds: optionalText(formData, "targetDurationSeconds"),
     restSeconds: text(formData, "restSeconds", "90"),
     notes: optionalText(formData, "notes"),
   });
   if (!parsed.success) return fail("Bitte gültige Zielwerte angeben.");
-  if (parsed.data.targetRepsMin > parsed.data.targetRepsMax) {
-    return fail("Die Mindest-Wiederholungen dürfen nicht größer sein als das Maximum.");
-  }
+
+  const resolved = resolveTargetFields(exercise.trackingMode, parsed.data);
+  if (!resolved.ok) return fail(resolved.error);
 
   const [last] = await db
     .select({ max: sql<number | null>`max(${planExercises.position})` })
@@ -177,7 +223,7 @@ export async function addPlanExerciseAction(
     planId,
     exerciseId,
     position: (last?.max ?? -1) + 1,
-    ...parsed.data,
+    ...resolved.fields,
   });
 
   revalidatePath(`/plans/${planId}`);
@@ -196,15 +242,19 @@ export async function updatePlanExerciseAction(
     targetSets: text(formData, "targetSets"),
     targetRepsMin: text(formData, "targetRepsMin"),
     targetRepsMax: text(formData, "targetRepsMax"),
+    targetDurationSeconds: optionalText(formData, "targetDurationSeconds"),
     restSeconds: text(formData, "restSeconds"),
     notes: optionalText(formData, "notes"),
   });
   if (!parsed.success) return fail("Bitte gültige Zielwerte angeben.");
-  if (parsed.data.targetRepsMin > parsed.data.targetRepsMax) {
-    return fail("Die Mindest-Wiederholungen dürfen nicht größer sein als das Maximum.");
-  }
 
-  await db.update(planExercises).set(parsed.data).where(eq(planExercises.id, itemId));
+  const resolved = resolveTargetFields(item.trackingMode, parsed.data);
+  if (!resolved.ok) return fail(resolved.error);
+
+  await db
+    .update(planExercises)
+    .set(resolved.fields)
+    .where(eq(planExercises.id, itemId));
 
   revalidatePath(`/plans/${item.planId}`);
   return { ok: true };

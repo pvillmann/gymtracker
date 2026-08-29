@@ -10,7 +10,7 @@ import { TrendBadge } from "@/components/TrendBadge";
 import { Card, ErrorMessage, cx } from "@/components/ui";
 import type { TrackingMode } from "@/db/schema";
 import { describeSet } from "@/lib/describe";
-import { formatKg } from "@/lib/format";
+import { formatDuration, formatKg } from "@/lib/format";
 import type { FormState } from "@/lib/result";
 import { compareSets, setVolume } from "@/lib/training";
 
@@ -35,6 +35,7 @@ export type LoggerTarget = {
   targetSets: number;
   targetRepsMin: number;
   targetRepsMax: number;
+  targetDurationSeconds: number | null;
   restSeconds: number;
   notes: string | null;
 };
@@ -167,7 +168,10 @@ export function ExerciseLogger({
           10,
       ),
       duration: String(
-        previousSameSet?.durationSeconds ?? lastThisSession?.durationSeconds ?? 30,
+        previousSameSet?.durationSeconds ??
+          lastThisSession?.durationSeconds ??
+          target?.targetDurationSeconds ??
+          30,
       ),
     };
   }, [loggedSets, previous, nextSetNumber, target]);
@@ -215,11 +219,13 @@ export function ExerciseLogger({
           </Link>
           <p className="mt-0.5 text-sm text-muted tnum">
             {target
-              ? `Ziel: ${target.targetSets} × ${
-                  target.targetRepsMin === target.targetRepsMax
-                    ? target.targetRepsMin
-                    : `${target.targetRepsMin}–${target.targetRepsMax}`
-                } Wdh.`
+              ? isTimed
+                ? `Ziel: ${target.targetSets} × ${formatDuration(target.targetDurationSeconds ?? 0)}`
+                : `Ziel: ${target.targetSets} × ${
+                    target.targetRepsMin === target.targetRepsMax
+                      ? target.targetRepsMin
+                      : `${target.targetRepsMin}–${target.targetRepsMax}`
+                  } Wdh.`
               : "Zusätzliche Übung"}
           </p>
         </div>

@@ -17,7 +17,7 @@ import { PlanForm } from "@/components/PlanForm";
 import { SubmitButton } from "@/components/SubmitButton";
 import { Card, EmptyState, PageHeader } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
-import { exerciseCount, formatDurationLong, sets } from "@/lib/format";
+import { exerciseCount, formatDuration, formatDurationLong, sets } from "@/lib/format";
 import { getPlan, listExercises, listPlanItems } from "@/lib/queries";
 
 export const metadata: Metadata = { title: "Plan · GymTracker" };
@@ -38,9 +38,11 @@ export default async function PlanDetailPage({
   const available = exercises.filter((exercise) => !used.has(exercise.id));
 
   const totalSets = items.reduce((sum, item) => sum + item.targetSets, 0);
-  // Grobe Schätzung: ~40 s Arbeitszeit pro Satz plus die eingeplanten Pausen.
+  // Grobe Schätzung: bei Zeit-Übungen die Zieldauer, sonst ~40 s Arbeitszeit
+  // pro Satz, jeweils plus die eingeplanten Pausen.
   const estimatedSeconds = items.reduce(
-    (sum, item) => sum + item.targetSets * (40 + item.restSeconds),
+    (sum, item) =>
+      sum + item.targetSets * ((item.targetDurationSeconds ?? 40) + item.restSeconds),
     0,
   );
 
@@ -94,10 +96,11 @@ export default async function PlanDetailPage({
                   </Link>
                   <p className="mt-0.5 text-sm text-muted tnum">
                     {item.targetSets} ×{" "}
-                    {item.targetRepsMin === item.targetRepsMax
-                      ? item.targetRepsMin
-                      : `${item.targetRepsMin}–${item.targetRepsMax}`}{" "}
-                    Wdh.
+                    {item.trackingMode === "time"
+                      ? formatDuration(item.targetDurationSeconds ?? 0)
+                      : item.targetRepsMin === item.targetRepsMax
+                        ? `${item.targetRepsMin} Wdh.`
+                        : `${item.targetRepsMin}–${item.targetRepsMax} Wdh.`}
                     {item.restSeconds > 0
                       ? ` · ${item.restSeconds} s Pause`
                       : " · ohne Pause"}
@@ -141,10 +144,12 @@ export default async function PlanDetailPage({
                 <div className="mt-3 space-y-3">
                   <EditPlanItemForm
                     action={updatePlanExerciseAction.bind(null, item.id)}
+                    trackingMode={item.trackingMode}
                     defaults={{
                       targetSets: item.targetSets,
                       targetRepsMin: item.targetRepsMin,
                       targetRepsMax: item.targetRepsMax,
+                      targetDurationSeconds: item.targetDurationSeconds,
                       restSeconds: item.restSeconds,
                       notes: item.notes,
                     }}
@@ -180,6 +185,7 @@ export default async function PlanDetailPage({
                 id: exercise.id,
                 name: exercise.name,
                 muscleGroup: exercise.muscleGroup,
+                trackingMode: exercise.trackingMode,
               }))}
             />
           )}

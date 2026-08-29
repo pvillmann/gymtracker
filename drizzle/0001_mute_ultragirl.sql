@@ -1,0 +1,1 @@
+ALTER TABLE `plan_exercises` ADD `target_duration_seconds` integer;
