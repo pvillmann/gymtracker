@@ -1,0 +1,66 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink: #0a0c0f;
+  --color-surface: #14181e;
+  --color-surface-2: #1b212a;
+  --color-line: #262e39;
+  --color-line-soft: #1f2731;
+  --color-fg: #e9eef4;
+  --color-muted: #97a4b5;
+  --color-faint: #7b8899;
+
+  --color-accent: #c8f14e;
+  --color-accent-dim: #9dbf3a;
+  --color-up: #4ade80;
+  --color-down: #f87171;
+  --color-flat: #94a3b8;
+  --color-warn: #fbbf24;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+
+  --radius-card: 1rem;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html {
+  background-color: var(--color-ink);
+  /* Verhindert, dass iOS beim Fokussieren von Inputs hineinzoomt. */
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background-color: var(--color-ink);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  overscroll-behavior-y: none;
+}
+
+/* Zahlen sollen beim Hochzählen nicht springen. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Zahlenfelder ohne Spinner – die +/- Buttons übernehmen das. */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

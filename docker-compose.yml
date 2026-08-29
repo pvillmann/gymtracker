@@ -1,0 +1,25 @@
+services:
+  gymtracker:
+    build: .
+    image: gymtracker
+    container_name: gymtracker
+    restart: unless-stopped
+    ports:
+      # Links der Port auf dem Host. Hinter einem Reverse Proxy reicht
+      # "127.0.0.1:3000:3000", damit der Dienst nicht offen im Netz hängt.
+      - "3000:3000"
+    environment:
+      # Bestimmt, wann eine Trainingswoche beginnt und endet.
+      TZ: Europe/Berlin
+      # Optional: sperrt die Registrierung hinter einen Code. Ist der Wert
+      # gesetzt, muss ihn jeder neue Nutzer eingeben.
+      # REGISTRATION_CODE: "dein-geheimer-code"
+      # Nur nötig, wenn dein Reverse Proxy HTTPS terminiert, aber kein
+      # X-Forwarded-Proto schickt.
+      # COOKIE_SECURE: "true"
+    volumes:
+      # Hier liegt die SQLite-Datenbank – das ist der Teil, den du sichern musst.
+      - gymtracker-data:/data
+
+volumes:
+  gymtracker-data:
