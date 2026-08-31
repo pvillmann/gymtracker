@@ -61,11 +61,32 @@ Homescreen.
 
 ## Schnellstart mit Docker
 
+Das Image wird bei jedem Push auf `main` automatisch gebaut und öffentlich
+unter `ghcr.io/pvillmann/gymtracker:latest` veröffentlicht (Details unten) —
+du musst das Repo dafür nicht klonen.
+
+**Nur mit Docker, ganz ohne Repo:**
+
+```bash
+docker run -d \
+  --name gymtracker \
+  --restart unless-stopped \
+  -p 3000:3000 \
+  -v gymtracker-data:/data \
+  ghcr.io/pvillmann/gymtracker:latest
+```
+
+**Mit Compose** (praktischer für Umgebungsvariablen, Reverse Proxy etc.):
+
 ```bash
 git clone https://github.com/pvillmann/gymtracker.git
 cd gymtracker
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 ```
+
+Willst du stattdessen aus dem Quellcode bauen, z. B. um eigene Änderungen zu
+testen: `docker compose up -d --build` statt `pull` + `up -d`.
 
 Danach `http://<dein-server>:3000` öffnen, ein Konto anlegen — der erste
 registrierte Nutzer ist einfach der erste Nutzer, es gibt keine Admin-Rolle.
@@ -122,17 +143,18 @@ SQLite schreibt im WAL-Modus, die Änderungen stecken dann noch in `gym.db-wal`.
 
 ## Update
 
-Zwei Wege, je nachdem ob du lokal bauen oder das fertige Image aus der
-GitHub Container Registry ziehen willst (siehe unten):
+Zwei Wege, je nachdem ob du das fertige Image aus der GitHub Container
+Registry ziehen oder lokal bauen willst:
 
 ```bash
-# Lokal bauen
+# Vorgebautes Image von GitHub holen (Standard, kein lokaler Build nötig)
 git pull
-docker compose up -d --build
-
-# Oder: vorgebautes Image von GitHub holen (schneller, kein lokaler Build)
 docker compose pull
 docker compose up -d
+
+# Oder: lokal bauen, z. B. für eigene Änderungen
+git pull
+docker compose up -d --build
 ```
 
 Neue Migrationen laufen beim Start automatisch. Vorher ein Backup zu ziehen,
@@ -143,14 +165,14 @@ schadet trotzdem nie.
 Jeder Push auf `main` baut über [`.github/workflows/docker.yml`](.github/workflows/docker.yml)
 automatisch das Produktions-Image und veröffentlicht es als
 `ghcr.io/pvillmann/gymtracker:latest` (zusätzlich getaggt mit dem kurzen
-Commit-Hash). Pull Requests bauen nur zur Validierung, ohne zu veröffentlichen
-— das eignet sich als Pflicht-Check für einen geschützten `main`-Branch.
+Commit-Hash) — öffentlich abrufbar, kein Login nötig. Pull Requests bauen nur
+zur Validierung, ohne zu veröffentlichen — das eignet sich als Pflicht-Check
+für einen geschützten `main`-Branch.
 
-`docker-compose.yml` verweist bereits auf dieses Image (`image:`), behält
-aber `build: .` als Fallback für lokale Änderungen.
+`docker-compose.yml` verweist auf dieses Image (`image:`), behält aber
+`build: .` als Fallback für lokale Änderungen.
 
-Das Image ist öffentlich abrufbar — `docker compose pull` funktioniert ohne
-Login. Falls du es später auf **Settings → Change package visibility →
+Falls du das Image später auf **Settings → Change package visibility →
 Private** stellst, muss sich der Server einmalig einloggen, z. B. mit einem
 [Personal Access Token](https://github.com/settings/tokens) mit
 `read:packages`-Recht:
@@ -195,6 +217,7 @@ Nützliche Skripte:
 - Eigene Auth: scrypt-Passworthashes, Session-Tokens werden nur als SHA-256-Hash
   gespeichert — wer die Datenbank liest, kann damit keine Session übernehmen
 - Diagramme sind handgeschriebenes SVG, keine Chart-Bibliothek
+- Docker-Image auf `node:22-trixie-slim` (aktuelle Debian-Stable-Basis)
 
 ### Aufbau
 

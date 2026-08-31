@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # --- Abhängigkeiten -----------------------------------------------------------
-FROM node:22-bookworm-slim AS deps
+FROM node:22-trixie-slim AS deps
 WORKDIR /app
 # better-sqlite3 kompiliert sich bei Bedarf selbst gegen die Node-ABI dieses
 # Images – ohne Compiler bricht "npm ci" mit einem node-gyp-Fehler ab.
@@ -12,7 +12,7 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 # --- Build --------------------------------------------------------------------
-FROM node:22-bookworm-slim AS builder
+FROM node:22-trixie-slim AS builder
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/node_modules ./node_modules
@@ -20,7 +20,7 @@ COPY . .
 RUN npm run build
 
 # --- Laufzeit -----------------------------------------------------------------
-FROM node:22-bookworm-slim AS runner
+FROM node:22-trixie-slim AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production \
