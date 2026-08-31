@@ -22,6 +22,14 @@ services:
       # Nur nötig, wenn dein Reverse Proxy HTTPS terminiert, aber kein
       # X-Forwarded-Proto schickt.
       # COOKIE_SECURE: "true"
+      # E-Mail-Versand ist Pflicht (Bestätigungsmail, Passwort vergessen).
+      SMTP_HOST: ""
+      SMTP_PORT: "587"
+      SMTP_USER: ""
+      SMTP_PASSWORD: ""
+      SMTP_FROM: ""
+      # Basis-URL für Links in Mails, ohne "/" am Ende.
+      APP_URL: "http://localhost:3000"
     volumes:
       # Hier liegt die SQLite-Datenbank – das ist der Teil, den du sichern musst.
       - gymtracker-data:/data

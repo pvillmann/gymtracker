@@ -56,6 +56,10 @@ Homescreen.
 
 **Mehrere Nutzer**
 - Registrierung mit E-Mail und Passwort (scrypt-Hash), Session-Cookies
+- E-Mail-Bestätigung ist Pflicht: ohne Klick auf den Link in der
+  Willkommensmail kein Login
+- "Passwort vergessen" per Mail-Link, invalidiert dabei alle bestehenden
+  Sessions des Kontos
 - Jeder Nutzer sieht ausschließlich seine eigenen Pläne, Übungen und Trainings
 - Die Registrierung lässt sich über `REGISTRATION_CODE` hinter einen Code sperren
 
@@ -65,6 +69,9 @@ Das Image wird bei jedem Push auf `main` automatisch gebaut und öffentlich
 unter `ghcr.io/pvillmann/gymtracker:latest` veröffentlicht (Details unten) —
 du musst das Repo dafür nicht klonen.
 
+SMTP-Zugangsdaten sind **Pflicht** (siehe [E-Mail-Versand](#e-mail-versand) unten)
+— ohne sie kommt niemand über die Bestätigungsmail hinaus.
+
 **Nur mit Docker, ganz ohne Repo:**
 
 ```bash
@@ -73,6 +80,12 @@ docker run -d \
   --restart unless-stopped \
   -p 3000:3000 \
   -v gymtracker-data:/data \
+  -e SMTP_HOST=smtp.example.com \
+  -e SMTP_PORT=587 \
+  -e SMTP_USER=dein-nutzername \
+  -e SMTP_PASSWORD=dein-passwort \
+  -e SMTP_FROM="GymTracker <noreply@example.com>" \
+  -e APP_URL=http://<dein-server>:3000 \
   ghcr.io/pvillmann/gymtracker:latest
 ```
 
@@ -126,6 +139,43 @@ gym.example.com {
 
 Und in der `docker-compose.yml` den Port auf `127.0.0.1:3000:3000` einschränken,
 damit der Container nicht direkt aus dem Netz erreichbar ist.
+
+## E-Mail-Versand
+
+Läuft über SMTP mit Zugangsdaten in der `.env` bzw. `docker-compose.yml` —
+kein Drittanbieter-Account nötig, funktioniert mit praktisch jedem Provider
+(eigener Mailserver, Domain-Hoster, ein App-Passwort bei Gmail o. ä.):
+
+```yaml
+environment:
+  SMTP_HOST: "smtp.example.com"
+  SMTP_PORT: "587"
+  SMTP_USER: "dein-nutzername"
+  SMTP_PASSWORD: "dein-passwort"
+  SMTP_FROM: "GymTracker <noreply@example.com>"
+  APP_URL: "https://gym.example.com"
+```
+
+`APP_URL` ist die Adresse, unter der GymTracker für deine Nutzer erreichbar
+ist — wird für die Links in Bestätigungs- und Passwort-Reset-Mails gebraucht
+(in einer Mail funktioniert kein relativer Link). Ohne `/` am Ende angeben.
+
+`SMTP_PORT` bestimmt automatisch, ob TLS direkt (Port 465) oder per STARTTLS
+(alles andere) genutzt wird. Erwartet dein Provider auf einem anderen Port
+trotzdem implizites TLS, kannst du das mit `SMTP_SECURE: "true"` erzwingen.
+
+Schlägt der Versand fehl (SMTP nicht erreichbar, falsche Zugangsdaten), bleibt
+das Konto trotzdem angelegt — der Nutzer landet auf einer Seite mit einem
+"Erneut senden"-Button, sobald der Mailserver wieder erreichbar ist.
+
+**Lokal testen ohne echte Zugangsdaten**: ein Fake-SMTP-Server wie
+[MailHog](https://github.com/mailhog/MailHog) fängt alle Mails ab und zeigt
+sie in einer Weboberfläche:
+
+```bash
+docker run -d -p 1025:1025 -p 8025:8025 mailhog/mailhog
+# SMTP_HOST=localhost, SMTP_PORT=1025, dann auf http://localhost:8025 schauen
+```
 
 ## Backup
 
@@ -206,6 +256,12 @@ Nützliche Skripte:
 | `DATABASE_PATH` | `./data/gym.db` | Pfad zur SQLite-Datei |
 | `REGISTRATION_CODE` | — | Wenn gesetzt, ist die Registrierung durch diesen Code geschützt |
 | `COOKIE_SECURE` | automatisch | Erzwingt (`true`) oder verhindert (`false`) das `secure`-Flag des Session-Cookies |
+| `SMTP_HOST` | — | Pflicht. Adresse des SMTP-Servers |
+| `SMTP_PORT` | `587` | SMTP-Port |
+| `SMTP_USER` / `SMTP_PASSWORD` | — | SMTP-Zugangsdaten |
+| `SMTP_FROM` | — | Pflicht. Absender inkl. Anzeigename, z. B. `GymTracker <noreply@example.com>` |
+| `SMTP_SECURE` | automatisch (Port 465) | Erzwingt implizites TLS unabhängig vom Port |
+| `APP_URL` | — | Pflicht. Basis-URL für Links in Mails, ohne `/` am Ende |
 | `TZ` | Systemzeitzone | Bestimmt, wann eine Trainingswoche beginnt |
 | `PORT` | `3000` | Port des Servers |
 
@@ -214,8 +270,10 @@ Nützliche Skripte:
 - **Next.js 16** (App Router, Server Actions) mit **React 19**
 - **SQLite** über **better-sqlite3**, Schema und Abfragen mit **Drizzle ORM**
 - **Tailwind CSS 4**
-- Eigene Auth: scrypt-Passworthashes, Session-Tokens werden nur als SHA-256-Hash
-  gespeichert — wer die Datenbank liest, kann damit keine Session übernehmen
+- Eigene Auth: scrypt-Passworthashes, Session-, Verifizierungs- und
+  Reset-Tokens werden nur als SHA-256-Hash gespeichert — wer die Datenbank
+  liest, kann damit weder eine Session übernehmen noch einen Mail-Link fälschen
+- Mailversand über **nodemailer** direkt per SMTP, keine Drittanbieter-API
 - Diagramme sind handgeschriebenes SVG, keine Chart-Bibliothek
 - Docker-Image auf `node:22-trixie-slim` (aktuelle Debian-Stable-Basis)
 
@@ -227,7 +285,7 @@ src/
   actions/        Server Actions (schreiben), jeweils mit Besitzprüfung
   components/     UI-Bausteine, u. a. der Satz-Logger und die Diagramme
   db/             Drizzle-Schema und SQLite-Verbindung
-  lib/            Abfragen, Auth, Statistik, Formatierung
+  lib/            Abfragen, Auth, Mailversand, Statistik, Formatierung
 drizzle/          Generierte SQL-Migrationen
 ```
 

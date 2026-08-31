@@ -22,6 +22,8 @@ export const users = sqliteTable(
     name: text("name").notNull(),
     /** Für das Volumen von Körpergewichts-Übungen (Klimmzüge, Dips ...). */
     bodyweightKg: real("bodyweight_kg").notNull().default(80),
+    /** null = noch nicht bestätigt. Login ist erst danach möglich. */
+    emailVerifiedAt: integer("email_verified_at"),
     createdAt: integer("created_at").notNull().default(now),
   },
   (t) => [uniqueIndex("users_email_unique").on(t.email)],
@@ -39,6 +41,35 @@ export const sessions = sqliteTable(
     createdAt: integer("created_at").notNull().default(now),
   },
   (t) => [index("sessions_user_idx").on(t.userId)],
+);
+
+/** Einmal-Link zum Bestätigen einer E-Mail-Adresse nach der Registrierung. */
+export const emailVerificationTokens = sqliteTable(
+  "email_verification_tokens",
+  {
+    /** SHA-256 des Tokens aus dem Mail-Link – der Klartext steht nur in der Mail. */
+    tokenHash: text("token_hash").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    expiresAt: integer("expires_at").notNull(),
+    createdAt: integer("created_at").notNull().default(now),
+  },
+  (t) => [index("email_verification_tokens_user_idx").on(t.userId)],
+);
+
+/** Einmal-Link für "Passwort vergessen". */
+export const passwordResetTokens = sqliteTable(
+  "password_reset_tokens",
+  {
+    tokenHash: text("token_hash").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    expiresAt: integer("expires_at").notNull(),
+    createdAt: integer("created_at").notNull().default(now),
+  },
+  (t) => [index("password_reset_tokens_user_idx").on(t.userId)],
 );
 
 export const exercises = sqliteTable(
