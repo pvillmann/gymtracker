@@ -13,6 +13,12 @@ services:
       # Links der Port auf dem Host. Hinter einem Reverse Proxy reicht
       # "127.0.0.1:3000:3000", damit der Dienst nicht offen im Netz hängt.
       - "3000:3000"
+    # SMTP-Zugangsdaten und APP_URL sind Pflicht (Bestätigungsmail, Passwort
+    # vergessen) und gehören nicht in dieses Repo – siehe .env.example. Lege
+    # eine lokale .env danebenlegen (git-ignored, wird hier automatisch
+    # geladen); ohne sie startet der Container nicht sauber.
+    env_file:
+      - .env
     environment:
       # Bestimmt, wann eine Trainingswoche beginnt und endet.
       TZ: Europe/Berlin
@@ -22,14 +28,6 @@ services:
       # Nur nötig, wenn dein Reverse Proxy HTTPS terminiert, aber kein
       # X-Forwarded-Proto schickt.
       # COOKIE_SECURE: "true"
-      # E-Mail-Versand ist Pflicht (Bestätigungsmail, Passwort vergessen).
-      SMTP_HOST: ""
-      SMTP_PORT: "587"
-      SMTP_USER: ""
-      SMTP_PASSWORD: ""
-      SMTP_FROM: ""
-      # Basis-URL für Links in Mails, ohne "/" am Ende.
-      APP_URL: "http://localhost:3000"
     volumes:
       # Hier liegt die SQLite-Datenbank – das ist der Teil, den du sichern musst.
       - gymtracker-data:/data
