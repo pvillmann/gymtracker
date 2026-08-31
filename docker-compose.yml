@@ -1,7 +1,12 @@
 services:
   gymtracker:
+    # Wird bei main-Pushes automatisch von GitHub Actions gebaut und hierher
+    # veröffentlicht (.github/workflows/docker.yml) – "docker compose pull"
+    # holt die fertige main-Version, ohne lokal zu bauen. "build: ." bleibt
+    # als Fallback, falls du lokale Änderungen testen willst
+    # ("docker compose build").
+    image: ghcr.io/pvillmann/gymtracker:latest
     build: .
-    image: gymtracker
     container_name: gymtracker
     restart: unless-stopped
     ports:

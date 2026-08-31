@@ -1,5 +1,7 @@
 # GymTracker
 
+[![Docker](https://github.com/pvillmann/gymtracker/actions/workflows/docker.yml/badge.svg)](https://github.com/pvillmann/gymtracker/actions/workflows/docker.yml)
+
 Ein selbst gehosteter Gym-Tracker: Trainingsplan hinterlegen, im Gym die Sätze
 mit Gewicht und Wiederholungen mitschreiben und dabei immer sehen, was beim
 letzten Mal an derselben Maschine stand — und ob es heute besser oder schlechter
@@ -120,13 +122,48 @@ SQLite schreibt im WAL-Modus, die Änderungen stecken dann noch in `gym.db-wal`.
 
 ## Update
 
+Zwei Wege, je nachdem ob du lokal bauen oder das fertige Image aus der
+GitHub Container Registry ziehen willst (siehe unten):
+
 ```bash
+# Lokal bauen
 git pull
 docker compose up -d --build
+
+# Oder: vorgebautes Image von GitHub holen (schneller, kein lokaler Build)
+docker compose pull
+docker compose up -d
 ```
 
 Neue Migrationen laufen beim Start automatisch. Vorher ein Backup zu ziehen,
 schadet trotzdem nie.
+
+## Vorgefertigtes Image (GitHub Container Registry)
+
+Jeder Push auf `main` baut über [`.github/workflows/docker.yml`](.github/workflows/docker.yml)
+automatisch das Produktions-Image und veröffentlicht es als
+`ghcr.io/pvillmann/gymtracker:latest` (zusätzlich getaggt mit dem kurzen
+Commit-Hash). Pull Requests bauen nur zur Validierung, ohne zu veröffentlichen
+— das eignet sich als Pflicht-Check für einen geschützten `main`-Branch.
+
+`docker-compose.yml` verweist bereits auf dieses Image (`image:`), behält
+aber `build: .` als Fallback für lokale Änderungen.
+
+**Wichtig:** Ein frisch veröffentlichtes GHCR-Image ist standardmäßig
+**privat**, auch wenn das Repository öffentlich ist — das ist ein
+GitHub-Standardverhalten, keine bewusste Einstellung hier. Zwei Optionen:
+
+- **Image einmalig auf öffentlich stellen** (empfohlen für dieses Projekt,
+  der Quellcode ist ja ohnehin öffentlich): auf GitHub zu
+  `github.com/pvillmann?tab=packages` → `gymtracker` → **Package settings**
+  → **Change visibility** → **Public**. Danach funktioniert
+  `docker compose pull` ohne Login.
+- **Privat lassen**: auf dem Server einmalig einloggen, z. B. mit einem
+  [Personal Access Token](https://github.com/settings/tokens) mit
+  `read:packages`-Recht:
+  ```bash
+  echo "<dein-token>" | docker login ghcr.io -u <dein-github-nutzername> --password-stdin
+  ```
 
 ## Lokale Entwicklung
 
