@@ -62,6 +62,8 @@ Homescreen.
   Sessions des Kontos
 - Jeder Nutzer sieht ausschließlich seine eigenen Pläne, Übungen und Trainings
 - Die Registrierung lässt sich über `REGISTRATION_CODE` hinter einen Code sperren
+- Konto selbst restlos löschen (mit Passwort-Bestätigung) – entfernt wirklich
+  alles: Pläne, Übungen, Trainings, Sätze, Sessions
 
 ## Schnellstart mit Docker
 
