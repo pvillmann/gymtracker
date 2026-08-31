@@ -54,6 +54,17 @@ export function AuthForm({
           />
         </Field>
 
+        {!isRegister ? (
+          <p className="-mt-2 text-right text-sm">
+            <Link
+              href="/forgot-password"
+              className="text-muted underline-offset-4 hover:text-fg hover:underline"
+            >
+              Passwort vergessen?
+            </Link>
+          </p>
+        ) : null}
+
         {isRegister && requiresCode ? (
           <Field
             label="Registrierungscode"
