@@ -9,6 +9,21 @@ Für das Handy gebaut: große Tap-Ziele, Plus/Minus-Tasten in den Gewichtsstufen
 der jeweiligen Maschine, dunkles Design, funktioniert als Web-App auf dem
 Homescreen.
 
+## Screenshots
+
+<table>
+  <tr>
+    <td width="33%"><img src="docs/screenshots/dashboard.png" alt="Start-Bildschirm mit laufendem Training, Serie und letztem Training" /><br />Start</td>
+    <td width="33%"><img src="docs/screenshots/workout.png" alt="Aktives Training mit Satz-Eingabe, Vergleich zum letzten Mal und Pausentimer" /><br />Training mitschreiben</td>
+    <td width="33%"><img src="docs/screenshots/plan.png" alt="Trainingsplan mit sortierten Übungen und Zielvorgaben" /><br />Trainingsplan</td>
+  </tr>
+  <tr>
+    <td width="33%"><img src="docs/screenshots/stats-facts.png" alt="Statistik-Seite mit Gesamtvolumen, Serie und motivierenden Fun Facts" /><br />Statistik &amp; Fun Facts</td>
+    <td width="33%"><img src="docs/screenshots/stats-chart.png" alt="Balkendiagramme für bewegtes Gewicht und Trainings pro Woche, Top-Übungen nach Volumen" /><br />Verlaufscharts</td>
+    <td width="33%"><img src="docs/screenshots/history.png" alt="Liste aller abgeschlossenen Trainings, nach Monat gruppiert" /><br />Verlauf</td>
+  </tr>
+</table>
+
 ## Was drin ist
 
 **Training mitschreiben**
