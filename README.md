@@ -149,21 +149,15 @@ Commit-Hash). Pull Requests bauen nur zur Validierung, ohne zu veröffentlichen
 `docker-compose.yml` verweist bereits auf dieses Image (`image:`), behält
 aber `build: .` als Fallback für lokale Änderungen.
 
-**Wichtig:** Ein frisch veröffentlichtes GHCR-Image ist standardmäßig
-**privat**, auch wenn das Repository öffentlich ist — das ist ein
-GitHub-Standardverhalten, keine bewusste Einstellung hier. Zwei Optionen:
+Das Image ist öffentlich abrufbar — `docker compose pull` funktioniert ohne
+Login. Falls du es später auf **Settings → Change package visibility →
+Private** stellst, muss sich der Server einmalig einloggen, z. B. mit einem
+[Personal Access Token](https://github.com/settings/tokens) mit
+`read:packages`-Recht:
 
-- **Image einmalig auf öffentlich stellen** (empfohlen für dieses Projekt,
-  der Quellcode ist ja ohnehin öffentlich): auf GitHub zu
-  `github.com/pvillmann?tab=packages` → `gymtracker` → **Package settings**
-  → **Change visibility** → **Public**. Danach funktioniert
-  `docker compose pull` ohne Login.
-- **Privat lassen**: auf dem Server einmalig einloggen, z. B. mit einem
-  [Personal Access Token](https://github.com/settings/tokens) mit
-  `read:packages`-Recht:
-  ```bash
-  echo "<dein-token>" | docker login ghcr.io -u <dein-github-nutzername> --password-stdin
-  ```
+```bash
+echo "<dein-token>" | docker login ghcr.io -u <dein-github-nutzername> --password-stdin
+```
 
 ## Lokale Entwicklung
 
