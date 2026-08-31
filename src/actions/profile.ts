@@ -2,12 +2,14 @@
 
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { db } from "@/db";
 import { sessions, users } from "@/db/schema";
 import {
   createSession,
+  destroySession,
   hashPassword,
   requireUser,
   verifyPassword,
@@ -80,4 +82,26 @@ export async function changePasswordAction(
   await createSession(user.id);
 
   return { ok: true };
+}
+
+/**
+ * Löscht das Konto restlos. exercises/plans/workouts/sessions/Tokens hängen
+ * alle per ON DELETE CASCADE an users.id – ein einziges DELETE reicht, um
+ * wirklich alles zu entfernen (Pläne, Übungen, Trainings, Sätze).
+ */
+export async function deleteAccountAction(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const user = await requireUser();
+
+  const password = text(formData, "password");
+  if (!(await verifyPassword(password, user.passwordHash))) {
+    return fail("Das Passwort stimmt nicht.");
+  }
+
+  await db.delete(users).where(eq(users.id, user.id));
+  await destroySession();
+
+  redirect("/login?deleted=1");
 }

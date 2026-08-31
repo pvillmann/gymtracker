@@ -2,7 +2,12 @@
 
 import { useActionState } from "react";
 
-import { changePasswordAction, updateProfileAction } from "@/actions/profile";
+import {
+  changePasswordAction,
+  deleteAccountAction,
+  updateProfileAction,
+} from "@/actions/profile";
+import { ConfirmSubmitButton } from "@/components/ConfirmSubmitButton";
 import { SubmitButton } from "@/components/SubmitButton";
 import { ErrorMessage, Field, Input } from "@/components/ui";
 import type { FormState } from "@/lib/result";
@@ -76,6 +81,34 @@ export function PasswordForm() {
       <SubmitButton variant="secondary" className="w-full">
         Passwort ändern
       </SubmitButton>
+    </form>
+  );
+}
+
+export function DeleteAccountForm() {
+  const [state, formAction] = useActionState<FormState, FormData>(
+    deleteAccountAction,
+    {},
+  );
+
+  return (
+    <form action={formAction} className="space-y-4">
+      <Field label="Passwort zur Bestätigung">
+        <Input
+          type="password"
+          name="password"
+          autoComplete="current-password"
+          required
+        />
+      </Field>
+      <ErrorMessage>{state.error}</ErrorMessage>
+      <ConfirmSubmitButton
+        variant="danger"
+        className="w-full"
+        message="Konto wirklich unwiderruflich löschen? Alle Trainingspläne, Übungen und Trainings gehen dabei verloren – das lässt sich nicht rückgängig machen."
+      >
+        Konto endgültig löschen
+      </ConfirmSubmitButton>
     </form>
   );
 }
