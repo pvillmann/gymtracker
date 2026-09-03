@@ -255,7 +255,7 @@ Nützliche Skripte:
 
 | Variable | Standard | Bedeutung |
 | --- | --- | --- |
-| `DATABASE_PATH` | `./data/gym.db` | Pfad zur SQLite-Datei |
+| `DATABASE_PATH` | `./data/gym.db` lokal, `/data/gym.db` im Container | Pfad zur SQLite-Datei. Im Container von `docker-compose.yml` gesetzt – trag ihn nicht zusätzlich in die `.env` ein. |
 | `REGISTRATION_CODE` | — | Wenn gesetzt, ist die Registrierung durch diesen Code geschützt |
 | `COOKIE_SECURE` | automatisch | Erzwingt (`true`) oder verhindert (`false`) das `secure`-Flag des Session-Cookies |
 | `SMTP_HOST` | — | Pflicht. Adresse des SMTP-Servers |
