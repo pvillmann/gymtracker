@@ -20,6 +20,12 @@ services:
     env_file:
       - .env
     environment:
+      # Bewusst hier und nicht nur im Dockerfile: environment: sticht env_file:.
+      # Ohne diese Zeile würde ein DATABASE_PATH aus der .env gewinnen, und der
+      # dort für die lokale Entwicklung gedachte relative Pfad landet im
+      # Container unter /app/data – ein Verzeichnis, das dem Container nicht
+      # gehört. Der Start scheitert dann mit EACCES bzw. SQLITE_READONLY.
+      DATABASE_PATH: /data/gym.db
       # Bestimmt, wann eine Trainingswoche beginnt und endet.
       TZ: Europe/Berlin
       # Optional: sperrt die Registrierung hinter einen Code. Ist der Wert
