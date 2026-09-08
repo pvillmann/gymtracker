@@ -27,7 +27,7 @@ const exerciseInput = z.object({
     .max(500)
     .optional()
     .transform((v) => (v ? v : null)),
-  trackingMode: z.enum(["weight_reps", "bodyweight_reps", "time"]),
+  trackingMode: z.enum(["weight_reps", "bodyweight_reps", "assisted_reps", "time"]),
   weightStepKg: z.coerce
     .number()
     .positive("Die Gewichtsstufe muss größer als 0 sein.")

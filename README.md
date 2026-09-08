@@ -65,6 +65,11 @@ Homescreen.
 - Konto selbst restlos löschen (mit Passwort-Bestätigung) – entfernt wirklich
   alles: Pläne, Übungen, Trainings, Sätze, Sessions
 
+**Benutzergruppen**
+- Gruppenmodell als Grundlage, aktuell mit der Systemgruppe *Administratoren*
+- Benutzerverwaltung: Konten freischalten, sperren, löschen und Adminrechte vergeben
+- Schutz gegen Selbstaussperrung, serverseitig geprüft
+
 ## Schnellstart mit Docker
 
 Das Image wird bei jedem Push auf `main` automatisch gebaut und öffentlich
@@ -179,6 +184,78 @@ docker run -d -p 1025:1025 -p 8025:8025 mailhog/mailhog
 # SMTP_HOST=localhost, SMTP_PORT=1025, dann auf http://localhost:8025 schauen
 ```
 
+## Benutzergruppen und Administration
+
+Nutzer gehören Gruppen an. Aktuell gibt es genau eine, die die Anwendung selbst
+mitbringt: **Administratoren**. Die Tabellen sind bewusst allgemein gehalten,
+damit später auch fachliche Gruppen dazukommen können, über die sich
+Trainingspläne teilen lassen.
+
+### Ersteinrichtung
+
+Solange es **keinen** Administrator gibt, legt die Anwendung beim Start ein
+Einrichtungskonto an und schreibt die Zugangsdaten ins Log:
+
+```bash
+docker compose logs gymtracker | grep -A6 "nicht eingerichtet"
+```
+
+```
+E-Mail:   admin@admin.de
+Passwort: k7qm2-xf9rt-3bnwd
+```
+
+Das Passwort wird bei **jedem Start** neu erzeugt. Im Log steht damit immer
+ein gültiges, auch wenn die alte Ausgabe längst weggescrollt ist – und ein
+Passwort, das jemand mal mitgelesen hat, überlebt keinen Neustart.
+
+Damit meldest du dich an und landest direkt auf der Einrichtungsseite. Dort
+gibt es zwei Wege:
+
+- **Neues Konto anlegen** – der Normalfall bei einer frischen Installation.
+- **Bestehendes Konto übernehmen** – wenn schon Konten existieren, etwa weil du
+  GymTracker vor dieser Version betrieben hast. Du wählst dein eigenes aus,
+  statt ein zweites anzulegen.
+
+In beiden Fällen wird das gewählte Konto Administrator, das Übergangskonto
+gelöscht und die Einrichtungsseite verschwindet. Danach findest du unter
+**Einstellungen → Administration** die Benutzerverwaltung.
+
+Das Einrichtungskonto kann ausschließlich diese eine Sache. Es kommt weder in
+die App noch in die Benutzerverwaltung, und an seine Adresse wird nie eine Mail
+verschickt – auch kein „Passwort vergessen", denn `admin.de` gehört jemand
+anderem.
+
+Es ist zugleich der Notausgang: Wer versehentlich alle Administratoren
+entfernt, bekommt nach einem Neustart wieder ein Einrichtungskonto – statt sich
+dauerhaft ausgesperrt zu haben.
+
+### Was ein Administrator kann
+
+| Aktion | Wozu |
+| --- | --- |
+| Adminrechte vergeben und entziehen | Weitere Administratoren benennen |
+| E-Mail manuell bestätigen | Der Notausgang, wenn eine Bestätigungsmail nicht ankommt |
+| Bestätigungsmail erneut senden | Zustellung nochmal anstoßen |
+| Konto sperren und entsperren | Login blockieren, Trainingsdaten bleiben erhalten |
+| Konto löschen | Entfernt das Konto samt aller Trainingsdaten |
+
+Zwei Regeln verhindern, dass sich jemand aussperrt, und sie werden serverseitig
+in jeder Aktion geprüft, nicht nur im Menü versteckt:
+
+- Am **eigenen** Konto sind Sperren, Löschen und der Entzug der Adminrechte
+  gesperrt. Weil nur Administratoren diese Aktionen ausführen können, bleibt
+  damit immer mindestens einer übrig.
+- **Andere Administratoren** lassen sich weder sperren noch löschen. Dafür muss
+  man ihnen zuerst die Adminrechte nehmen.
+
+Eine Sperre wirkt sofort: laufende Sitzungen des Kontos werden ungültig, nicht
+erst beim nächsten Login.
+
+**Trainingsdaten anderer Konten bleiben auch für Administratoren privat.** In
+der Benutzerverwaltung ist nur sichtbar, wie viele Trainings ein Konto hat –
+keine Pläne, keine Sätze, keine Gewichte.
+
 ## Backup
 
 Alles steckt in einer einzigen SQLite-Datei. Sauber (also auch im laufenden
@@ -291,9 +368,27 @@ src/
 drizzle/          Generierte SQL-Migrationen
 ```
 
+### Messarten
+
+Jede Übung hat eine Messart, die bestimmt, was du erfasst und wie daraus die
+bewegte Last wird:
+
+| Messart | Du trägst ein | Bewegte Last |
+| --- | --- | --- |
+| Gewicht × Wiederholungen | das aufgelegte Gewicht | genau dieses Gewicht |
+| Körpergewicht (+ Zusatzgewicht) | optionales Zusatzgewicht | Körpergewicht **plus** Zusatz |
+| Körpergewicht − Gegengewicht | das Gegengewicht der Maschine | Körpergewicht **minus** Gegengewicht |
+| Zeit | die Dauer | keine (zählt nicht ins Volumen) |
+
+Die dritte ist für **assistierte Klimmzug- und Dip-Maschinen**: das eingestellte
+Gegengewicht nimmt dir Last ab. Entsprechend ist **weniger** Gegengewicht die
+Steigerung — die App dreht die Richtung um, ein Satz mit 5 kg weniger Hilfe
+erscheint als Fortschritt (`▲ −5 kg Hilfe`), nicht als Rückschritt.
+
 ### Wie das bewegte Gewicht gerechnet wird
 
-Volumen eines Satzes = Gewicht × Wiederholungen, aufsummiert über alle Sätze.
-Bei Körpergewichts-Übungen (Klimmzüge, Dips) zählt das in den Einstellungen
-hinterlegte Körpergewicht mit — sonst wären Klimmzüge rechnerisch wertlos.
-Zeit-Übungen tragen kein Volumen bei.
+Volumen eines Satzes = bewegte Last × Wiederholungen, aufsummiert über alle
+Sätze. Das in den Einstellungen hinterlegte Körpergewicht geht dabei in die
+beiden Körpergewichts-Messarten ein — sonst wären Klimmzüge rechnerisch
+wertlos. Mehr Gegengewicht als Körpergewicht ergibt null statt einer negativen
+Last.

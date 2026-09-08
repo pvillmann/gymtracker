@@ -9,7 +9,6 @@ import { sessions, users } from "@/db/schema";
 import {
   consumeEmailVerificationToken,
   consumePasswordResetToken,
-  createEmailVerificationToken,
   createPasswordResetToken,
   createSession,
   destroySession,
@@ -20,8 +19,9 @@ import {
 } from "@/lib/auth";
 import { newId } from "@/lib/ids";
 import { optionalText, text } from "@/lib/formdata";
-import { appUrl, sendPasswordResetEmail, sendVerificationEmail } from "@/lib/mail";
+import { appUrl, sendPasswordResetEmail } from "@/lib/mail";
 import { fail, type FormState } from "@/lib/result";
+import { sendVerificationLink } from "@/lib/verification";
 
 const credentials = z.object({
   email: z.string().trim().toLowerCase().email("Bitte eine gültige E-Mail angeben."),
@@ -42,21 +42,6 @@ const emailOnly = z.object({
  * SMTP-Fehlern weiter – das Konto existiert so oder so schon, ein
  * Mailausfall soll die Registrierung nicht als Ganzes scheitern lassen.
  */
-async function sendVerificationLink(
-  userId: string,
-  email: string,
-  name: string,
-): Promise<boolean> {
-  const token = await createEmailVerificationToken(userId);
-  try {
-    await sendVerificationEmail(email, name, appUrl(`/verify-email?token=${token}`));
-    return true;
-  } catch (error) {
-    console.error("Verifizierungsmail konnte nicht verschickt werden:", error);
-    return false;
-  }
-}
-
 export async function registerAction(
   _prev: FormState,
   formData: FormData,
@@ -126,12 +111,20 @@ export async function loginAction(
     return fail("E-Mail oder Passwort ist falsch.");
   }
 
+  // Vor der Verifizierungs-Weiterleitung prüfen, sonst landet ein gesperrtes
+  // unbestätigtes Konto im Bestätigungsablauf statt an dieser Wand.
+  if (user.disabledAt !== null) {
+    return fail("Dieses Konto ist gesperrt. Wende dich an einen Administrator.");
+  }
+
   if (!user.emailVerifiedAt) {
     redirect(`/verify-email/pending?${new URLSearchParams({ email: user.email })}`);
   }
 
   await createSession(user.id);
-  redirect("/");
+
+  // Das Übergangskonto kann nur eines: die Einrichtung abschließen.
+  redirect(user.isSetupAccount ? "/setup" : "/");
 }
 
 export async function logoutAction(): Promise<void> {
@@ -177,7 +170,12 @@ export async function resendVerificationAction(
       .limit(1);
     const user = found[0];
 
-    if (user && !user.emailVerifiedAt && !(await hasRecentEmailVerificationToken(user.id))) {
+    if (
+      user &&
+      !user.isSetupAccount &&
+      !user.emailVerifiedAt &&
+      !(await hasRecentEmailVerificationToken(user.id))
+    ) {
       await sendVerificationLink(user.id, user.email, user.name);
     }
   }
@@ -199,7 +197,10 @@ export async function requestPasswordResetAction(
       .limit(1);
     const user = found[0];
 
-    if (user && !(await hasRecentPasswordResetToken(user.id))) {
+    // Das Einrichtungskonto ist ausgenommen: seine Adresse gehört einer
+    // fremden Domain, dorthin darf nie etwas rausgehen. Das Passwort steht
+    // ohnehin bei jedem Start neu im Server-Log.
+    if (user && !user.isSetupAccount && !(await hasRecentPasswordResetToken(user.id))) {
       const token = await createPasswordResetToken(user.id);
       try {
         await sendPasswordResetEmail(

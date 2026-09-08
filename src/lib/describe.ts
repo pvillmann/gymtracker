@@ -13,6 +13,12 @@ export function describeSet(set: SetLike, mode: TrackingMode): string {
   if (mode === "time") {
     return formatDuration(set.durationSeconds ?? 0);
   }
+  if (mode === "assisted_reps") {
+    // Das Minus macht sofort klar, dass hier Last abgenommen wird.
+    return set.weightKg > 0
+      ? `−${formatKg(set.weightKg)} kg × ${set.reps}`
+      : `${set.reps} Wdh.`;
+  }
   if (mode === "bodyweight_reps") {
     return set.weightKg > 0
       ? `+${formatKg(set.weightKg)} kg × ${set.reps}`
@@ -47,6 +53,8 @@ export function trackingModeLabel(mode: TrackingMode): string {
   switch (mode) {
     case "bodyweight_reps":
       return "Körpergewicht";
+    case "assisted_reps":
+      return "Gegengewicht";
     case "time":
       return "Zeit";
     default:

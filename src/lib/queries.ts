@@ -18,6 +18,7 @@ import {
   exercises,
   planExercises,
   plans,
+  users,
   workouts,
   workoutSets,
   type Exercise,
@@ -531,6 +532,8 @@ export async function getBestsBefore(
         (case
           when ${exercises.trackingMode} = 'bodyweight_reps'
           then ${bodyweightKg} + ${workoutSets.weightKg}
+          when ${exercises.trackingMode} = 'assisted_reps'
+          then max(${bodyweightKg} - ${workoutSets.weightKg}, 0)
           else ${workoutSets.weightKg}
         end) * (1 + ${workoutSets.reps} / 30.0)
       )`,
@@ -551,4 +554,57 @@ export async function getBestsBefore(
     result.set(row.exerciseId, Math.max(row.best ?? 0, 0));
   }
   return result;
+}
+
+export type ManagedUser = {
+  id: string;
+  name: string;
+  email: string;
+  emailVerifiedAt: number | null;
+  disabledAt: number | null;
+  createdAt: number;
+  workoutCount: number;
+};
+
+/**
+ * Alle Konten für die Benutzerverwaltung, neueste zuerst. Die Zahl der
+ * Trainings gibt einen Anhaltspunkt, wie aktiv ein Konto ist – Inhalte der
+ * Trainings sieht ein Administrator bewusst nicht.
+ */
+export async function listAllUsers(): Promise<ManagedUser[]> {
+  return db
+    .select({
+      id: users.id,
+      name: users.name,
+      email: users.email,
+      emailVerifiedAt: users.emailVerifiedAt,
+      disabledAt: users.disabledAt,
+      createdAt: users.createdAt,
+      workoutCount: count(workouts.id),
+    })
+    .from(users)
+    .leftJoin(workouts, eq(workouts.userId, users.id))
+    .groupBy(users.id)
+    .orderBy(desc(users.createdAt));
+}
+
+/**
+ * Konten, die sich bei der Einrichtung zum Administrator machen lassen.
+ * Unbestätigte und gesperrte Konten bleiben außen vor – als Administrator
+ * kämen sie nicht am Login vorbei.
+ */
+export async function listPromotableAccounts(): Promise<
+  Array<{ id: string; name: string; email: string }>
+> {
+  return db
+    .select({ id: users.id, name: users.name, email: users.email })
+    .from(users)
+    .where(
+      and(
+        eq(users.isSetupAccount, false),
+        isNull(users.disabledAt),
+        isNotNull(users.emailVerifiedAt),
+      ),
+    )
+    .orderBy(asc(users.createdAt));
 }

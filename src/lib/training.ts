@@ -16,16 +16,24 @@ export function setVolume(
 }
 
 /**
- * Tatsächlich bewegte Last eines Satzes. Bei Körpergewichts-Übungen ist das
- * Zusatzgewicht allein aussagelos – ohne das Körpergewicht wäre ein Klimmzug
- * mit 0 kg Zusatz rechnerisch nichts wert.
+ * Tatsächlich bewegte Last eines Satzes.
+ *
+ * Bei Körpergewichts-Übungen ist das Zusatzgewicht allein aussagelos – ohne
+ * das Körpergewicht wäre ein Klimmzug mit 0 kg Zusatz rechnerisch nichts wert.
+ *
+ * An einer assistierten Maschine ist es umgekehrt: das eingestellte
+ * Gegengewicht nimmt dir Last ab, es wird also abgezogen. Weniger Gegengewicht
+ * ist demnach die Steigerung, nicht mehr.
  */
 export function effectiveLoad(
   mode: TrackingMode,
   weightKg: number,
   bodyweightKg: number,
 ): number {
-  return mode === "bodyweight_reps" ? bodyweightKg + weightKg : weightKg;
+  if (mode === "bodyweight_reps") return bodyweightKg + weightKg;
+  // Nicht unter null: mehr Gegengewicht als Körpergewicht hebt sich auf.
+  if (mode === "assisted_reps") return Math.max(0, bodyweightKg - weightKg);
+  return weightKg;
 }
 
 /**
@@ -80,6 +88,7 @@ export function compareSets(
   current: ComparableSet,
   previous: ComparableSet | null | undefined,
   mode: TrackingMode,
+  bodyweightKg: number,
 ): SetComparison {
   if (!previous) return { trend: "new", label: "neu" };
 
@@ -96,15 +105,21 @@ export function compareSets(
 
   const weightDiff = current.weightKg - previous.weightKg;
   const repsDiff = current.reps - previous.reps;
+  // Die Richtung kommt aus der effektiven Last, nicht aus dem eingestellten
+  // Gewicht. Nur so zeigt eine Maschine mit Gegengewicht nach oben, wenn du
+  // die Hilfe reduzierst.
   const trend = trendOf(
-    estimateOneRepMax(current.weightKg, current.reps),
-    estimateOneRepMax(previous.weightKg, previous.reps),
+    estimateOneRepMax(effectiveLoad(mode, current.weightKg, bodyweightKg), current.reps),
+    estimateOneRepMax(effectiveLoad(mode, previous.weightKg, bodyweightKg), previous.reps),
   );
 
   if (Math.abs(weightDiff) >= 0.05) {
     const rounded = Math.round(Math.abs(weightDiff) * 10) / 10;
     const value = rounded.toLocaleString("de-DE", { maximumFractionDigits: 1 });
-    return { trend, label: `${weightDiff > 0 ? "+" : "−"}${value} kg` };
+    // Beim Gegengewicht benennt das Label die Hilfe, der Pfeil die Leistung:
+    // "▲ −5 kg Hilfe" heißt fünf Kilo weniger Unterstützung.
+    const unit = mode === "assisted_reps" ? " kg Hilfe" : " kg";
+    return { trend, label: `${weightDiff > 0 ? "+" : "−"}${value}${unit}` };
   }
 
   if (repsDiff !== 0) {

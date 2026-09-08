@@ -149,7 +149,13 @@ export default async function ExerciseDetailPage({
               </div>
             </Card>
             <Card>
-              <p className="text-xs text-muted">Schwerstes Gewicht</p>
+              <p className="text-xs text-muted">
+                {/* Bei Körpergewichts- und Maschinenübungen ist die gezeigte
+                    Zahl die bewegte Last, nicht das eingestellte Gewicht. */}
+                {exercise.trackingMode === "weight_reps"
+                  ? "Schwerstes Gewicht"
+                  : "Höchste Last"}
+              </p>
               <p className="mt-1 text-lg font-bold tnum">{formatKg(heaviest)} kg</p>
               <p className="mt-1.5 text-xs text-faint">
                 Beste Wiederholungen: {bestReps}
