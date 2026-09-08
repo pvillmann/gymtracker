@@ -1,0 +1,1 @@
+ALTER TABLE `users` ADD `is_setup_account` integer DEFAULT false NOT NULL;

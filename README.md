@@ -191,26 +191,37 @@ mitbringt: **Administratoren**. Die Tabellen sind bewusst allgemein gehalten,
 damit später auch fachliche Gruppen dazukommen können, über die sich
 Trainingspläne teilen lassen.
 
-### Zum Administrator werden
+### Ersteinrichtung
 
-Trag deine Adresse in die `.env` ein und starte neu:
+Solange es **keinen** Administrator gibt, legt die Anwendung beim Start ein
+Übergangskonto an und weist im Log darauf hin:
 
 ```
-ADMIN_EMAILS=du@beispiel.de
+admin / admin
 ```
 
-```bash
-docker compose up -d
-```
+Damit meldest du dich an und landest direkt auf der Einrichtungsseite. Dort
+gibt es zwei Wege:
 
-Der Abgleich läuft bei **jedem** Start und ist idempotent. Das ist Absicht: wer
-sich die Rechte versehentlich selbst entzieht, bekommt sie durch einen Neustart
-zurück, ohne in der Datenbank herumoperieren zu müssen. Existiert zu einer
-Adresse noch kein Konto, steht ein Hinweis im Log und der nächste Start trägt
-es nach.
+- **Neues Konto anlegen** – der Normalfall bei einer frischen Installation.
+- **Bestehendes Konto übernehmen** – wenn schon Konten existieren, etwa weil du
+  GymTracker vor dieser Version betrieben hast. Du wählst dein eigenes aus,
+  statt ein zweites anzulegen.
 
-Danach findest du unter **Einstellungen → Administration** die
-Benutzerverwaltung.
+In beiden Fällen wird das gewählte Konto Administrator, das Übergangskonto
+gelöscht und die Einrichtungsseite verschwindet. Danach findest du unter
+**Einstellungen → Administration** die Benutzerverwaltung.
+
+> **Auf einer öffentlich erreichbaren Instanz gehört das sofort erledigt.**
+> Bis die Einrichtung abgeschlossen ist, kann sie jeder abschließen, der die
+> Adresse kennt. Das Übergangskonto kann zwar nichts anderes – keine
+> Trainingsdaten, keine Benutzerverwaltung –, aber wer zuerst kommt, bestimmt
+> den Administrator. Am saubersten richtest du die Instanz ein, **bevor** du
+> sie ins Netz hängst.
+
+Das Übergangskonto ist zugleich der Notausgang: Wer versehentlich alle
+Administratoren entfernt, bekommt es nach einem Neustart wieder – statt sich
+dauerhaft ausgesperrt zu haben.
 
 ### Was ein Administrator kann
 
@@ -315,7 +326,6 @@ Nützliche Skripte:
 | Variable | Standard | Bedeutung |
 | --- | --- | --- |
 | `DATABASE_PATH` | `./data/gym.db` lokal, `/data/gym.db` im Container | Pfad zur SQLite-Datei. Im Container von `docker-compose.yml` gesetzt – trag ihn nicht zusätzlich in die `.env` ein. |
-| `ADMIN_EMAILS` | — | Konten, die beim Start Administrator werden. Mehrere durch Komma getrennt |
 | `REGISTRATION_CODE` | — | Wenn gesetzt, ist die Registrierung durch diesen Code geschützt |
 | `COOKIE_SECURE` | automatisch | Erzwingt (`true`) oder verhindert (`false`) das `secure`-Flag des Session-Cookies |
 | `SMTP_HOST` | — | Pflicht. Adresse des SMTP-Servers |

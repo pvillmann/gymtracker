@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { BottomNav } from "@/components/BottomNav";
 import { requireUser } from "@/lib/auth";
@@ -9,6 +10,9 @@ export default async function AppLayout({
   children: React.ReactNode;
 }) {
   const user = await requireUser();
+  // Das Übergangskonto hat in der App nichts zu suchen – nur in der Einrichtung.
+  if (user.isSetupAccount) redirect("/setup");
+
   const initials = user.name.trim().slice(0, 2).toUpperCase();
 
   return (

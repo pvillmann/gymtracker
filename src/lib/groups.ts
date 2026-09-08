@@ -27,6 +27,15 @@ export async function isAdmin(userId: string): Promise<boolean> {
   return (await getAdminUserIds()).has(userId);
 }
 
+/**
+ * Solange es keinen einzigen Administrator gibt, ist die Instanz nicht
+ * eingerichtet – dann existiert das Übergangskonto und die Setup-Seite ist
+ * erreichbar.
+ */
+export async function isSetupPending(): Promise<boolean> {
+  return (await getAdminUserIds()).size === 0;
+}
+
 /** Die Gruppe selbst – das Bootstrapping legt sie beim Start an. */
 export async function getAdminGroup() {
   const rows = await db

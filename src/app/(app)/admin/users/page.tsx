@@ -13,7 +13,7 @@ import { ConfirmSubmitButton } from "@/components/ConfirmSubmitButton";
 import { SubmitButton } from "@/components/SubmitButton";
 import { Card, PageHeader, cx } from "@/components/ui";
 import { requireAdmin } from "@/lib/auth";
-import { formatDate } from "@/lib/format";
+import { formatDate, plural } from "@/lib/format";
 import { getAdminUserIds } from "@/lib/groups";
 import { listAllUsers } from "@/lib/queries";
 
@@ -79,8 +79,8 @@ export default async function AdminUsersPage({
       <PageHeader
         title="Benutzerverwaltung"
         subtitle={[
-          `${people.length} Konten`,
-          `${adminIds.size} Admin${adminIds.size === 1 ? "" : "s"}`,
+          plural(people.length, "Konto", "Konten"),
+          plural(adminIds.size, "Admin", "Admins"),
           unverified > 0 ? `${unverified} unbestätigt` : null,
           locked > 0 ? `${locked} gesperrt` : null,
         ]

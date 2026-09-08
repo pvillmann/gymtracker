@@ -23,6 +23,19 @@ import { appUrl, sendPasswordResetEmail } from "@/lib/mail";
 import { fail, type FormState } from "@/lib/result";
 import { sendVerificationLink } from "@/lib/verification";
 
+/**
+ * Beim Login wird der Wert nur nachgeschlagen, nicht zugestellt – deshalb hier
+ * bewusst kein Format-Zwang. Das lässt auch den Benutzernamen des
+ * Übergangskontos ("admin") durch, der keine Adresse ist.
+ *
+ * Bewusst getrennt von den Registrierungsregeln: dort müssen E-Mail-Format und
+ * Mindestlänge des Passworts weiter gelten.
+ */
+const loginInput = z.object({
+  email: z.string().trim().toLowerCase().min(1),
+  password: z.string().min(1),
+});
+
 const credentials = z.object({
   email: z.string().trim().toLowerCase().email("Bitte eine gültige E-Mail angeben."),
   password: z.string().min(8, "Das Passwort braucht mindestens 8 Zeichen."),
@@ -92,7 +105,7 @@ export async function loginAction(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  const parsed = credentials.safeParse({
+  const parsed = loginInput.safeParse({
     email: text(formData, "email"),
     password: text(formData, "password"),
   });
@@ -122,7 +135,9 @@ export async function loginAction(
   }
 
   await createSession(user.id);
-  redirect("/");
+
+  // Das Übergangskonto kann nur eines: die Einrichtung abschließen.
+  redirect(user.isSetupAccount ? "/setup" : "/");
 }
 
 export async function logoutAction(): Promise<void> {

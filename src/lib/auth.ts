@@ -2,18 +2,11 @@ import "server-only";
 
 import { desc, eq, lt } from "drizzle-orm";
 import { cache } from "react";
-import {
-  createHash,
-  randomBytes,
-  scrypt as scryptCallback,
-  timingSafeEqual,
-} from "node:crypto";
-import { promisify } from "node:util";
+import { createHash, randomBytes } from "node:crypto";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { db } from "@/db";
-import { isAdmin } from "@/lib/groups";
 import {
   emailVerificationTokens,
   passwordResetTokens,
@@ -21,38 +14,18 @@ import {
   users,
   type User,
 } from "@/db/schema";
+import { isAdmin } from "@/lib/groups";
+import { hashPassword, verifyPassword } from "@/lib/password";
 
-const scrypt = promisify(scryptCallback) as (
-  password: string,
-  salt: Buffer,
-  keylen: number,
-) => Promise<Buffer>;
+// Weitergereicht, damit die bestehenden Importstellen "@/lib/auth" behalten.
+export { hashPassword, verifyPassword };
 
 const SESSION_COOKIE = "gym_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 90; // 90 Tage
-const KEY_LENGTH = 64;
-
-export async function hashPassword(password: string): Promise<string> {
-  const salt = randomBytes(16);
-  const derived = await scrypt(password, salt, KEY_LENGTH);
-  return `scrypt$${salt.toString("hex")}$${derived.toString("hex")}`;
-}
-
-export async function verifyPassword(
-  password: string,
-  stored: string,
-): Promise<boolean> {
-  const [algorithm, saltHex, hashHex] = stored.split("$");
-  if (algorithm !== "scrypt" || !saltHex || !hashHex) return false;
-
-  const expected = Buffer.from(hashHex, "hex");
-  const derived = await scrypt(password, Buffer.from(saltHex, "hex"), expected.length);
-  return expected.length === derived.length && timingSafeEqual(expected, derived);
-}
 
 /** SHA-256 eines Tokens – dieselbe Funktion für Sessions, Verifizierungs- und
  * Reset-Links, damit nirgendwo ein Klartext-Token in der DB landet. */
-export function hashToken(token: string): string {
+function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 

@@ -585,3 +585,24 @@ export async function listAllUsers(): Promise<ManagedUser[]> {
     .groupBy(users.id)
     .orderBy(desc(users.createdAt));
 }
+
+/**
+ * Konten, die sich bei der Einrichtung zum Administrator machen lassen.
+ * Unbestätigte und gesperrte Konten bleiben außen vor – als Administrator
+ * kämen sie nicht am Login vorbei.
+ */
+export async function listPromotableAccounts(): Promise<
+  Array<{ id: string; name: string; email: string }>
+> {
+  return db
+    .select({ id: users.id, name: users.name, email: users.email })
+    .from(users)
+    .where(
+      and(
+        eq(users.isSetupAccount, false),
+        isNull(users.disabledAt),
+        isNotNull(users.emailVerifiedAt),
+      ),
+    )
+    .orderBy(asc(users.createdAt));
+}

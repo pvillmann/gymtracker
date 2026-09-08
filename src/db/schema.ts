@@ -30,6 +30,14 @@ export const users = sqliteTable(
      * ohne die Trainingsdaten anzufassen – die Umkehrung von "löschen".
      */
     disabledAt: integer("disabled_at"),
+    /**
+     * Das Übergangskonto "admin", das die Anwendung anlegt, solange es keinen
+     * Administrator gibt. Es kann nichts außer die Einrichtung abschließen und
+     * wird danach gelöscht.
+     */
+    isSetupAccount: integer("is_setup_account", { mode: "boolean" })
+      .notNull()
+      .default(false),
     createdAt: integer("created_at").notNull().default(now),
   },
   (t) => [uniqueIndex("users_email_unique").on(t.email)],
