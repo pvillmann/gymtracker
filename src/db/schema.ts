@@ -12,7 +12,11 @@ import {
 const now = sql`(unixepoch())`;
 
 /** Tracking-Modus einer Übung. Bestimmt, welche Felder beim Loggen erfasst werden. */
-export type TrackingMode = "weight_reps" | "bodyweight_reps" | "time";
+export type TrackingMode =
+  | "weight_reps"
+  | "bodyweight_reps"
+  | "assisted_reps"
+  | "time";
 
 export const users = sqliteTable(
   "users",

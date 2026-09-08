@@ -283,7 +283,12 @@ export function ExerciseLogger({
             const reference = previous?.sets.find(
               (s) => s.setNumber === set.setNumber,
             );
-            const comparison = compareSets(set, reference, exercise.trackingMode);
+            const comparison = compareSets(
+              set,
+              reference,
+              exercise.trackingMode,
+              bodyweightKg,
+            );
 
             return (
               <li
@@ -360,7 +365,9 @@ export function ExerciseLogger({
               label={
                 exercise.trackingMode === "bodyweight_reps"
                   ? "Zusatzgewicht (kg)"
-                  : "Gewicht (kg)"
+                  : exercise.trackingMode === "assisted_reps"
+                    ? "Gegengewicht (kg)"
+                    : "Gewicht (kg)"
               }
               name="weightKg"
               value={weight}

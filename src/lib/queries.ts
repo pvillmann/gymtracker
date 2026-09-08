@@ -532,6 +532,8 @@ export async function getBestsBefore(
         (case
           when ${exercises.trackingMode} = 'bodyweight_reps'
           then ${bodyweightKg} + ${workoutSets.weightKg}
+          when ${exercises.trackingMode} = 'assisted_reps'
+          then max(${bodyweightKg} - ${workoutSets.weightKg}, 0)
           else ${workoutSets.weightKg}
         end) * (1 + ${workoutSets.reps} / 30.0)
       )`,

@@ -29,6 +29,11 @@ export const TRACKING_MODES: Array<{
     hint: "Klimmzüge, Dips, Liegestütze. Fürs Volumen zählt dein Körpergewicht mit.",
   },
   {
+    value: "assisted_reps",
+    label: "Körpergewicht − Gegengewicht",
+    hint: "Assistierte Klimmzug- und Dip-Maschinen. Das eingestellte Gegengewicht nimmt dir Last ab und wird abgezogen.",
+  },
+  {
     value: "time",
     label: "Zeit",
     hint: "Planks, Hängen, Cardio-Intervalle.",
@@ -59,5 +64,11 @@ export const DEFAULT_EXERCISES: Array<{
   { name: "Bauchpresse", muscleGroup: "Bauch" },
   { name: "Plank", muscleGroup: "Bauch", trackingMode: "time" },
   { name: "Klimmzüge", muscleGroup: "Rücken", trackingMode: "bodyweight_reps" },
+  {
+    name: "Klimmzugmaschine",
+    muscleGroup: "Rücken",
+    trackingMode: "assisted_reps",
+    weightStepKg: 5,
+  },
   { name: "Laufband", muscleGroup: "Cardio", trackingMode: "time" },
 ];

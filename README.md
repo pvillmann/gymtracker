@@ -368,9 +368,27 @@ src/
 drizzle/          Generierte SQL-Migrationen
 ```
 
+### Messarten
+
+Jede Übung hat eine Messart, die bestimmt, was du erfasst und wie daraus die
+bewegte Last wird:
+
+| Messart | Du trägst ein | Bewegte Last |
+| --- | --- | --- |
+| Gewicht × Wiederholungen | das aufgelegte Gewicht | genau dieses Gewicht |
+| Körpergewicht (+ Zusatzgewicht) | optionales Zusatzgewicht | Körpergewicht **plus** Zusatz |
+| Körpergewicht − Gegengewicht | das Gegengewicht der Maschine | Körpergewicht **minus** Gegengewicht |
+| Zeit | die Dauer | keine (zählt nicht ins Volumen) |
+
+Die dritte ist für **assistierte Klimmzug- und Dip-Maschinen**: das eingestellte
+Gegengewicht nimmt dir Last ab. Entsprechend ist **weniger** Gegengewicht die
+Steigerung — die App dreht die Richtung um, ein Satz mit 5 kg weniger Hilfe
+erscheint als Fortschritt (`▲ −5 kg Hilfe`), nicht als Rückschritt.
+
 ### Wie das bewegte Gewicht gerechnet wird
 
-Volumen eines Satzes = Gewicht × Wiederholungen, aufsummiert über alle Sätze.
-Bei Körpergewichts-Übungen (Klimmzüge, Dips) zählt das in den Einstellungen
-hinterlegte Körpergewicht mit — sonst wären Klimmzüge rechnerisch wertlos.
-Zeit-Übungen tragen kein Volumen bei.
+Volumen eines Satzes = bewegte Last × Wiederholungen, aufsummiert über alle
+Sätze. Das in den Einstellungen hinterlegte Körpergewicht geht dabei in die
+beiden Körpergewichts-Messarten ein — sonst wären Klimmzüge rechnerisch
+wertlos. Mehr Gegengewicht als Körpergewicht ergibt null statt einer negativen
+Last.

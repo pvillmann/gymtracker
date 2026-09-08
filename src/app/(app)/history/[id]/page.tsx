@@ -172,7 +172,12 @@ export default async function WorkoutDetailPage({
                   const reference = last?.sets.find(
                     (s) => s.setNumber === set.setNumber,
                   );
-                  const comparison = compareSets(set, reference, entry.trackingMode);
+                  const comparison = compareSets(
+                    set,
+                    reference,
+                    entry.trackingMode,
+                    user.bodyweightKg,
+                  );
 
                   return (
                     <li
