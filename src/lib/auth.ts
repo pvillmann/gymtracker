@@ -13,6 +13,7 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { db } from "@/db";
+import { isAdmin } from "@/lib/groups";
 import {
   emailVerificationTokens,
   passwordResetTokens,
@@ -120,6 +121,8 @@ export const getCurrentUser = cache(async (): Promise<User | null> => {
   const row = rows[0];
   if (!row) return null;
   if (row.expiresAt < Math.floor(Date.now() / 1000)) return null;
+  // Eine Sperre wirkt sofort, auch auf bereits angemeldete Geräte.
+  if (row.user.disabledAt !== null) return null;
 
   return row.user;
 });
@@ -128,6 +131,17 @@ export const getCurrentUser = cache(async (): Promise<User | null> => {
 export async function requireUser(): Promise<User> {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
+  return user;
+}
+
+/**
+ * Wie requireUser, verlangt zusätzlich die Mitgliedschaft in der
+ * Administratoren-Gruppe. Jede Admin-Seite und jede Admin-Action ruft das auf –
+ * eine im Menü versteckte Schaltfläche ist kein Zugriffsschutz.
+ */
+export async function requireAdmin(): Promise<User> {
+  const user = await requireUser();
+  if (!(await isAdmin(user.id))) redirect("/");
   return user;
 }
 

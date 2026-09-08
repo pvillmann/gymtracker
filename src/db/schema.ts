@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
   index,
   integer,
+  primaryKey,
   real,
   sqliteTable,
   text,
@@ -24,9 +25,54 @@ export const users = sqliteTable(
     bodyweightKg: real("bodyweight_kg").notNull().default(80),
     /** null = noch nicht bestätigt. Login ist erst danach möglich. */
     emailVerifiedAt: integer("email_verified_at"),
+    /**
+     * null = aktiv. Gesetzt sperrt es den Login und beendet laufende Sessions,
+     * ohne die Trainingsdaten anzufassen – die Umkehrung von "löschen".
+     */
+    disabledAt: integer("disabled_at"),
     createdAt: integer("created_at").notNull().default(now),
   },
   (t) => [uniqueIndex("users_email_unique").on(t.email)],
+);
+
+/**
+ * Benutzergruppen. Bewusst allgemein gehalten und nicht als Rollen-Spalte auf
+ * users: so lassen sich später auch fachliche Gruppen anlegen, über die
+ * Trainingspläne geteilt werden.
+ */
+export const groups = sqliteTable(
+  "groups",
+  {
+    id: text("id").primaryKey(),
+    /** Stabiler Bezeichner, über den der Code eine Gruppe findet. */
+    slug: text("slug").notNull(),
+    name: text("name").notNull(),
+    description: text("description"),
+    /**
+     * Systemgruppen gehören zur Anwendung selbst (aktuell nur die
+     * Administratoren) und lassen sich weder umbenennen noch löschen.
+     */
+    isSystem: integer("is_system", { mode: "boolean" }).notNull().default(false),
+    createdAt: integer("created_at").notNull().default(now),
+  },
+  (t) => [uniqueIndex("groups_slug_unique").on(t.slug)],
+);
+
+export const groupMembers = sqliteTable(
+  "group_members",
+  {
+    groupId: text("group_id")
+      .notNull()
+      .references(() => groups.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    addedAt: integer("added_at").notNull().default(now),
+  },
+  (t) => [
+    primaryKey({ columns: [t.groupId, t.userId] }),
+    index("group_members_user_idx").on(t.userId),
+  ],
 );
 
 export const sessions = sqliteTable(
@@ -181,6 +227,8 @@ export const workoutSets = sqliteTable(
 );
 
 export type User = typeof users.$inferSelect;
+export type Group = typeof groups.$inferSelect;
+export type GroupMember = typeof groupMembers.$inferSelect;
 export type Exercise = typeof exercises.$inferSelect;
 export type Plan = typeof plans.$inferSelect;
 export type PlanExercise = typeof planExercises.$inferSelect;

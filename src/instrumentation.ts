@@ -4,4 +4,7 @@ export async function register() {
 
   const { runMigrations } = await import("./db/migrate");
   runMigrations();
+
+  const { ensureAdminGroup } = await import("./db/bootstrap");
+  await ensureAdminGroup();
 }

@@ -18,6 +18,7 @@ import {
   exercises,
   planExercises,
   plans,
+  users,
   workouts,
   workoutSets,
   type Exercise,
@@ -551,4 +552,36 @@ export async function getBestsBefore(
     result.set(row.exerciseId, Math.max(row.best ?? 0, 0));
   }
   return result;
+}
+
+export type ManagedUser = {
+  id: string;
+  name: string;
+  email: string;
+  emailVerifiedAt: number | null;
+  disabledAt: number | null;
+  createdAt: number;
+  workoutCount: number;
+};
+
+/**
+ * Alle Konten für die Benutzerverwaltung, neueste zuerst. Die Zahl der
+ * Trainings gibt einen Anhaltspunkt, wie aktiv ein Konto ist – Inhalte der
+ * Trainings sieht ein Administrator bewusst nicht.
+ */
+export async function listAllUsers(): Promise<ManagedUser[]> {
+  return db
+    .select({
+      id: users.id,
+      name: users.name,
+      email: users.email,
+      emailVerifiedAt: users.emailVerifiedAt,
+      disabledAt: users.disabledAt,
+      createdAt: users.createdAt,
+      workoutCount: count(workouts.id),
+    })
+    .from(users)
+    .leftJoin(workouts, eq(workouts.userId, users.id))
+    .groupBy(users.id)
+    .orderBy(desc(users.createdAt));
 }

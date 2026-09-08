@@ -9,7 +9,6 @@ import { sessions, users } from "@/db/schema";
 import {
   consumeEmailVerificationToken,
   consumePasswordResetToken,
-  createEmailVerificationToken,
   createPasswordResetToken,
   createSession,
   destroySession,
@@ -20,8 +19,9 @@ import {
 } from "@/lib/auth";
 import { newId } from "@/lib/ids";
 import { optionalText, text } from "@/lib/formdata";
-import { appUrl, sendPasswordResetEmail, sendVerificationEmail } from "@/lib/mail";
+import { appUrl, sendPasswordResetEmail } from "@/lib/mail";
 import { fail, type FormState } from "@/lib/result";
+import { sendVerificationLink } from "@/lib/verification";
 
 const credentials = z.object({
   email: z.string().trim().toLowerCase().email("Bitte eine gültige E-Mail angeben."),
@@ -42,21 +42,6 @@ const emailOnly = z.object({
  * SMTP-Fehlern weiter – das Konto existiert so oder so schon, ein
  * Mailausfall soll die Registrierung nicht als Ganzes scheitern lassen.
  */
-async function sendVerificationLink(
-  userId: string,
-  email: string,
-  name: string,
-): Promise<boolean> {
-  const token = await createEmailVerificationToken(userId);
-  try {
-    await sendVerificationEmail(email, name, appUrl(`/verify-email?token=${token}`));
-    return true;
-  } catch (error) {
-    console.error("Verifizierungsmail konnte nicht verschickt werden:", error);
-    return false;
-  }
-}
-
 export async function registerAction(
   _prev: FormState,
   formData: FormData,
@@ -124,6 +109,12 @@ export async function loginAction(
   const user = found[0];
   if (!user || !(await verifyPassword(parsed.data.password, user.passwordHash))) {
     return fail("E-Mail oder Passwort ist falsch.");
+  }
+
+  // Vor der Verifizierungs-Weiterleitung prüfen, sonst landet ein gesperrtes
+  // unbestätigtes Konto im Bestätigungsablauf statt an dieser Wand.
+  if (user.disabledAt !== null) {
+    return fail("Dieses Konto ist gesperrt. Wende dich an einen Administrator.");
   }
 
   if (!user.emailVerifiedAt) {

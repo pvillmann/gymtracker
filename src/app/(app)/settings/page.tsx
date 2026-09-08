@@ -7,13 +7,15 @@ import {
   PasswordForm,
   ProfileForm,
 } from "@/components/SettingsForms";
-import { Card, PageHeader } from "@/components/ui";
+import { ButtonLink, Card, PageHeader } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
+import { isAdmin } from "@/lib/groups";
 
 export const metadata: Metadata = { title: "Einstellungen · GymTracker" };
 
 export default async function SettingsPage() {
   const user = await requireUser();
+  const userIsAdmin = await isAdmin(user.id);
 
   return (
     <>
@@ -36,6 +38,24 @@ export default async function SettingsPage() {
           <PasswordForm />
         </Card>
       </section>
+
+      {userIsAdmin ? (
+        <section className="mb-6">
+          <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+            Administration
+          </h2>
+          <Card>
+            <p className="mb-4 text-sm text-muted">
+              Du bist in der Gruppe <strong className="text-fg">Administratoren</strong>.
+              Damit kannst du Konten freischalten, sperren und Adminrechte
+              vergeben.
+            </p>
+            <ButtonLink href="/admin/users" variant="secondary" className="w-full">
+              Benutzerverwaltung
+            </ButtonLink>
+          </Card>
+        </section>
+      ) : null}
 
       <form action={logoutAction} className="mb-10">
         <SubmitButton variant="secondary" className="w-full">
