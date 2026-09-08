@@ -21,12 +21,16 @@ export default async function LoginPage({
         <div className="mb-4 rounded-xl border border-warn/40 bg-warn/10 px-4 py-3 text-sm">
           <p className="font-semibold text-warn">Diese Instanz ist noch nicht eingerichtet.</p>
           <p className="mt-1 text-muted">
-            Melde dich mit{" "}
+            Melde dich als{" "}
             <code className="rounded bg-surface-2 px-1 py-0.5 text-fg">{SETUP_LOGIN}</code>{" "}
-            / <code className="rounded bg-surface-2 px-1 py-0.5 text-fg">{SETUP_LOGIN}</code>{" "}
-            an und lege den ersten Administrator fest. Bis dahin kann das jeder
-            tun, der diese Adresse kennt.
+            an und lege den ersten Administrator fest. Das Passwort steht im
+            Server-Log:
           </p>
+          {/* Das Passwort steht bewusst nicht hier – wer es lesen kann, muss
+              Zugriff auf den Server haben. */}
+          <code className="mt-2 block overflow-x-auto rounded-lg bg-surface-2 px-3 py-2 text-xs text-fg">
+            docker compose logs gymtracker | grep -A6 &quot;nicht eingerichtet&quot;
+          </code>
         </div>
       ) : null}
 

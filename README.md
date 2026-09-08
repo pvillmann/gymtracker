@@ -194,11 +194,20 @@ Trainingspläne teilen lassen.
 ### Ersteinrichtung
 
 Solange es **keinen** Administrator gibt, legt die Anwendung beim Start ein
-Übergangskonto an und weist im Log darauf hin:
+Einrichtungskonto an und schreibt die Zugangsdaten ins Log:
+
+```bash
+docker compose logs gymtracker | grep -A6 "nicht eingerichtet"
+```
 
 ```
-admin / admin
+E-Mail:   admin@admin.de
+Passwort: k7qm2-xf9rt-3bnwd
 ```
+
+Das Passwort wird bei **jedem Start** neu erzeugt. Im Log steht damit immer
+ein gültiges, auch wenn die alte Ausgabe längst weggescrollt ist – und ein
+Passwort, das jemand mal mitgelesen hat, überlebt keinen Neustart.
 
 Damit meldest du dich an und landest direkt auf der Einrichtungsseite. Dort
 gibt es zwei Wege:
@@ -212,15 +221,13 @@ In beiden Fällen wird das gewählte Konto Administrator, das Übergangskonto
 gelöscht und die Einrichtungsseite verschwindet. Danach findest du unter
 **Einstellungen → Administration** die Benutzerverwaltung.
 
-> **Auf einer öffentlich erreichbaren Instanz gehört das sofort erledigt.**
-> Bis die Einrichtung abgeschlossen ist, kann sie jeder abschließen, der die
-> Adresse kennt. Das Übergangskonto kann zwar nichts anderes – keine
-> Trainingsdaten, keine Benutzerverwaltung –, aber wer zuerst kommt, bestimmt
-> den Administrator. Am saubersten richtest du die Instanz ein, **bevor** du
-> sie ins Netz hängst.
+Das Einrichtungskonto kann ausschließlich diese eine Sache. Es kommt weder in
+die App noch in die Benutzerverwaltung, und an seine Adresse wird nie eine Mail
+verschickt – auch kein „Passwort vergessen", denn `admin.de` gehört jemand
+anderem.
 
-Das Übergangskonto ist zugleich der Notausgang: Wer versehentlich alle
-Administratoren entfernt, bekommt es nach einem Neustart wieder – statt sich
+Es ist zugleich der Notausgang: Wer versehentlich alle Administratoren
+entfernt, bekommt nach einem Neustart wieder ein Einrichtungskonto – statt sich
 dauerhaft ausgesperrt zu haben.
 
 ### Was ein Administrator kann

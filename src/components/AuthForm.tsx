@@ -30,13 +30,11 @@ export function AuthForm({
           </Field>
         ) : null}
 
-        <Field label={isRegister ? "E-Mail" : "E-Mail oder Benutzername"}>
-          {/* Beim Login bewusst kein type="email": sonst blockt der Browser
-              den Benutzernamen des Einrichtungskontos. */}
+        <Field label="E-Mail">
           <Input
-            type={isRegister ? "email" : "text"}
+            type="email"
             name="email"
-            autoComplete={isRegister ? "email" : "username"}
+            autoComplete="email"
             inputMode="email"
             required
             placeholder="du@beispiel.de"

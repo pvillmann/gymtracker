@@ -1,4 +1,5 @@
 import { count, eq } from "drizzle-orm";
+import { randomBytes } from "node:crypto";
 
 import { hashPassword } from "../lib/password";
 import { db } from "./connection";
@@ -7,22 +8,44 @@ import { groupMembers, groups, users } from "./schema";
 const ADMIN_GROUP_SLUG = "administrators";
 const ADMIN_GROUP_ID = "grp_administrators";
 
-/** Zugangsdaten des Übergangskontos. Bewusst trivial – es kann nichts außer
- *  die Einrichtung abschließen und verschwindet danach. */
-export const SETUP_LOGIN = "admin";
-const SETUP_PASSWORD = "admin";
+/** Kennung des Übergangskontos. Das Passwort wird erzeugt, nicht geraten. */
+export const SETUP_LOGIN = "admin@admin.de";
 const SETUP_USER_ID = "usr_setup";
 
-function announceSetupMode(): void {
+// Ohne 0/O/1/l/I – das Passwort wird aus dem Log abgetippt, oft am Handy.
+const ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789";
+
+function generatePassword(): string {
+  const chars: string[] = [];
+  // Verwerfen statt Modulo-Rest: sonst wären die ersten Zeichen des Alphabets
+  // etwas wahrscheinlicher als die letzten.
+  const limit = 256 - (256 % ALPHABET.length);
+  while (chars.length < 15) {
+    for (const byte of randomBytes(32)) {
+      if (byte >= limit) continue;
+      chars.push(ALPHABET[byte % ALPHABET.length]);
+      if (chars.length === 15) break;
+    }
+  }
+  return [chars.slice(0, 5), chars.slice(5, 10), chars.slice(10, 15)]
+    .map((group) => group.join(""))
+    .join("-");
+}
+
+function announceSetupMode(password: string): void {
   console.warn(
     [
       "",
       "=".repeat(68),
       "  GymTracker ist noch nicht eingerichtet.",
       "",
-      `  Melde dich mit  ${SETUP_LOGIN} / ${SETUP_PASSWORD}  an und lege den ersten`,
-      "  Administrator fest. Bis dahin kann das jeder tun, der die Adresse",
-      "  kennt – auf einer öffentlich erreichbaren Instanz also bitte sofort.",
+      "  Melde dich an und lege den ersten Administrator fest:",
+      "",
+      `      E-Mail:   ${SETUP_LOGIN}`,
+      `      Passwort: ${password}`,
+      "",
+      "  Das Passwort wird bei jedem Start neu erzeugt und gilt nur bis zum",
+      "  nächsten. Danach steht hier wieder ein frisches.",
       "=".repeat(68),
       "",
     ].join("\n"),
@@ -79,18 +102,29 @@ export async function ensureAdminBootstrap(): Promise<void> {
     return;
   }
 
-  if (!existingSetup[0]) {
+  // Das Passwort wird bei jedem Start neu vergeben. So steht im Log immer ein
+  // gültiges, auch wenn die alte Ausgabe längst weggescrollt ist – und ein
+  // Passwort, das jemand mal mitgelesen hat, überlebt keinen Neustart.
+  const password = generatePassword();
+  const passwordHash = await hashPassword(password);
+
+  if (existingSetup[0]) {
+    await db
+      .update(users)
+      .set({ passwordHash })
+      .where(eq(users.id, existingSetup[0].id));
+  } else {
     await db.insert(users).values({
       id: SETUP_USER_ID,
       email: SETUP_LOGIN,
       name: "Einrichtung",
-      passwordHash: await hashPassword(SETUP_PASSWORD),
-      // Ohne dies liefe der Login in die E-Mail-Bestätigung, und "admin" ist
-      // keine Adresse, an die sich etwas schicken ließe.
+      passwordHash,
+      // Ohne dies liefe der Login in die E-Mail-Bestätigung – an diese Adresse
+      // wird bewusst nie etwas verschickt.
       emailVerifiedAt: Math.floor(Date.now() / 1000),
       isSetupAccount: true,
     });
   }
 
-  announceSetupMode();
+  announceSetupMode(password);
 }

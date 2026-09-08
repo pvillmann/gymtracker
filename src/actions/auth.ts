@@ -23,19 +23,6 @@ import { appUrl, sendPasswordResetEmail } from "@/lib/mail";
 import { fail, type FormState } from "@/lib/result";
 import { sendVerificationLink } from "@/lib/verification";
 
-/**
- * Beim Login wird der Wert nur nachgeschlagen, nicht zugestellt – deshalb hier
- * bewusst kein Format-Zwang. Das lässt auch den Benutzernamen des
- * Übergangskontos ("admin") durch, der keine Adresse ist.
- *
- * Bewusst getrennt von den Registrierungsregeln: dort müssen E-Mail-Format und
- * Mindestlänge des Passworts weiter gelten.
- */
-const loginInput = z.object({
-  email: z.string().trim().toLowerCase().min(1),
-  password: z.string().min(1),
-});
-
 const credentials = z.object({
   email: z.string().trim().toLowerCase().email("Bitte eine gültige E-Mail angeben."),
   password: z.string().min(8, "Das Passwort braucht mindestens 8 Zeichen."),
@@ -105,7 +92,7 @@ export async function loginAction(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  const parsed = loginInput.safeParse({
+  const parsed = credentials.safeParse({
     email: text(formData, "email"),
     password: text(formData, "password"),
   });
@@ -183,7 +170,12 @@ export async function resendVerificationAction(
       .limit(1);
     const user = found[0];
 
-    if (user && !user.emailVerifiedAt && !(await hasRecentEmailVerificationToken(user.id))) {
+    if (
+      user &&
+      !user.isSetupAccount &&
+      !user.emailVerifiedAt &&
+      !(await hasRecentEmailVerificationToken(user.id))
+    ) {
       await sendVerificationLink(user.id, user.email, user.name);
     }
   }
@@ -205,7 +197,10 @@ export async function requestPasswordResetAction(
       .limit(1);
     const user = found[0];
 
-    if (user && !(await hasRecentPasswordResetToken(user.id))) {
+    // Das Einrichtungskonto ist ausgenommen: seine Adresse gehört einer
+    // fremden Domain, dorthin darf nie etwas rausgehen. Das Passwort steht
+    // ohnehin bei jedem Start neu im Server-Log.
+    if (user && !user.isSetupAccount && !(await hasRecentPasswordResetToken(user.id))) {
       const token = await createPasswordResetToken(user.id);
       try {
         await sendPasswordResetEmail(

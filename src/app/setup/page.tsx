@@ -27,8 +27,7 @@ export default async function SetupPage() {
         </div>
         <h1 className="text-3xl font-bold tracking-tight">Einrichtung</h1>
         <p className="mt-2 text-sm text-muted">
-          Lege fest, wem diese Instanz gehört. Danach wird das Konto{" "}
-          <code className="rounded bg-surface-2 px-1 py-0.5 text-fg">admin</code>{" "}
+          Lege fest, wem diese Instanz gehört. Danach wird das Einrichtungskonto
           gelöscht und dieser Bildschirm verschwindet.
         </p>
       </div>
