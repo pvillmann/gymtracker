@@ -7,6 +7,7 @@ import type { User } from "@/db/schema";
 import { describeSet, describeSets, trackingModeLabel } from "@/lib/describe";
 import {
   formatDate,
+  formatDateTime,
   formatDuration,
   formatDurationLong,
   formatKg,
@@ -36,10 +37,36 @@ import { resolveExercise, resolvePlan } from "@/lib/services/resolve";
 import { totals, weekStreak } from "@/lib/stats";
 import {
   deleteLastSet,
+  discardWorkout,
   finishWorkout,
   logSet,
+  resolveWorkoutByDate,
+  setWorkoutTimes,
   startWorkout,
 } from "@/lib/services/workouts";
+
+/**
+ * Nimmt "2026-09-08T20:12", "2026-09-08 20:12" oder bloß "20:12" entgegen.
+ * Die reine Uhrzeit bezieht sich auf den Tag, an dem das Training begann –
+ * im Gespräch sagt niemand das Datum dazu, wenn es ohnehin klar ist.
+ */
+function parseMoment(value: string, sameDayAs: number): number {
+  const time = /^(\d{1,2}):(\d{2})$/.exec(value.trim());
+  if (time) {
+    const day = new Date(sameDayAs * 1000);
+    day.setHours(Number(time[1]), Number(time[2]), 0, 0);
+    return Math.floor(day.getTime() / 1000);
+  }
+
+  const parsed = new Date(value.trim().replace(" ", "T"));
+  const seconds = Math.floor(parsed.getTime() / 1000);
+  if (!Number.isFinite(seconds)) {
+    throw new ServiceError(
+      `„${value}" ist keine Zeitangabe. Erwartet wird "2026-09-08T20:12" oder "20:12".`,
+    );
+  }
+  return seconds;
+}
 
 type ToolResult = { content: Array<{ type: "text"; text: string }>; isError?: boolean };
 
@@ -588,6 +615,80 @@ export function registerGymTools(server: McpServer, user: User): void {
         return discarded
           ? "Training war leer und wurde verworfen."
           : `Training „${active.name}“ beendet: ${setsLabel(logged.length)}, ${formatVolume(volume)} bewegt.`;
+      }),
+  );
+
+  server.registerTool(
+    "edit_workout",
+    {
+      title: "Zeiten eines Trainings korrigieren",
+      description:
+        "Setzt Beginn oder Ende eines gespeicherten Trainings neu. Gedacht " +
+        "für den Fall, dass das Beenden vergessen wurde und die Dauer " +
+        "dadurch unrealistisch ist. Ohne Datum ist das zuletzt beendete " +
+        "Training gemeint.",
+      inputSchema: {
+        date: z
+          .string()
+          .optional()
+          .describe("Tag des Trainings als 2026-09-08; ohne Angabe das letzte"),
+        started_at: z
+          .string()
+          .optional()
+          .describe("Neuer Beginn, „2026-09-08T18:30“ oder nur „18:30“"),
+        finished_at: z
+          .string()
+          .optional()
+          .describe("Neues Ende, „2026-09-08T20:12“ oder nur „20:12“"),
+      },
+    },
+    async ({ date, started_at, finished_at }) =>
+      run(async () => {
+        if (!started_at && !finished_at) {
+          throw new ServiceError("Bitte einen neuen Beginn oder ein neues Ende angeben.");
+        }
+
+        const workout = await resolveWorkoutByDate(user.id, date);
+        const times = {
+          startedAt: started_at ? parseMoment(started_at, workout.startedAt) : undefined,
+          finishedAt: finished_at ? parseMoment(finished_at, workout.startedAt) : undefined,
+        };
+
+        const saved = await setWorkoutTimes(user, workout.id, times);
+        const duration =
+          saved.finishedAt === null
+            ? "läuft noch"
+            : formatDurationLong(saved.finishedAt - saved.startedAt);
+
+        return (
+          `Training „${workout.name}“ vom ${formatDate(saved.startedAt)}: ` +
+          `${formatDateTime(saved.startedAt)} bis ` +
+          `${saved.finishedAt === null ? "offen" : formatDateTime(saved.finishedAt)} (${duration}).`
+        );
+      }),
+  );
+
+  server.registerTool(
+    "delete_workout",
+    {
+      title: "Training löschen",
+      description:
+        "Löscht ein gespeichertes Training samt seiner Sätze — etwa einen " +
+        "Doppeleintrag. Das lässt sich nicht rückgängig machen, deshalb vor " +
+        "dem Aufruf beim Nutzer rückfragen.",
+      inputSchema: {
+        date: z
+          .string()
+          .optional()
+          .describe("Tag des Trainings als 2026-09-08; ohne Angabe das letzte"),
+      },
+    },
+    async ({ date }) =>
+      run(async () => {
+        const workout = await resolveWorkoutByDate(user.id, date);
+        await discardWorkout(user, workout.id);
+
+        return `Training „${workout.name}“ vom ${formatDate(workout.startedAt)} gelöscht.`;
       }),
   );
 }

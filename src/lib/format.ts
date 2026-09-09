@@ -105,3 +105,21 @@ export const exerciseCount = (count: number) => plural(count, "Übung", "Übunge
 export const workoutCount = (count: number) => plural(count, "Training", "Trainings");
 export const weeks = (count: number) => plural(count, "Woche", "Wochen");
 export const reps = (count: number) => plural(count, "Wiederholung", "Wiederholungen");
+
+/**
+ * Formatiert einen Zeitpunkt für ein `datetime-local`-Feld ("2026-09-08T20:12").
+ *
+ * Bewusst hier und nicht im Client: Die ganze App zeigt Zeiten in der Zone des
+ * Servers (TZ), und dort wird das Feld beim Absenden auch wieder gelesen.
+ * Würde der Browser formatieren, verschöbe sich jede Eingabe um die Differenz
+ * der beiden Zonen — auf einem Handy in einer anderen Zeitzone also lautlos um
+ * Stunden.
+ */
+export function toDateTimeInput(unixSeconds: number): string {
+  const d = new Date(unixSeconds * 1000);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return (
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
+    `T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  );
+}
