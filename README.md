@@ -42,7 +42,8 @@ Homescreen.
 - Mehrere Trainingspläne mit sortierter Übungsreihenfolge und Zielvorgaben
   (Sätze, Wiederholungsbereich, Pausenlänge)
 - Ein Startpaket gängiger Geräte lässt sich per Klick anlegen
-- Drei Messarten: Gewicht × Wiederholungen, Körpergewicht (+ Zusatzgewicht) und Zeit
+- Vier Messarten: Gewicht × Wiederholungen, Körpergewicht (+ Zusatzgewicht),
+  Körpergewicht − Gegengewicht (assistierte Maschinen) und Zeit
 
 **Fortschritt sehen**
 - Pro Übung: Verlaufskurve des besten Satzes, schwerstes Gewicht, bestes Training
@@ -64,6 +65,13 @@ Homescreen.
 - Die Registrierung lässt sich über `REGISTRATION_CODE` hinter einen Code sperren
 - Konto selbst restlos löschen (mit Passwort-Bestätigung) – entfernt wirklich
   alles: Pläne, Übungen, Trainings, Sätze, Sessions
+
+**Per Chat mitschreiben (MCP)**
+- GymTracker bringt einen eigenen MCP-Server mit: „Heute Rückentraining, erster
+  Satz Latzug mit 20 kg" wird direkt zum protokollierten Satz
+- Jeder Nutzer erzeugt sich in den Einstellungen seinen eigenen Schlüssel
+- Lesen (Pläne, Verlauf, letzte Leistung, Statistik) und Schreiben (Übungen und
+  Pläne anlegen, Training starten, Sätze protokollieren, Training beenden)
 
 **Benutzergruppen**
 - Gruppenmodell als Grundlage, aktuell mit der Systemgruppe *Administratoren*
@@ -256,6 +264,72 @@ erst beim nächsten Login.
 der Benutzerverwaltung ist nur sichtbar, wie viele Trainings ein Konto hat –
 keine Pläne, keine Sätze, keine Gewichte.
 
+## Anbindung an Claude (MCP)
+
+GymTracker stellt unter `/api/mcp` einen
+[MCP](https://modelcontextprotocol.io)-Server bereit. Damit lässt sich das
+Training im Chat oder per Sprache mitschreiben, statt zwischen den Sätzen zu
+tippen:
+
+> „Heute Rückentraining. War 10 Minuten auf dem Stepper, und jetzt erster Satz
+> Latzug mit 20 Kilo, 12 Wiederholungen."
+
+### Schlüssel erzeugen
+
+1. In GymTracker unter **Einstellungen → Zugriff für Claude (MCP)** eine
+   Bezeichnung eintragen (z. B. „Handy") und **Schlüssel erzeugen** klicken.
+2. Den Schlüssel sofort kopieren — er wird **genau einmal** angezeigt. In der
+   Datenbank liegt danach nur noch sein SHA-256-Hash, wie bei den Session-Tokens.
+3. Der Schlüssel gilt ausschließlich für dein eigenes Konto. Er lässt sich
+   jederzeit widerrufen; laufende Verbindungen sind damit sofort tot.
+
+### In Claude eintragen
+
+Der Server spricht Streamable HTTP und authentifiziert über einen
+`Authorization: Bearer`-Header. In Claude Desktop oder Claude Code:
+
+```json
+{
+  "mcpServers": {
+    "gymtracker": {
+      "type": "http",
+      "url": "https://gym.example.com/api/mcp",
+      "headers": { "Authorization": "Bearer gym_dein-schluessel" }
+    }
+  }
+}
+```
+
+Die passende Adresse steht in den Einstellungen direkt über dem Eingabefeld.
+Der Endpunkt gehört hinter TLS — der Schlüssel steht im Klartext im Header.
+
+### Was der Server kann
+
+| Werkzeug | Wozu |
+| --- | --- |
+| `list_exercises`, `list_plans`, `get_plan` | Übungen und Pläne durchsehen |
+| `last_performance`, `exercise_history` | Was lief beim letzten Mal an dieser Maschine? |
+| `recent_workouts`, `training_stats` | Verlauf und Kennzahlen |
+| `create_exercise` | Neue Übung anlegen, inkl. Messart und Gewichtsstufe |
+| `create_plan`, `add_exercise_to_plan` | Plan aufbauen |
+| `update_plan_exercise`, `remove_exercise_from_plan` | Zielwerte ändern, Übung entfernen |
+| `start_workout`, `current_workout`, `finish_workout` | Training führen |
+| `log_set`, `undo_last_set` | Sätze protokollieren und korrigieren |
+
+Übungen und Pläne werden über ihren **Namen** angesprochen, nicht über IDs:
+„Latzug" findet die Übung auch als Teilwort und ohne Rücksicht auf Groß- und
+Kleinschreibung. Passen mehrere, fragt der Server nach, statt zu raten. Ist noch
+kein Training offen, startet `log_set` selbst ein freies Training — mitten in der
+Übung will niemand erst einen Plan auswählen.
+
+Pläne **löschen** kann der MCP-Server bewusst nicht. Das bleibt der Oberfläche
+vorbehalten, wo eine Rückfrage davorsteht.
+
+Die Regeln sind dieselben wie in der Oberfläche: beide Wege rufen dieselbe
+Fachlogik in `src/lib/services/` auf. Ein Schlüssel sieht ausschließlich die
+Daten seines eigenen Kontos, und ein gesperrtes Konto kommt auch über MCP nicht
+mehr hinein.
+
 ## Backup
 
 Alles steckt in einer einzigen SQLite-Datei. Sauber (also auch im laufenden
@@ -353,6 +427,8 @@ Nützliche Skripte:
   Reset-Tokens werden nur als SHA-256-Hash gespeichert — wer die Datenbank
   liest, kann damit weder eine Session übernehmen noch einen Mail-Link fälschen
 - Mailversand über **nodemailer** direkt per SMTP, keine Drittanbieter-API
+- MCP-Server über das offizielle **@modelcontextprotocol/sdk**, zustandslos
+  über Streamable HTTP unter `/api/mcp`
 - Diagramme sind handgeschriebenes SVG, keine Chart-Bibliothek
 - Docker-Image auf `node:22-trixie-slim` (aktuelle Debian-Stable-Basis)
 
@@ -361,10 +437,13 @@ Nützliche Skripte:
 ```
 src/
   app/            Seiten – (auth) für Login/Registrierung, (app) für alles dahinter
-  actions/        Server Actions (schreiben), jeweils mit Besitzprüfung
+    api/mcp/      Der MCP-Endpunkt, Anmeldung per API-Schlüssel
+  actions/        Server Actions – dünne Adapter auf die Services
   components/     UI-Bausteine, u. a. der Satz-Logger und die Diagramme
   db/             Drizzle-Schema und SQLite-Verbindung
   lib/            Abfragen, Auth, Mailversand, Statistik, Formatierung
+    services/     Fachlogik, geteilt von Oberfläche und MCP-Server
+    mcp/          Die Werkzeuge, die der MCP-Server anbietet
 drizzle/          Generierte SQL-Migrationen
 ```
 
