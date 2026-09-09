@@ -27,13 +27,26 @@ function unauthorized(): Response {
   );
 }
 
-function readBearer(request: Request): string | null {
+/**
+ * Der Schlüssel darf auf zwei Wegen ankommen.
+ *
+ * `Authorization: Bearer …` ist der übliche und bleibt der erste. Manche
+ * Clients halten diesen Header aber für ihren eigenen OAuth-Flow reserviert
+ * und reichen einen selbst gesetzten Wert nicht durch – Claudes
+ * Connector-Dialog etwa erlaubt Zusatz-Header ausdrücklich nur *neben* dem
+ * OAuth-Token. Für die bleibt `X-API-Key`.
+ */
+function readToken(request: Request): string | null {
   const header = request.headers.get("authorization");
-  if (!header) return null;
-  const [scheme, ...rest] = header.split(" ");
-  if (scheme.toLowerCase() !== "bearer") return null;
-  const token = rest.join(" ").trim();
-  return token || null;
+  if (header) {
+    const [scheme, ...rest] = header.split(" ");
+    if (scheme.toLowerCase() === "bearer") {
+      const token = rest.join(" ").trim();
+      if (token) return token;
+    }
+  }
+
+  return request.headers.get("x-api-key")?.trim() || null;
 }
 
 /**
@@ -44,7 +57,7 @@ function readBearer(request: Request): string | null {
  * jede Anfrage ohnehin über ihren API-Schlüssel einem Konto zugeordnet wird.
  */
 export async function POST(request: Request): Promise<Response> {
-  const token = readBearer(request);
+  const token = readToken(request);
   if (!token) return unauthorized();
 
   const user = await authenticateApiToken(token);

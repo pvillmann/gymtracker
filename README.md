@@ -303,6 +303,20 @@ Der Server spricht Streamable HTTP und authentifiziert über einen
 Die passende Adresse steht in den Einstellungen direkt über dem Eingabefeld.
 Der Endpunkt gehört hinter TLS — der Schlüssel steht im Klartext im Header.
 
+Manche Clients beanspruchen `Authorization` für ihren eigenen OAuth-Flow und
+reichen einen selbst gesetzten Wert nicht durch. Claudes Dialog für eigene
+Connectors etwa nimmt Zusatz-Header ausdrücklich nur *neben* dem OAuth-Token
+entgegen. Für diesen Fall akzeptiert der Server denselben Schlüssel auch unter
+`X-API-Key`:
+
+```
+X-API-Key: gym_dein-schluessel
+```
+
+Geprüft wird in beiden Fällen dasselbe: derselbe Schlüssel, derselbe Hash,
+dieselben Rechte. `Authorization` hat Vorrang, `X-API-Key` greift nur, wenn
+dort nichts Brauchbares steht.
+
 ### Was der Server kann
 
 | Werkzeug | Wozu |
