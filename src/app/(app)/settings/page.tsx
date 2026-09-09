@@ -7,8 +7,10 @@ import {
   PasswordForm,
   ProfileForm,
 } from "@/components/SettingsForms";
+import { ApiTokenManager } from "@/components/ApiTokenManager";
 import { ButtonLink, Card, PageHeader } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
+import { listApiTokens } from "@/lib/api-tokens";
 import { isAdmin } from "@/lib/groups";
 
 export const metadata: Metadata = { title: "Einstellungen · GymTracker" };
@@ -16,6 +18,10 @@ export const metadata: Metadata = { title: "Einstellungen · GymTracker" };
 export default async function SettingsPage() {
   const user = await requireUser();
   const userIsAdmin = await isAdmin(user.id);
+  const tokens = await listApiTokens(user.id);
+  // APP_URL ist für den Mailversand ohnehin gesetzt; fehlt sie, zeigen wir
+  // nur den Pfad statt einer erfundenen Adresse.
+  const mcpUrl = `${(process.env.APP_URL ?? "").replace(/\/$/, "")}/api/mcp`;
 
   return (
     <>
@@ -56,6 +62,25 @@ export default async function SettingsPage() {
           </Card>
         </section>
       ) : null}
+
+      <section className="mb-6">
+        <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+          Zugriff für Claude (MCP)
+        </h2>
+        <Card>
+          <p className="mb-3 text-sm text-muted">
+            Mit einem Schlüssel kannst du GymTracker als MCP-Server in Claude
+            einbinden und per Chat oder Sprache Trainings protokollieren, Pläne
+            bearbeiten und deinen Verlauf abfragen. Ein Schlüssel gilt nur für
+            dein Konto.
+          </p>
+          <p className="mb-1 text-xs text-faint">Server-Adresse</p>
+          <code className="mb-4 block overflow-x-auto rounded-lg bg-surface-2 px-3 py-2 font-mono text-xs break-all text-fg">
+            {mcpUrl}
+          </code>
+          <ApiTokenManager tokens={tokens} />
+        </Card>
+      </section>
 
       <form action={logoutAction} className="mb-10">
         <SubmitButton variant="secondary" className="w-full">

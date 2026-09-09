@@ -2,7 +2,7 @@ import "server-only";
 
 import { desc, eq, lt } from "drizzle-orm";
 import { cache } from "react";
-import { createHash, randomBytes } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -15,6 +15,7 @@ import {
   type User,
 } from "@/db/schema";
 import { isAdmin } from "@/lib/groups";
+import { sha256Hex } from "@/lib/hash";
 import { hashPassword, verifyPassword } from "@/lib/password";
 
 // Weitergereicht, damit die bestehenden Importstellen "@/lib/auth" behalten.
@@ -23,11 +24,9 @@ export { hashPassword, verifyPassword };
 const SESSION_COOKIE = "gym_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 90; // 90 Tage
 
-/** SHA-256 eines Tokens – dieselbe Funktion für Sessions, Verifizierungs- und
+/** Kurzer Alias – dieselbe Funktion für Sessions, Verifizierungs- und
  * Reset-Links, damit nirgendwo ein Klartext-Token in der DB landet. */
-function hashToken(token: string): string {
-  return createHash("sha256").update(token).digest("hex");
-}
+const hashToken = sha256Hex;
 
 /**
  * Entscheidet, ob das Session-Cookie als "secure" gesetzt wird.

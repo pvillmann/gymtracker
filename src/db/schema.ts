@@ -130,6 +130,31 @@ export const passwordResetTokens = sqliteTable(
   (t) => [index("password_reset_tokens_user_idx").on(t.userId)],
 );
 
+/**
+ * Zugangsschlüssel für den MCP-Endpunkt. Wie bei den Sessions liegt nur der
+ * Hash in der Datenbank – der Klartext wird genau einmal angezeigt.
+ */
+export const apiTokens = sqliteTable(
+  "api_tokens",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** Frei wählbare Bezeichnung, damit man mehrere auseinanderhalten kann. */
+    name: text("name").notNull(),
+    tokenHash: text("token_hash").notNull(),
+    /** Die ersten Zeichen im Klartext, damit man den Schlüssel wiedererkennt. */
+    preview: text("preview").notNull(),
+    lastUsedAt: integer("last_used_at"),
+    createdAt: integer("created_at").notNull().default(now),
+  },
+  (t) => [
+    uniqueIndex("api_tokens_hash_unique").on(t.tokenHash),
+    index("api_tokens_user_idx").on(t.userId),
+  ],
+);
+
 export const exercises = sqliteTable(
   "exercises",
   {
@@ -239,6 +264,7 @@ export const workoutSets = sqliteTable(
 );
 
 export type User = typeof users.$inferSelect;
+export type ApiToken = typeof apiTokens.$inferSelect;
 export type Group = typeof groups.$inferSelect;
 export type GroupMember = typeof groupMembers.$inferSelect;
 export type Exercise = typeof exercises.$inferSelect;
