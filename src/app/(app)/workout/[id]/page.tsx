@@ -10,7 +10,14 @@ import { Card, EmptyState } from "@/components/ui";
 import { WorkoutClock } from "@/components/WorkoutClock";
 import { requireUser } from "@/lib/auth";
 import { describeSets } from "@/lib/describe";
-import { formatRelativeDay, formatVolume, sets } from "@/lib/format";
+import {
+  formatDateTime,
+  formatDurationLong,
+  formatRelativeDay,
+  formatVolume,
+  sets,
+} from "@/lib/format";
+import { IMPLAUSIBLE_SECONDS, lastSetAt } from "@/lib/services/workouts";
 import {
   getPreviousPerformances,
   getWorkout,
@@ -79,6 +86,12 @@ export default async function WorkoutPage({
     (exercise) => !seen.has(exercise.id) && exercise.archivedAt === null,
   );
 
+  // Wer das Beenden vergisst, hat ein Training mit absurder Dauer im Verlauf –
+  // und die verzerrt hinterher jede Auswertung über die Trainingszeit. Der
+  // letzte Satz sagt, wann tatsächlich Schluss war.
+  const runningFor = Math.floor(Date.now() / 1000) - workout.startedAt;
+  const lastSet = runningFor > IMPLAUSIBLE_SECONDS ? await lastSetAt(workout.id) : null;
+
   return (
     <>
       <div className="sticky top-14 z-20 -mx-5 mb-4 border-b border-line-soft bg-ink/95 px-5 py-3 backdrop-blur">
@@ -90,7 +103,7 @@ export default async function WorkoutPage({
               {formatVolume(totalVolume)}
             </p>
           </div>
-          <form action={finishWorkoutAction.bind(null, workout.id)}>
+          <form action={finishWorkoutAction.bind(null, workout.id, undefined)}>
             <SubmitButton size="sm" pendingLabel="…">
               Beenden
             </SubmitButton>
@@ -168,9 +181,32 @@ export default async function WorkoutPage({
       </section>
 
       <div className="mt-6 space-y-3">
-        <form action={finishWorkoutAction.bind(null, workout.id)}>
-          <SubmitButton size="lg" className="w-full" pendingLabel="Wird abgeschlossen …">
-            Training beenden
+        {lastSet !== null ? (
+          <Card className="border-accent/40 bg-accent/8">
+            <p className="text-sm font-semibold text-accent">
+              Läuft seit {formatDurationLong(runningFor)}
+            </p>
+            <p className="mt-1 text-sm text-muted">
+              Der letzte Satz war um {formatDateTime(lastSet)}. Vermutlich ist das
+              Beenden untergegangen — dann gehört das Ende dorthin und nicht auf
+              jetzt.
+            </p>
+            <form action={finishWorkoutAction.bind(null, workout.id, lastSet)} className="mt-3">
+              <SubmitButton size="lg" className="w-full" pendingLabel="Wird abgeschlossen …">
+                Beenden, Ende {formatDateTime(lastSet)}
+              </SubmitButton>
+            </form>
+          </Card>
+        ) : null}
+
+        <form action={finishWorkoutAction.bind(null, workout.id, undefined)}>
+          <SubmitButton
+            size="lg"
+            variant={lastSet !== null ? "secondary" : undefined}
+            className="w-full"
+            pendingLabel="Wird abgeschlossen …"
+          >
+            {lastSet !== null ? "Trotzdem jetzt beenden" : "Training beenden"}
           </SubmitButton>
         </form>
         <form action={discardWorkoutAction.bind(null, workout.id)}>

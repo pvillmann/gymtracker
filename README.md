@@ -35,6 +35,10 @@ Homescreen.
 - Jeder gespeicherte Satz bekommt sofort ein Vergleichs-Label: ▲ +5 kg, ▼ −1 Wdh. oder „gleich"
 - Pausentimer startet automatisch nach dem Satz und vibriert, wenn er abgelaufen ist
 - Notizfeld pro Maschine für die Einstellungen (Sitzhöhe, Lehne, Griff)
+- Beenden vergessen? Wer ein Training öffnet, das seit Stunden läuft, bekommt
+  angeboten, das Ende auf den letzten protokollierten Satz zu setzen — sonst
+  steht im Verlauf eine Dauer, die jede Auswertung über die Trainingszeit
+  verzerrt. Beginn und Ende lassen sich später ohnehin korrigieren.
 - Aufwärmsätze zählen nicht als Arbeitssätze
 - Übungen lassen sich spontan ergänzen, auch wenn sie nicht im Plan stehen
 
@@ -328,6 +332,7 @@ dort nichts Brauchbares steht.
 | `create_plan`, `add_exercise_to_plan` | Plan aufbauen |
 | `update_plan_exercise`, `remove_exercise_from_plan` | Zielwerte ändern, Übung entfernen |
 | `start_workout`, `current_workout`, `finish_workout` | Training führen |
+| `edit_workout`, `delete_workout` | Zeiten eines Trainings korrigieren oder es löschen |
 | `log_set`, `undo_last_set` | Sätze protokollieren und korrigieren |
 
 Übungen und Pläne werden über ihren **Namen** angesprochen, nicht über IDs:
@@ -335,6 +340,11 @@ dort nichts Brauchbares steht.
 Kleinschreibung. Passen mehrere, fragt der Server nach, statt zu raten. Ist noch
 kein Training offen, startet `log_set` selbst ein freies Training — mitten in der
 Übung will niemand erst einen Plan auswählen.
+
+Trainings werden über ihr **Datum** angesprochen (`2026-09-08`); ohne Angabe
+ist das zuletzt beendete gemeint. Zeiten dürfen als `2026-09-08T20:12` oder
+verkürzt als `20:12` kommen — die reine Uhrzeit bezieht sich auf den Tag des
+Trainings.
 
 Pläne **löschen** kann der MCP-Server bewusst nicht. Das bleibt der Oberfläche
 vorbehalten, wo eine Rückfrage davorsteht.

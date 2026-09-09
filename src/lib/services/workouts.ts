@@ -11,6 +11,7 @@ import {
   type TrackingMode,
   type User,
 } from "@/db/schema";
+import { formatDateTime } from "@/lib/format";
 import { newId } from "@/lib/ids";
 import { getActiveWorkout } from "@/lib/queries";
 import { ServiceError } from "@/lib/services/errors";
@@ -26,7 +27,11 @@ import { setVolume } from "@/lib/training";
 
 async function requireOpenWorkout(userId: string, workoutId: string) {
   const rows = await db
-    .select({ id: workouts.id, finishedAt: workouts.finishedAt })
+    .select({
+      id: workouts.id,
+      startedAt: workouts.startedAt,
+      finishedAt: workouts.finishedAt,
+    })
     .from(workouts)
     .where(and(eq(workouts.id, workoutId), eq(workouts.userId, userId)))
     .limit(1);
@@ -253,8 +258,9 @@ export async function deleteLastSet(
 export async function finishWorkout(
   user: User,
   workoutId: string,
+  endAt?: number,
 ): Promise<{ discarded: boolean }> {
-  await requireOpenWorkout(user.id, workoutId);
+  const workout = await requireOpenWorkout(user.id, workoutId);
 
   const [logged] = await db
     .select({ count: sql<number>`count(*)` })
@@ -266,18 +272,125 @@ export async function finishWorkout(
     return { discarded: true };
   }
 
-  await db
-    .update(workouts)
-    .set({ finishedAt: Math.floor(Date.now() / 1000) })
-    .where(eq(workouts.id, workoutId));
+  const finishedAt = endAt ?? Math.floor(Date.now() / 1000);
+  assertWindow(workout.startedAt, finishedAt);
+  await assertCoversSets(workoutId, workout.startedAt, finishedAt);
+
+  await db.update(workouts).set({ finishedAt }).where(eq(workouts.id, workoutId));
 
   return { discarded: false };
+}
+
+/**
+ * Wann wurde in diesem Training zuletzt ein Satz gespeichert? Das ist die
+ * ehrliche Antwort auf ein vergessenes "Beenden": danach ist nichts mehr
+ * passiert, also war da Schluss.
+ */
+export async function lastSetAt(workoutId: string): Promise<number | null> {
+  const rows = await db
+    .select({ completedAt: workoutSets.completedAt })
+    .from(workoutSets)
+    .where(eq(workoutSets.workoutId, workoutId))
+    .orderBy(desc(workoutSets.completedAt))
+    .limit(1);
+
+  return rows[0]?.completedAt ?? null;
+}
+
+/** Ab dieser Dauer nehmen wir an, dass jemand das Beenden vergessen hat. */
+export const IMPLAUSIBLE_SECONDS = 4 * 60 * 60;
+
+function assertWindow(startedAt: number, finishedAt: number | null): void {
+  const now = Math.floor(Date.now() / 1000);
+  // Eine Minute Luft: Uhren gehen auseinander, und ein Formular wird auch
+  // nicht in derselben Sekunde abgeschickt, in der es gerendert wurde.
+  const soon = now + 60;
+
+  if (startedAt > soon) throw new ServiceError("Der Beginn darf nicht in der Zukunft liegen.");
+  if (finishedAt === null) return;
+  if (finishedAt > soon) throw new ServiceError("Das Ende darf nicht in der Zukunft liegen.");
+  // Gleichstand ist erlaubt: wer ein Training in derselben Sekunde beendet,
+  // in der es begann, bekommt eine Dauer von null – unschön, aber ehrlich.
+  // Verboten ist nur, was eine negative Dauer ergäbe.
+  if (finishedAt < startedAt) {
+    throw new ServiceError("Das Ende darf nicht vor dem Beginn liegen.");
+  }
+}
+
+/**
+ * Ein Zeitfenster, das protokollierte Sätze ausschließt, wäre in sich
+ * widersprüchlich – dann stünde im Training ein Satz, der außerhalb davon
+ * stattgefunden hat.
+ */
+async function assertCoversSets(
+  workoutId: string,
+  startedAt: number,
+  finishedAt: number | null,
+): Promise<void> {
+  const [range] = await db
+    .select({
+      first: sql<number | null>`min(${workoutSets.completedAt})`,
+      last: sql<number | null>`max(${workoutSets.completedAt})`,
+    })
+    .from(workoutSets)
+    .where(eq(workoutSets.workoutId, workoutId));
+
+  if (range?.first != null && startedAt > range.first) {
+    throw new ServiceError(
+      `Der Beginn liegt nach dem ersten Satz (${formatDateTime(range.first)}).`,
+    );
+  }
+  // Auf die Minute abgerundet vergleichen: Das Eingabefeld kennt keine
+  // Sekunden, ein Satz um 13:56:37 wird dort zu 13:56. Ohne das Abrunden
+  // scheiterte schon das unveränderte Speichern an seinen eigenen Vorgaben.
+  if (finishedAt !== null && range?.last != null && finishedAt < toFullMinute(range.last)) {
+    throw new ServiceError(
+      `Das Ende liegt vor dem letzten Satz (${formatDateTime(range.last)}).`,
+    );
+  }
+}
+
+function toFullMinute(unixSeconds: number): number {
+  return Math.floor(unixSeconds / 60) * 60;
+}
+
+export type WorkoutTimes = { startedAt?: number; finishedAt?: number };
+
+/**
+ * Korrigiert Beginn und Ende eines Trainings. Der häufigste Fall ist ein
+ * vergessenes "Beenden": das Training steht dann mit einer Dauer da, die
+ * jede Auswertung über die Trainingszeit verzerrt.
+ */
+export async function setWorkoutTimes(
+  user: User,
+  workoutId: string,
+  times: WorkoutTimes,
+): Promise<{ startedAt: number; finishedAt: number | null }> {
+  const workout = await requireOwnWorkout(user.id, workoutId);
+
+  const startedAt = times.startedAt ?? workout.startedAt;
+  const finishedAt =
+    times.finishedAt ?? (workout.finishedAt === null ? null : workout.finishedAt);
+
+  assertWindow(startedAt, finishedAt);
+  await assertCoversSets(workoutId, startedAt, finishedAt);
+
+  await db
+    .update(workouts)
+    .set({ startedAt, finishedAt })
+    .where(eq(workouts.id, workoutId));
+
+  return { startedAt, finishedAt };
 }
 
 /** Wie requireOpenWorkout, akzeptiert aber auch beendete Trainings. */
 export async function requireOwnWorkout(userId: string, workoutId: string) {
   const rows = await db
-    .select({ id: workouts.id, finishedAt: workouts.finishedAt })
+    .select({
+      id: workouts.id,
+      startedAt: workouts.startedAt,
+      finishedAt: workouts.finishedAt,
+    })
     .from(workouts)
     .where(and(eq(workouts.id, workoutId), eq(workouts.userId, userId)))
     .limit(1);
@@ -304,4 +417,62 @@ export async function setWorkoutNotes(
     .update(workouts)
     .set({ notes: trimmed || null })
     .where(eq(workouts.id, workoutId));
+}
+
+/**
+ * Sucht ein abgeschlossenes Training über sein Datum ("2026-09-08"). Ohne
+ * Datum ist das zuletzt beendete gemeint – das ist der Fall, um den es fast
+ * immer geht ("das eben war zu lang").
+ *
+ * Wie bei Übungen und Plänen wird bei Mehrdeutigkeit nachgefragt statt
+ * geraten: an einem Tag können zwei Trainings liegen.
+ */
+export async function resolveWorkoutByDate(
+  userId: string,
+  date?: string,
+): Promise<{ id: string; name: string; startedAt: number; finishedAt: number | null }> {
+  const rows = await db
+    .select({
+      id: workouts.id,
+      name: workouts.name,
+      startedAt: workouts.startedAt,
+      finishedAt: workouts.finishedAt,
+    })
+    .from(workouts)
+    .where(eq(workouts.userId, userId))
+    .orderBy(desc(workouts.startedAt));
+
+  if (rows.length === 0) throw new ServiceError("Es ist noch kein Training gespeichert.");
+
+  if (!date) {
+    const latest = rows.find((w) => w.finishedAt !== null) ?? rows[0];
+    return latest;
+  }
+
+  const onDate = rows.filter((w) => localDate(w.startedAt) === date);
+  if (onDate.length === 1) return onDate[0];
+
+  if (onDate.length === 0) {
+    const known = rows
+      .slice(0, 5)
+      .map((w) => localDate(w.startedAt))
+      .join(", ");
+    throw new ServiceError(
+      `Am ${date} ist kein Training gespeichert. Zuletzt: ${known}.`,
+    );
+  }
+
+  const candidates = onDate
+    .map((w) => `${w.name} ab ${formatDateTime(w.startedAt)}`)
+    .join("; ");
+  throw new ServiceError(
+    `Am ${date} liegen mehrere Trainings: ${candidates}. Bitte die Uhrzeit dazusagen.`,
+  );
+}
+
+/** Tagesdatum in Ortszeit als "YYYY-MM-DD" – passend zu TZ, nicht zu UTC. */
+function localDate(unixSeconds: number): string {
+  const d = new Date(unixSeconds * 1000);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }

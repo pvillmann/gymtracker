@@ -7,6 +7,7 @@ import { ConfirmSubmitButton } from "@/components/ConfirmSubmitButton";
 import { TrendBadge } from "@/components/TrendBadge";
 import { Card, PageHeader } from "@/components/ui";
 import { WorkoutNotesForm } from "@/components/WorkoutNotesForm";
+import { WorkoutTimesForm } from "@/components/WorkoutTimesForm";
 import { requireUser } from "@/lib/auth";
 import { describeSet } from "@/lib/describe";
 import {
@@ -16,6 +17,7 @@ import {
   formatVolume,
   formatWeekday,
   sets,
+  toDateTimeInput,
 } from "@/lib/format";
 import {
   getBestsBefore,
@@ -215,6 +217,24 @@ export default async function WorkoutDetailPage({
         </h2>
         <Card>
           <WorkoutNotesForm workoutId={workout.id} notes={workout.notes} />
+        </Card>
+      </section>
+
+      <section className="mb-6">
+        <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+          Zeiten korrigieren
+        </h2>
+        <Card>
+          <p className="mb-4 text-sm text-muted">
+            Wurde das Beenden vergessen, steht hier eine Dauer, die jede
+            Auswertung über die Trainingszeit verzerrt. Hier lässt sie sich
+            geraderücken.
+          </p>
+          <WorkoutTimesForm
+            workoutId={workout.id}
+            startedAt={toDateTimeInput(workout.startedAt)}
+            finishedAt={workout.finishedAt === null ? "" : toDateTimeInput(workout.finishedAt)}
+          />
         </Card>
       </section>
 

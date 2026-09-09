@@ -18,6 +18,7 @@ import {
   requireOwnExercise,
   requireOwnWorkout,
   setWorkoutNotes,
+  setWorkoutTimes,
   startWorkout,
   updateSet,
   type SetValues,
@@ -126,9 +127,12 @@ export async function deleteSetAction(setId: string): Promise<void> {
   revalidatePath(`/history/${workoutId}`);
 }
 
-export async function finishWorkoutAction(workoutId: string): Promise<void> {
+export async function finishWorkoutAction(
+  workoutId: string,
+  endAt?: number,
+): Promise<void> {
   const user = await requireUser();
-  const { discarded } = await finishWorkout(user, workoutId);
+  const { discarded } = await finishWorkout(user, workoutId, endAt);
 
   revalidatePath("/");
   if (discarded) redirect("/");
@@ -194,6 +198,43 @@ export async function addExerciseToWorkoutAction(
 
   const query = [...extras].map((id) => `extra=${encodeURIComponent(id)}`).join("&");
   redirect(`/workout/${workoutId}?${query}#uebung-${exerciseId}`);
+}
+
+/**
+ * Ein "datetime-local"-Feld liefert "2026-09-08T20:12" in Ortszeit. Genau so
+ * soll es auch gelesen werden – der Server läuft über TZ in derselben Zone.
+ */
+function readLocalDateTime(value: string): number | null {
+  if (!value) return null;
+  const parsed = new Date(value);
+  const seconds = Math.floor(parsed.getTime() / 1000);
+  return Number.isFinite(seconds) ? seconds : null;
+}
+
+export async function updateWorkoutTimesAction(
+  workoutId: string,
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const user = await requireUser();
+
+  const startedAt = readLocalDateTime(text(formData, "startedAt"));
+  if (startedAt === null) return fail("Bitte einen gültigen Beginn angeben.");
+
+  const rawEnd = optionalText(formData, "finishedAt");
+  const finishedAt = rawEnd ? readLocalDateTime(rawEnd) : undefined;
+  if (rawEnd && finishedAt === null) return fail("Bitte ein gültiges Ende angeben.");
+
+  const result = await guarded(async () => {
+    await setWorkoutTimes(user, workoutId, { startedAt, finishedAt: finishedAt ?? undefined });
+  });
+
+  if (result.ok) {
+    revalidatePath(`/history/${workoutId}`);
+    revalidatePath("/history");
+    revalidatePath("/stats");
+  }
+  return result;
 }
 
 /** Löscht ein abgeschlossenes Training samt seiner Sätze. */
