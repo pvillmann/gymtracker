@@ -4,7 +4,13 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import type { User } from "@/db/schema";
-import { describeSet, describeSets, trackingModeLabel } from "@/lib/describe";
+import {
+  describeSet,
+  describeSets,
+  effortLabel,
+  lastEffort,
+  trackingModeLabel,
+} from "@/lib/describe";
 import {
   formatDate,
   formatDateTime,
@@ -236,11 +242,13 @@ export function registerGymTools(server: McpServer, user: User): void {
         const previous = await getPreviousPerformances(user.id, [found.id]);
         const last = previous.get(found.id);
         if (!last) return `„${found.name}“ wurde noch nie trainiert.`;
+        const effort = lastEffort(last.sets);
 
         return [
           `${found.name}, ${formatRelativeDay(last.performedAt)} (${formatDate(last.performedAt)}):`,
           describeSets(last.sets, found.trackingMode),
           `Bewegt: ${formatVolume(last.totalVolumeKg)}`,
+          ...(effort ? [`Letzter Satz: ${effortLabel(effort)}`] : []),
         ].join("\n");
       }),
   );
@@ -522,13 +530,14 @@ export function registerGymTools(server: McpServer, user: User): void {
           const exercise = byId.get(exerciseId);
           const mode = exercise?.trackingMode ?? "weight_reps";
           return `${exercise?.name ?? "Unbekannt"}: ${entries
-            .map((s) => describeSet(s, mode))
+            .map((s) => `${s.isWarmup ? "Aufwärmen " : ""}${describeSet(s, mode)}`)
             .join(", ")}`;
         });
 
         const volume = logged.reduce((sum, s) => sum + s.volumeKg, 0);
+        const working = logged.filter((s) => !s.isWarmup).length;
         return [
-          `Training „${active.name}“, ${setsLabel(logged.length)}, ${formatVolume(volume)}:`,
+          `Training „${active.name}“, ${setsLabel(working)}, ${formatVolume(volume)}:`,
           ...lines,
         ].join("\n");
       }),
@@ -555,6 +564,13 @@ export function registerGymTools(server: McpServer, user: User): void {
           .optional()
           .describe("Dauer in Sekunden, nur bei Messart Zeit"),
         is_warmup: z.boolean().optional().describe("Aufwärmsatz, zählt nicht als Arbeitssatz"),
+        effort: z
+          .enum(["max", "ok", "easy"])
+          .optional()
+          .describe(
+            "Nur beim letzten Arbeitssatz einer Übung: wie er sich angefühlt hat. " +
+              "max = am Limit (0–1 Wdh. übrig), ok = 2–3 übrig, easy = leicht (4+ übrig)",
+          ),
       },
     },
     async (args) =>
@@ -567,10 +583,11 @@ export function registerGymTools(server: McpServer, user: User): void {
           reps: args.reps ?? 0,
           durationSeconds: args.duration_seconds,
           isWarmup: args.is_warmup,
+          effort: args.effort,
         });
 
         const prefix = workout.started ? "Freies Training gestartet. " : "";
-        return `${prefix}Satz ${result.setNumber} bei „${result.exerciseName}“ gespeichert (${formatVolume(
+        return `${prefix}${result.isWarmup ? "Aufwärmsatz" : "Satz"} ${result.ordinal} bei „${result.exerciseName}“ gespeichert (${formatVolume(
           result.volumeKg,
         )} bewegt).`;
       }),
@@ -589,8 +606,8 @@ export function registerGymTools(server: McpServer, user: User): void {
         if (!active) throw new ServiceError("Es läuft gerade kein Training.");
 
         const found = await resolveExercise(user, exercise);
-        const { setNumber } = await deleteLastSet(user, active.id, found.id);
-        return `Satz ${setNumber} bei „${found.name}“ wurde zurückgenommen.`;
+        const { ordinal, isWarmup } = await deleteLastSet(user, active.id, found.id);
+        return `${isWarmup ? "Aufwärmsatz" : "Satz"} ${ordinal} bei „${found.name}“ wurde zurückgenommen.`;
       }),
   );
 

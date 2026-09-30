@@ -22,6 +22,7 @@ import {
   workouts,
   workoutSets,
   type Exercise,
+  type SetEffort,
   type TrackingMode,
 } from "@/db/schema";
 
@@ -148,6 +149,7 @@ export type LoggedSet = {
   reps: number;
   durationSeconds: number | null;
   isWarmup: boolean;
+  effort: SetEffort | null;
   volumeKg: number;
   completedAt: number;
 };
@@ -162,6 +164,7 @@ export async function listWorkoutSets(workoutId: string): Promise<LoggedSet[]> {
       reps: workoutSets.reps,
       durationSeconds: workoutSets.durationSeconds,
       isWarmup: workoutSets.isWarmup,
+      effort: workoutSets.effort,
       volumeKg: workoutSets.volumeKg,
       completedAt: workoutSets.completedAt,
     })
@@ -190,6 +193,7 @@ type PreviousRow = {
   reps: number;
   duration_seconds: number | null;
   is_warmup: number;
+  effort: SetEffort | null;
   volume_kg: number;
   completed_at: number;
 };
@@ -227,7 +231,8 @@ export async function getPreviousPerformances(
 
   const rows = db.all<PreviousRow>(sql`
     select id, workout_id, workout_name, started_at, exercise_id, set_number,
-           weight_kg, reps, duration_seconds, is_warmup, volume_kg, completed_at
+           weight_kg, reps, duration_seconds, is_warmup, effort, volume_kg,
+           completed_at
     from (
       select s.id             as id,
              s.workout_id     as workout_id,
@@ -239,6 +244,7 @@ export async function getPreviousPerformances(
              s.reps           as reps,
              s.duration_seconds as duration_seconds,
              s.is_warmup      as is_warmup,
+             s.effort         as effort,
              s.volume_kg      as volume_kg,
              s.completed_at   as completed_at,
              dense_rank() over (
@@ -265,6 +271,7 @@ export async function getPreviousPerformances(
       reps: row.reps,
       durationSeconds: row.duration_seconds,
       isWarmup: Boolean(row.is_warmup),
+      effort: row.effort,
       volumeKg: row.volume_kg,
       completedAt: row.completed_at,
     };
@@ -325,6 +332,7 @@ export async function getExerciseSessions(
       reps: workoutSets.reps,
       durationSeconds: workoutSets.durationSeconds,
       isWarmup: workoutSets.isWarmup,
+      effort: workoutSets.effort,
       volumeKg: workoutSets.volumeKg,
       completedAt: workoutSets.completedAt,
       workoutId: workouts.id,
@@ -361,6 +369,7 @@ export async function getExerciseSessions(
       reps: row.reps,
       durationSeconds: row.durationSeconds,
       isWarmup: row.isWarmup,
+      effort: row.effort,
       volumeKg: row.volumeKg,
       completedAt: row.completedAt,
     });
@@ -459,6 +468,7 @@ export async function getWorkoutDetail(
       reps: workoutSets.reps,
       durationSeconds: workoutSets.durationSeconds,
       isWarmup: workoutSets.isWarmup,
+      effort: workoutSets.effort,
       volumeKg: workoutSets.volumeKg,
       completedAt: workoutSets.completedAt,
       name: exercises.name,
@@ -496,6 +506,7 @@ export async function getWorkoutDetail(
       reps: row.reps,
       durationSeconds: row.durationSeconds,
       isWarmup: row.isWarmup,
+      effort: row.effort,
       volumeKg: row.volumeKg,
       completedAt: row.completedAt,
     });

@@ -8,9 +8,11 @@ import {
   plans,
   workouts,
   workoutSets,
+  type SetEffort,
   type TrackingMode,
   type User,
 } from "@/db/schema";
+import { ordinalOfKind } from "@/lib/describe";
 import { formatDateTime } from "@/lib/format";
 import { newId } from "@/lib/ids";
 import { getActiveWorkout } from "@/lib/queries";
@@ -115,6 +117,8 @@ export type SetValues = {
   reps: number;
   durationSeconds?: number;
   isWarmup?: boolean;
+  /** Nur für den letzten Arbeitssatz gedacht, siehe rateSet. */
+  effort?: SetEffort | null;
 };
 
 /** Prüft, ob die Werte zur Messart der Übung passen. */
@@ -128,7 +132,11 @@ function assertValuesFit(mode: TrackingMode, values: SetValues): void {
 
 export type LoggedSet = {
   setId: string;
+  /** Reihenfolge über Aufwärm- und Arbeitssätze hinweg. */
   setNumber: number;
+  /** Nummer unter den Sätzen derselben Art – die, die der Nutzer sieht. */
+  ordinal: number;
+  isWarmup: boolean;
   volumeKg: number;
   exerciseName: string;
 };
@@ -143,15 +151,22 @@ export async function logSet(
   const exercise = await requireOwnExercise(user.id, exerciseId);
   assertValuesFit(exercise.trackingMode, values);
 
+  const isWarmup = values.isWarmup ?? false;
   const [existing] = await db
-    .select({ count: sql<number>`count(*)` })
+    .select({
+      count: sql<number>`count(*)`,
+      warmups: sql<number>`coalesce(sum(case when ${workoutSets.isWarmup} then 1 else 0 end), 0)`,
+    })
     .from(workoutSets)
     .where(
       and(eq(workoutSets.workoutId, workoutId), eq(workoutSets.exerciseId, exercise.id)),
     );
 
   const setId = newId();
-  const setNumber = (existing?.count ?? 0) + 1;
+  const count = existing?.count ?? 0;
+  const warmups = existing?.warmups ?? 0;
+  const setNumber = count + 1;
+  const ordinal = (isWarmup ? warmups : count - warmups) + 1;
   const volumeKg = setVolume(
     exercise.trackingMode,
     values.weightKg,
@@ -167,11 +182,13 @@ export async function logSet(
     weightKg: values.weightKg,
     reps: values.reps,
     durationSeconds: values.durationSeconds ?? null,
-    isWarmup: values.isWarmup ?? false,
+    isWarmup,
+    // Ein Aufwärmsatz sagt nichts darüber, ob beim Gewicht noch Luft war.
+    effort: isWarmup ? null : (values.effort ?? null),
     volumeKg,
   });
 
-  return { setId, setNumber, volumeKg, exerciseName: exercise.name };
+  return { setId, setNumber, ordinal, isWarmup, volumeKg, exerciseName: exercise.name };
 }
 
 /** Lädt einen Satz inklusive Besitzprüfung über das zugehörige Training. */
@@ -181,6 +198,7 @@ export async function getOwnedSet(userId: string, setId: string) {
       id: workoutSets.id,
       workoutId: workoutSets.workoutId,
       exerciseId: workoutSets.exerciseId,
+      isWarmup: workoutSets.isWarmup,
     })
     .from(workoutSets)
     .innerJoin(workouts, eq(workouts.id, workoutSets.workoutId))
@@ -208,6 +226,8 @@ export async function updateSet(
       reps: values.reps,
       durationSeconds: values.durationSeconds ?? null,
       isWarmup: values.isWarmup ?? false,
+      // Wird ein Satz nachträglich zum Aufwärmsatz, verliert er die Bewertung.
+      ...(values.isWarmup ? { effort: null } : {}),
       volumeKg: setVolume(
         exercise.trackingMode,
         values.weightKg,
@@ -216,6 +236,25 @@ export async function updateSet(
       ),
     })
     .where(eq(workoutSets.id, setId));
+}
+
+/**
+ * Wie hat sich der Satz angefühlt? Gedacht für den letzten Arbeitssatz einer
+ * Übung; null nimmt die Bewertung zurück. Geht auch nach dem Training noch,
+ * wenn man es erst im Verlauf nachträgt.
+ */
+export async function rateSet(
+  user: User,
+  setId: string,
+  effort: SetEffort | null,
+): Promise<{ workoutId: string }> {
+  const existing = await getOwnedSet(user.id, setId);
+  if (existing.isWarmup) {
+    throw new ServiceError("Aufwärmsätze werden nicht bewertet.");
+  }
+
+  await db.update(workoutSets).set({ effort }).where(eq(workoutSets.id, setId));
+  return { workoutId: existing.workoutId };
 }
 
 export async function deleteSet(user: User, setId: string): Promise<{ workoutId: string }> {
@@ -232,23 +271,22 @@ export async function deleteLastSet(
   user: User,
   workoutId: string,
   exerciseId: string,
-): Promise<{ setNumber: number }> {
+): Promise<{ ordinal: number; isWarmup: boolean }> {
   await requireOpenWorkout(user.id, workoutId);
 
   const rows = await db
-    .select({ id: workoutSets.id, setNumber: workoutSets.setNumber })
+    .select({ id: workoutSets.id, isWarmup: workoutSets.isWarmup })
     .from(workoutSets)
     .where(
       and(eq(workoutSets.workoutId, workoutId), eq(workoutSets.exerciseId, exerciseId)),
     )
-    .orderBy(desc(workoutSets.setNumber))
-    .limit(1);
+    .orderBy(asc(workoutSets.setNumber));
 
-  const last = rows[0];
+  const last = rows.at(-1);
   if (!last) throw new ServiceError("Für diese Übung ist noch kein Satz gespeichert.");
 
   await deleteSet(user, last.id);
-  return { setNumber: last.setNumber };
+  return { ordinal: ordinalOfKind(rows, last), isWarmup: last.isWarmup };
 }
 
 /**

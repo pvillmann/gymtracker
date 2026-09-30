@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
+import type { SetEffort } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
 import { parseDurationInput } from "@/lib/format";
 import { optionalText, text } from "@/lib/formdata";
@@ -15,6 +16,7 @@ import {
   finishWorkout,
   getOwnedSet,
   logSet,
+  rateSet,
   requireOwnExercise,
   requireOwnWorkout,
   setWorkoutNotes,
@@ -117,6 +119,19 @@ export async function updateSetAction(
     revalidatePath(`/history/${existing.workoutId}`);
   }
   return result;
+}
+
+export async function rateSetAction(
+  setId: string,
+  effort: SetEffort | null,
+): Promise<void> {
+  const user = await requireUser();
+  const parsed = z.enum(["max", "ok", "easy"]).nullable().safeParse(effort);
+  if (!parsed.success) return;
+
+  const { workoutId } = await rateSet(user, setId, parsed.data);
+  revalidatePath(`/workout/${workoutId}`);
+  revalidatePath(`/history/${workoutId}`);
 }
 
 export async function deleteSetAction(setId: string): Promise<void> {

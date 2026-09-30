@@ -33,13 +33,16 @@ Homescreen.
   Gewichtsstufe der Maschine (die Beinpresse springt in 5 kg, die Kurzhantel in 2 kg)
 - Über jedem Eingabefeld steht, was beim letzten Mal in genau diesem Satz stand
 - Jeder gespeicherte Satz bekommt sofort ein Vergleichs-Label: ▲ +5 kg, ▼ −1 Wdh. oder „gleich"
+- Den letzten Satz einer Übung mit einem Tipp einschätzen – „Am Limit“, „Ok“
+  oder „Leicht“ – und beim nächsten Mal sehen, ob noch Luft war
 - Pausentimer startet automatisch nach dem Satz und vibriert, wenn er abgelaufen ist
 - Notizfeld pro Maschine für die Einstellungen (Sitzhöhe, Lehne, Griff)
 - Beenden vergessen? Wer ein Training öffnet, das seit Stunden läuft, bekommt
   angeboten, das Ende auf den letzten protokollierten Satz zu setzen — sonst
   steht im Verlauf eine Dauer, die jede Auswertung über die Trainingszeit
   verzerrt. Beginn und Ende lassen sich später ohnehin korrigieren.
-- Aufwärmsätze zählen nicht als Arbeitssätze
+- Aufwärmsätze werden getrennt gezählt (A1, A2 …), zählen nicht aufs Satzziel
+  und werden nur mit den Aufwärmsätzen vom letzten Mal verglichen
 - Übungen lassen sich spontan ergänzen, auch wenn sie nicht im Plan stehen
 
 **Pläne und Übungen**

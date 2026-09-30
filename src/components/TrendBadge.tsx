@@ -33,7 +33,16 @@ export function TrendBadge({
       )}
     >
       <span aria-hidden="true">{arrows[trend]}</span>
-      {label}
+      {/* "+1 kg · −5 Wdh." darf nur zwischen den Teilen umbrechen, nie mitten
+          in "−5 Wdh." – auf schmalen Handys stehen die Teile dann untereinander. */}
+      <span className="flex flex-wrap justify-end gap-x-1 leading-tight">
+        {label.split(" · ").map((part, index, all) => (
+          <span key={index} className="whitespace-nowrap">
+            {part}
+            {index < all.length - 1 ? " ·" : ""}
+          </span>
+        ))}
+      </span>
     </span>
   );
 }

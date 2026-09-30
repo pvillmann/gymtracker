@@ -5,11 +5,18 @@ import { notFound, redirect } from "next/navigation";
 import { deleteWorkoutAction } from "@/actions/workouts";
 import { ConfirmSubmitButton } from "@/components/ConfirmSubmitButton";
 import { TrendBadge } from "@/components/TrendBadge";
-import { Card, PageHeader } from "@/components/ui";
+import { Card, PageHeader, cx } from "@/components/ui";
 import { WorkoutNotesForm } from "@/components/WorkoutNotesForm";
 import { WorkoutTimesForm } from "@/components/WorkoutTimesForm";
 import { requireUser } from "@/lib/auth";
-import { describeSet } from "@/lib/describe";
+import {
+  describeSet,
+  effortLabel,
+  lastEffort,
+  nthOfKind,
+  ordinalOfKind,
+  setLabel,
+} from "@/lib/describe";
 import {
   exerciseCount,
   formatDate,
@@ -61,7 +68,11 @@ export default async function WorkoutDetailPage({
   ]);
 
   const totalVolume = entries.reduce((sum, entry) => sum + entry.volumeKg, 0);
-  const totalSets = entries.reduce((sum, entry) => sum + entry.sets.length, 0);
+  // Wie im laufenden Training: gezählt werden die Arbeitssätze.
+  const totalSets = entries.reduce(
+    (sum, entry) => sum + entry.sets.filter((s) => !s.isWarmup).length,
+    0,
+  );
   const duration = workout.finishedAt - workout.startedAt;
 
   const previousVolume = [...previous.values()].reduce(
@@ -147,6 +158,7 @@ export default async function WorkoutDetailPage({
         {entries.map((entry) => {
           const last = previous.get(entry.exerciseId);
           const isRecord = records.includes(entry);
+          const effort = lastEffort(entry.sets);
 
           return (
             <Card key={entry.exerciseId}>
@@ -159,7 +171,8 @@ export default async function WorkoutDetailPage({
                     {entry.name}
                   </Link>
                   <p className="mt-0.5 text-sm text-muted tnum">
-                    {sets(entry.sets.length)} · {formatVolume(entry.volumeKg)}
+                    {sets(entry.sets.filter((s) => !s.isWarmup).length)} · {formatVolume(entry.volumeKg)}
+                    {effort ? ` · letzter Satz: ${effortLabel(effort)}` : ""}
                   </p>
                 </div>
                 {isRecord ? (
@@ -171,9 +184,10 @@ export default async function WorkoutDetailPage({
 
               <ul className="mt-3 space-y-1.5">
                 {entry.sets.map((set) => {
-                  const reference = last?.sets.find(
-                    (s) => s.setNumber === set.setNumber,
-                  );
+                  const ordinal = ordinalOfKind(entry.sets, set);
+                  const reference = last
+                    ? nthOfKind(last.sets, set.isWarmup, ordinal)
+                    : undefined;
                   const comparison = compareSets(
                     set,
                     reference,
@@ -186,17 +200,21 @@ export default async function WorkoutDetailPage({
                       key={set.id}
                       className="flex items-center gap-2 rounded-lg bg-surface-2 px-3 py-2"
                     >
-                      <span className="w-6 shrink-0 text-sm font-semibold text-faint tnum">
-                        {set.setNumber}.
+                      <span className="w-7 shrink-0 text-sm font-semibold text-faint tnum">
+                        {setLabel(set.isWarmup, ordinal)}.
                       </span>
-                      <span className="font-semibold tnum">
+                      {/* Aufwärmsätze erkennt man am "A" in der Nummer und der gedämpften
+                          Schrift – ein zusätzliches Schild passt neben dem Vergleich nicht
+                          mehr in die Zeile. */}
+                      <span
+                        className={cx(
+                          "whitespace-nowrap tnum",
+                          set.isWarmup ? "font-medium text-muted" : "font-semibold",
+                        )}
+                      >
+                        {set.isWarmup ? <span className="sr-only">Aufwärmsatz: </span> : null}
                         {describeSet(set, entry.trackingMode)}
                       </span>
-                      {set.isWarmup ? (
-                        <span className="rounded border border-line px-1.5 py-0.5 text-[10px] font-medium text-faint">
-                          Aufwärmen
-                        </span>
-                      ) : null}
                       <TrendBadge
                         trend={comparison.trend}
                         label={comparison.label}
