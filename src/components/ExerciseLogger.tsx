@@ -21,7 +21,7 @@ import {
 } from "@/lib/describe";
 import { formatDuration, formatKg, parseDurationInput } from "@/lib/format";
 import type { FormState } from "@/lib/result";
-import { compareSets, setVolume } from "@/lib/training";
+import { compareSets, percentChange, setVolume, trendOf } from "@/lib/training";
 
 export type LoggerSet = {
   id: string;
@@ -263,11 +263,24 @@ export function ExerciseLogger({
   // niemand, welcher der letzte ist, dann ist es einfach der jüngste.
   const lastWorking = setsOfKind(loggedSets, false).at(-1) ?? null;
   const previousEffort = previous ? lastEffort(previous.sets) : null;
-  const workingVolume = loggedSets.reduce(
-    (sum, set) =>
-      sum + setVolume(exercise.trackingMode, set.weightKg, set.reps, bodyweightKg),
-    0,
-  );
+  const volumeOf = (sets: LoggerSet[]) =>
+    sets.reduce(
+      (sum, set) =>
+        sum + setVolume(exercise.trackingMode, set.weightKg, set.reps, bodyweightKg),
+      0,
+    );
+
+  // Der Pfeil am Satz vergleicht die Leistung (1RM), das hier die Arbeit:
+  // weniger Wiederholungen mit mehr Gewicht können beides zugleich sein –
+  // ein schwächerer Satz, aber mehr bewegt. Aufwärmsätze zählen nicht mit.
+  const workingSets = setsOfKind(loggedSets, false);
+  const workingVolume = volumeOf(workingSets);
+  // Gleich viele Sätze gegeneinander: mitten im Training gegen das ganze
+  // letzte Mal zu messen, wäre nach dem ersten Satz immer rot.
+  const previousWorking = previous ? setsOfKind(previous.sets, false) : [];
+  const previousCompared = previousWorking.slice(0, workingSets.length);
+  const previousVolume = volumeOf(previousCompared);
+  const volumeChange = percentChange(workingVolume, previousVolume);
 
   return (
     <Card id={`uebung-${exercise.id}`} className="scroll-mt-20">
@@ -545,9 +558,28 @@ export function ExerciseLogger({
       ) : null}
 
       {workingVolume > 0 ? (
-        <p className="mt-3 text-xs text-faint tnum">
-          Bewegt an dieser Übung: {formatKg(workingVolume)} kg
-        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-faint tnum">
+          <span>Bewegt: {formatKg(workingVolume)} kg</span>
+          {volumeChange !== null ? (
+            <>
+              <TrendBadge
+                trend={trendOf(workingVolume, previousVolume)}
+                label={
+                  trendOf(workingVolume, previousVolume) === "flat"
+                    ? "gleich"
+                    : `${volumeChange > 0 ? "+" : "−"}${Math.round(Math.abs(volumeChange))} %`
+                }
+              />
+              <span>
+                {previousCompared.length < previousWorking.length
+                  ? `ggü. Satz ${
+                      previousCompared.length === 1 ? "1" : `1–${previousCompared.length}`
+                    } letztes Mal`
+                  : "ggü. letztem Mal"}
+              </span>
+            </>
+          ) : null}
+        </div>
       ) : null}
     </Card>
   );
