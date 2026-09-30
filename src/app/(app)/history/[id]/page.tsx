@@ -9,7 +9,7 @@ import { Card, PageHeader } from "@/components/ui";
 import { WorkoutNotesForm } from "@/components/WorkoutNotesForm";
 import { WorkoutTimesForm } from "@/components/WorkoutTimesForm";
 import { requireUser } from "@/lib/auth";
-import { describeSet } from "@/lib/describe";
+import { describeSet, nthOfKind, ordinalOfKind, setLabel } from "@/lib/describe";
 import {
   exerciseCount,
   formatDate,
@@ -61,7 +61,11 @@ export default async function WorkoutDetailPage({
   ]);
 
   const totalVolume = entries.reduce((sum, entry) => sum + entry.volumeKg, 0);
-  const totalSets = entries.reduce((sum, entry) => sum + entry.sets.length, 0);
+  // Wie im laufenden Training: gezählt werden die Arbeitssätze.
+  const totalSets = entries.reduce(
+    (sum, entry) => sum + entry.sets.filter((s) => !s.isWarmup).length,
+    0,
+  );
   const duration = workout.finishedAt - workout.startedAt;
 
   const previousVolume = [...previous.values()].reduce(
@@ -159,7 +163,7 @@ export default async function WorkoutDetailPage({
                     {entry.name}
                   </Link>
                   <p className="mt-0.5 text-sm text-muted tnum">
-                    {sets(entry.sets.length)} · {formatVolume(entry.volumeKg)}
+                    {sets(entry.sets.filter((s) => !s.isWarmup).length)} · {formatVolume(entry.volumeKg)}
                   </p>
                 </div>
                 {isRecord ? (
@@ -171,9 +175,10 @@ export default async function WorkoutDetailPage({
 
               <ul className="mt-3 space-y-1.5">
                 {entry.sets.map((set) => {
-                  const reference = last?.sets.find(
-                    (s) => s.setNumber === set.setNumber,
-                  );
+                  const ordinal = ordinalOfKind(entry.sets, set);
+                  const reference = last
+                    ? nthOfKind(last.sets, set.isWarmup, ordinal)
+                    : undefined;
                   const comparison = compareSets(
                     set,
                     reference,
@@ -186,8 +191,8 @@ export default async function WorkoutDetailPage({
                       key={set.id}
                       className="flex items-center gap-2 rounded-lg bg-surface-2 px-3 py-2"
                     >
-                      <span className="w-6 shrink-0 text-sm font-semibold text-faint tnum">
-                        {set.setNumber}.
+                      <span className="w-7 shrink-0 text-sm font-semibold text-faint tnum">
+                        {setLabel(set.isWarmup, ordinal)}.
                       </span>
                       <span className="font-semibold tnum">
                         {describeSet(set, entry.trackingMode)}

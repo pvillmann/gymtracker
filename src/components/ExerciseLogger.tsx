@@ -9,7 +9,7 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { TrendBadge } from "@/components/TrendBadge";
 import { Card, ErrorMessage, cx } from "@/components/ui";
 import type { TrackingMode } from "@/db/schema";
-import { describeSet } from "@/lib/describe";
+import { describeSet, nthOfKind, ordinalOfKind, setLabel, setsOfKind } from "@/lib/describe";
 import { formatDuration, formatKg, parseDurationInput } from "@/lib/format";
 import type { FormState } from "@/lib/result";
 import { compareSets, setVolume } from "@/lib/training";
@@ -157,19 +157,33 @@ export function ExerciseLogger({
   const [isPending, startTransition] = useTransition();
 
   const isTimed = exercise.trackingMode === "time";
-  const nextSetNumber = loggedSets.length + 1;
+  const warmupsToday = setsOfKind(loggedSets, true).length;
+  const workingToday = loggedSets.length - warmupsToday;
+  const previousWarmups = previous ? setsOfKind(previous.sets, true).length : 0;
 
-  const prefill = useMemo(() => {
+  // Wer sich letztes Mal aufgewärmt hat, tut es heute vermutlich wieder: bis
+  // die Aufwärmsätze vom letzten Mal erreicht sind und solange noch kein
+  // Arbeitssatz steht, ist der Haken vorausgewählt.
+  const defaultWarmup = workingToday === 0 && warmupsToday < previousWarmups;
+  const [isWarmup, setIsWarmup] = useState(defaultWarmup);
+
+  const prefillFor = (warmup: boolean) => {
+    // Aufwärm- und Arbeitssätze getrennt: sonst landet nach dem Aufwärmen das
+    // Aufwärmgewicht im ersten Arbeitssatz und der erste Arbeitssatz wird mit
+    // dem zweiten Satz vom letzten Mal verglichen.
+    const ordinal = (warmup ? warmupsToday : workingToday) + 1;
+    const previousOfKind = previous ? setsOfKind(previous.sets, warmup) : [];
     const previousSameSet =
-      previous?.sets.find((s) => s.setNumber === nextSetNumber) ??
-      previous?.sets.at(-1) ??
-      null;
-    const lastThisSession = loggedSets.at(-1) ?? null;
+      previousOfKind[ordinal - 1] ?? previousOfKind.at(-1) ?? null;
+    const lastThisSession = setsOfKind(loggedSets, warmup).at(-1) ?? null;
 
     return {
       // Gewicht: was du heute zuletzt aufgelegt hast, bleibt meist liegen.
       weight: formatValue(
-        lastThisSession?.weightKg ?? previousSameSet?.weightKg ?? 0,
+        lastThisSession?.weightKg ??
+          previousSameSet?.weightKg ??
+          loggedSets.at(-1)?.weightKg ??
+          0,
       ),
       // Wiederholungen: der Wert vom letzten Mal ist die Marke, die es zu
       // schlagen gilt.
@@ -186,22 +200,40 @@ export function ExerciseLogger({
           30,
       ),
     };
-  }, [loggedSets, previous, nextSetNumber, target]);
+  };
 
-  const [weight, setWeight] = useState(prefill.weight);
-  const [reps, setReps] = useState(prefill.reps);
-  const [duration, setDuration] = useState(prefill.duration);
+  const initial = prefillFor(defaultWarmup);
+  const [weight, setWeight] = useState(initial.weight);
+  const [reps, setReps] = useState(initial.reps);
+  const [duration, setDuration] = useState(initial.duration);
+  // Hat der Nutzer schon etwas eingetippt, bleibt es beim Umschalten des
+  // Aufwärm-Hakens stehen.
+  const [touched, setTouched] = useState(false);
   const [restEndsAt, setRestEndsAt] = useState<number | null>(null);
+
+  const applyPrefill = (warmup: boolean) => {
+    const next = prefillFor(warmup);
+    setWeight(next.weight);
+    setReps(next.reps);
+    setDuration(next.duration);
+    setTouched(false);
+  };
 
   // Nach jedem gespeicherten Satz die Felder auf den nächsten Satz vorbelegen.
   const syncedCount = useRef(loggedSets.length);
   useEffect(() => {
     if (syncedCount.current === loggedSets.length) return;
     syncedCount.current = loggedSets.length;
-    setWeight(prefill.weight);
-    setReps(prefill.reps);
-    setDuration(prefill.duration);
-  }, [loggedSets.length, prefill]);
+    setIsWarmup(defaultWarmup);
+    applyPrefill(defaultWarmup);
+    // prefillFor hängt nur an loggedSets und previous – beides ändert sich
+    // hier mit loggedSets.length.
+  }, [loggedSets.length, defaultWarmup]);
+
+  const edit = (setter: (value: string) => void) => (value: string) => {
+    setter(value);
+    setTouched(true);
+  };
 
   useEffect(() => {
     if (state.ok && target && target.restSeconds > 0) {
@@ -209,10 +241,13 @@ export function ExerciseLogger({
     }
   }, [state, target]);
 
-  const previousForNext =
-    previous?.sets.find((s) => s.setNumber === nextSetNumber) ?? null;
+  const nextOrdinal = (isWarmup ? warmupsToday : workingToday) + 1;
+  const previousForNext = previous
+    ? (nthOfKind(previous.sets, isWarmup, nextOrdinal) ?? null)
+    : null;
 
-  const done = target ? loggedSets.length >= target.targetSets : loggedSets.length > 0;
+  // Aufwärmsätze zählen nicht aufs Satzziel.
+  const done = target ? workingToday >= target.targetSets : workingToday > 0;
   const workingVolume = loggedSets.reduce(
     (sum, set) =>
       sum + setVolume(exercise.trackingMode, set.weightKg, set.reps, bodyweightKg),
@@ -249,8 +284,9 @@ export function ExerciseLogger({
               : "border-line bg-surface-2 text-muted",
           )}
         >
-          {loggedSets.length}
+          {workingToday}
           {target ? `/${target.targetSets}` : ""} Sätze
+          {warmupsToday > 0 ? ` + ${warmupsToday} Aufw.` : ""}
         </span>
       </div>
 
@@ -280,9 +316,11 @@ export function ExerciseLogger({
       {loggedSets.length > 0 ? (
         <ul className="mt-3 space-y-1.5">
           {loggedSets.map((set) => {
-            const reference = previous?.sets.find(
-              (s) => s.setNumber === set.setNumber,
-            );
+            const ordinal = ordinalOfKind(loggedSets, set);
+            const label = setLabel(set.isWarmup, ordinal);
+            const reference = previous
+              ? nthOfKind(previous.sets, set.isWarmup, ordinal)
+              : undefined;
             const comparison = compareSets(
               set,
               reference,
@@ -295,8 +333,8 @@ export function ExerciseLogger({
                 key={set.id}
                 className="flex items-center gap-2 rounded-lg bg-surface-2 px-3 py-2"
               >
-                <span className="w-6 shrink-0 text-sm font-semibold text-faint tnum">
-                  {set.setNumber}.
+                <span className="w-7 shrink-0 text-sm font-semibold text-faint tnum">
+                  {label}.
                 </span>
                 <span className="font-semibold tnum">
                   {describeSet(set, exercise.trackingMode)}
@@ -315,12 +353,12 @@ export function ExerciseLogger({
                   type="button"
                   disabled={isPending}
                   onClick={() => {
-                    if (!window.confirm(`Satz ${set.setNumber} löschen?`)) return;
+                    if (!window.confirm(`Satz ${label} löschen?`)) return;
                     startTransition(() => {
                       void deleteSetAction(set.id);
                     });
                   }}
-                  aria-label={`Satz ${set.setNumber} löschen`}
+                  aria-label={`Satz ${label} löschen`}
                   className="shrink-0 rounded-lg px-1.5 py-1 text-lg leading-none text-faint hover:text-down disabled:opacity-40"
                 >
                   ×
@@ -331,7 +369,15 @@ export function ExerciseLogger({
         </ul>
       ) : null}
 
-      <form action={formAction} className="mt-4">
+      <form
+        action={formAction}
+        // React setzt ein Formular nach der Action zurück. Alle Felder hier
+        // sind kontrolliert – beim Haken stellt der Reset aber den Zustand vom
+        // ersten Rendern wieder her, und der sähe dann angehakt aus, obwohl
+        // ein Arbeitssatz gespeichert würde.
+        onReset={(event) => event.preventDefault()}
+        className="mt-4"
+      >
         <input type="hidden" name="exerciseId" value={exercise.id} />
 
         {isTimed ? (
@@ -343,7 +389,7 @@ export function ExerciseLogger({
               label="Dauer (Min:Sek)"
               name="durationSeconds"
               value={duration}
-              onChange={setDuration}
+              onChange={edit(setDuration)}
               step={15}
               max={36_000}
               format={formatDuration}
@@ -354,7 +400,7 @@ export function ExerciseLogger({
               label="Zusatzgewicht (kg)"
               name="weightKg"
               value={weight}
-              onChange={setWeight}
+              onChange={edit(setWeight)}
               step={exercise.weightStepKg}
               max={1000}
             />
@@ -371,7 +417,7 @@ export function ExerciseLogger({
               }
               name="weightKg"
               value={weight}
-              onChange={setWeight}
+              onChange={edit(setWeight)}
               step={exercise.weightStepKg}
               max={1000}
               suffix={
@@ -386,7 +432,7 @@ export function ExerciseLogger({
               label="Wiederholungen"
               name="reps"
               value={reps}
-              onChange={setReps}
+              onChange={edit(setReps)}
               step={1}
               max={500}
               suffix={
@@ -404,6 +450,12 @@ export function ExerciseLogger({
           <input
             type="checkbox"
             name="isWarmup"
+            checked={isWarmup}
+            onChange={(event) => {
+              const warmup = event.target.checked;
+              setIsWarmup(warmup);
+              if (!touched) applyPrefill(warmup);
+            }}
             className="h-4 w-4 rounded border-line accent-[var(--color-accent)]"
           />
           Aufwärmsatz (zählt nicht als Arbeitssatz)
@@ -416,7 +468,7 @@ export function ExerciseLogger({
           className="mt-3 w-full"
           pendingLabel="Wird gespeichert …"
         >
-          Satz {nextSetNumber} speichern
+          {isWarmup ? `Aufwärmsatz ${nextOrdinal}` : `Satz ${nextOrdinal}`} speichern
         </SubmitButton>
       </form>
 

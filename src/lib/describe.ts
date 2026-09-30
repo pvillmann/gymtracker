@@ -8,6 +8,42 @@ export type SetLike = {
   isWarmup: boolean;
 };
 
+/**
+ * Aufwärm- und Arbeitssätze werden getrennt gezählt: "A1, A2, 1, 2, 3".
+ * set_number in der Datenbank bleibt die Reihenfolge über beide hinweg –
+ * zählen und vergleichen darf man damit aber nicht, sonst ist nach einem
+ * Aufwärmsatz der erste Arbeitssatz "Satz 2" und wird mit dem zweiten Satz
+ * vom letzten Mal verglichen.
+ */
+export function setsOfKind<T extends { isWarmup: boolean }>(
+  sets: readonly T[],
+  isWarmup: boolean,
+): T[] {
+  return sets.filter((s) => s.isWarmup === isWarmup);
+}
+
+/** 1-basierte Nummer eines Satzes unter den Sätzen seiner Art. */
+export function ordinalOfKind<T extends { isWarmup: boolean }>(
+  sets: readonly T[],
+  set: T,
+): number {
+  return setsOfKind(sets, set.isWarmup).indexOf(set) + 1;
+}
+
+/** Der n-te Satz derselben Art – das Gegenstück für den Vergleich. */
+export function nthOfKind<T extends { isWarmup: boolean }>(
+  sets: readonly T[],
+  isWarmup: boolean,
+  ordinal: number,
+): T | undefined {
+  return setsOfKind(sets, isWarmup)[ordinal - 1];
+}
+
+/** Anzeige-Nummer: "A1" für Aufwärmsätze, "1" für Arbeitssätze. */
+export function setLabel(isWarmup: boolean, ordinal: number): string {
+  return isWarmup ? `A${ordinal}` : String(ordinal);
+}
+
 /** Ein einzelner Satz als Text: "40 kg × 12" bzw. "1:30". */
 export function describeSet(set: SetLike, mode: TrackingMode): string {
   if (mode === "time") {

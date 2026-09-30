@@ -39,7 +39,8 @@ Homescreen.
   angeboten, das Ende auf den letzten protokollierten Satz zu setzen — sonst
   steht im Verlauf eine Dauer, die jede Auswertung über die Trainingszeit
   verzerrt. Beginn und Ende lassen sich später ohnehin korrigieren.
-- Aufwärmsätze zählen nicht als Arbeitssätze
+- Aufwärmsätze werden getrennt gezählt (A1, A2 …), zählen nicht aufs Satzziel
+  und werden nur mit den Aufwärmsätzen vom letzten Mal verglichen
 - Übungen lassen sich spontan ergänzen, auch wenn sie nicht im Plan stehen
 
 **Pläne und Übungen**
