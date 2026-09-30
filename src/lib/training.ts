@@ -113,21 +113,24 @@ export function compareSets(
     estimateOneRepMax(effectiveLoad(mode, previous.weightKg, bodyweightKg), previous.reps),
   );
 
+  const parts: string[] = [];
+
   if (Math.abs(weightDiff) >= 0.05) {
     const rounded = Math.round(Math.abs(weightDiff) * 10) / 10;
     const value = rounded.toLocaleString("de-DE", { maximumFractionDigits: 1 });
     // Beim Gegengewicht benennt das Label die Hilfe, der Pfeil die Leistung:
     // "▲ −5 kg Hilfe" heißt fünf Kilo weniger Unterstützung.
     const unit = mode === "assisted_reps" ? " kg Hilfe" : " kg";
-    return { trend, label: `${weightDiff > 0 ? "+" : "−"}${value}${unit}` };
+    parts.push(`${weightDiff > 0 ? "+" : "−"}${value}${unit}`);
   }
 
+  // Beide Größen nennen, wenn sich beide geändert haben: "▼ +1 kg" allein
+  // widerspricht sich – der Pfeil kommt dann von den Wiederholungen, die im
+  // Text fehlen würden.
   if (repsDiff !== 0) {
-    return {
-      trend,
-      label: `${repsDiff > 0 ? "+" : "−"}${Math.abs(repsDiff)} Wdh.`,
-    };
+    parts.push(`${repsDiff > 0 ? "+" : "−"}${Math.abs(repsDiff)} Wdh.`);
   }
 
-  return { trend: "flat", label: "gleich" };
+  if (parts.length === 0) return { trend: "flat", label: "gleich" };
+  return { trend, label: parts.join(" · ") };
 }

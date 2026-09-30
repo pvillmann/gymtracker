@@ -336,14 +336,18 @@ export function ExerciseLogger({
                 <span className="w-7 shrink-0 text-sm font-semibold text-faint tnum">
                   {label}.
                 </span>
-                <span className="font-semibold tnum">
+                {/* Aufwärmsätze erkennt man am "A" in der Nummer und der gedämpften
+                    Schrift – ein zusätzliches Schild passt neben dem Vergleich nicht
+                    mehr in die Zeile. */}
+                <span
+                  className={cx(
+                    "whitespace-nowrap tnum",
+                    set.isWarmup ? "font-medium text-muted" : "font-semibold",
+                  )}
+                >
+                  {set.isWarmup ? <span className="sr-only">Aufwärmsatz: </span> : null}
                   {describeSet(set, exercise.trackingMode)}
                 </span>
-                {set.isWarmup ? (
-                  <span className="rounded border border-line px-1.5 py-0.5 text-[10px] font-medium text-faint">
-                    Aufwärmen
-                  </span>
-                ) : null}
                 <TrendBadge
                   trend={comparison.trend}
                   label={comparison.label}
