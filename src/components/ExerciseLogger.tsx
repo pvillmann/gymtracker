@@ -3,13 +3,22 @@
 import Link from "next/link";
 import { useActionState, useEffect, useMemo, useRef, useState, useTransition } from "react";
 
-import { deleteSetAction, logSetAction } from "@/actions/workouts";
+import { deleteSetAction, logSetAction, rateSetAction } from "@/actions/workouts";
 import { RestTimer } from "@/components/RestTimer";
 import { SubmitButton } from "@/components/SubmitButton";
 import { TrendBadge } from "@/components/TrendBadge";
 import { Card, ErrorMessage, cx } from "@/components/ui";
-import type { TrackingMode } from "@/db/schema";
-import { describeSet, nthOfKind, ordinalOfKind, setLabel, setsOfKind } from "@/lib/describe";
+import type { SetEffort, TrackingMode } from "@/db/schema";
+import {
+  EFFORTS,
+  describeSet,
+  effortLabel,
+  lastEffort,
+  nthOfKind,
+  ordinalOfKind,
+  setLabel,
+  setsOfKind,
+} from "@/lib/describe";
 import { formatDuration, formatKg, parseDurationInput } from "@/lib/format";
 import type { FormState } from "@/lib/result";
 import { compareSets, setVolume } from "@/lib/training";
@@ -21,6 +30,7 @@ export type LoggerSet = {
   reps: number;
   durationSeconds: number | null;
   isWarmup: boolean;
+  effort: SetEffort | null;
 };
 
 export type LoggerExercise = {
@@ -248,6 +258,11 @@ export function ExerciseLogger({
 
   // Aufwärmsätze zählen nicht aufs Satzziel.
   const done = target ? workingToday >= target.targetSets : workingToday > 0;
+
+  // Bewertet wird nur der letzte Arbeitssatz – der zählt. Ohne Plan weiß
+  // niemand, welcher der letzte ist, dann ist es einfach der jüngste.
+  const lastWorking = setsOfKind(loggedSets, false).at(-1) ?? null;
+  const previousEffort = previous ? lastEffort(previous.sets) : null;
   const workingVolume = loggedSets.reduce(
     (sum, set) =>
       sum + setVolume(exercise.trackingMode, set.weightKg, set.reps, bodyweightKg),
@@ -307,6 +322,12 @@ export function ExerciseLogger({
           <>
             <span className="font-medium tnum">{previous.summary}</span>
             <span className="text-faint"> · {previous.relative}</span>
+            {previousEffort ? (
+              <span className="mt-0.5 block text-muted">
+                Letzter Satz:{" "}
+                <span className="font-medium text-fg">{effortLabel(previousEffort)}</span>
+              </span>
+            ) : null}
           </>
         ) : (
           <span className="text-faint">noch nie trainiert – heute setzt du die Marke</span>
@@ -371,6 +392,49 @@ export function ExerciseLogger({
             );
           })}
         </ul>
+      ) : null}
+
+      {done && lastWorking ? (
+        <div className="mt-3 rounded-lg border border-line px-3 py-2.5">
+          <p className="text-sm text-muted">
+            Wie war Satz {ordinalOfKind(loggedSets, lastWorking)}?
+          </p>
+          <div className="mt-2 grid grid-cols-3 gap-2">
+            {EFFORTS.map((option) => {
+              const selected = lastWorking.effort === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  aria-pressed={selected}
+                  disabled={isPending}
+                  onClick={() => {
+                    startTransition(() => {
+                      // Nochmal tippen nimmt die Bewertung zurück.
+                      void rateSetAction(lastWorking.id, selected ? null : option.value);
+                    });
+                  }}
+                  className={cx(
+                    "rounded-lg border px-1 py-1.5 text-center disabled:opacity-60",
+                    selected
+                      ? "border-accent bg-accent/12 text-accent"
+                      : "border-line bg-surface-2 text-fg",
+                  )}
+                >
+                  <span className="block text-sm font-semibold">{option.label}</span>
+                  <span
+                    className={cx(
+                      "block text-[11px]",
+                      selected ? "text-accent/80" : "text-faint",
+                    )}
+                  >
+                    {option.hint}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       ) : null}
 
       <form

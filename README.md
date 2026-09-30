@@ -33,6 +33,8 @@ Homescreen.
   Gewichtsstufe der Maschine (die Beinpresse springt in 5 kg, die Kurzhantel in 2 kg)
 - Über jedem Eingabefeld steht, was beim letzten Mal in genau diesem Satz stand
 - Jeder gespeicherte Satz bekommt sofort ein Vergleichs-Label: ▲ +5 kg, ▼ −1 Wdh. oder „gleich"
+- Den letzten Satz einer Übung mit einem Tipp einschätzen – „Am Limit“, „Ok“
+  oder „Leicht“ – und beim nächsten Mal sehen, ob noch Luft war
 - Pausentimer startet automatisch nach dem Satz und vibriert, wenn er abgelaufen ist
 - Notizfeld pro Maschine für die Einstellungen (Sitzhöhe, Lehne, Griff)
 - Beenden vergessen? Wer ein Training öffnet, das seit Stunden läuft, bekommt

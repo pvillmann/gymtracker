@@ -1,4 +1,4 @@
-import type { TrackingMode } from "@/db/schema";
+import type { SetEffort, TrackingMode } from "@/db/schema";
 import { formatDuration, formatKg } from "@/lib/format";
 
 export type SetLike = {
@@ -42,6 +42,32 @@ export function nthOfKind<T extends { isWarmup: boolean }>(
 /** Anzeige-Nummer: "A1" für Aufwärmsätze, "1" für Arbeitssätze. */
 export function setLabel(isWarmup: boolean, ordinal: number): string {
   return isWarmup ? `A${ordinal}` : String(ordinal);
+}
+
+/**
+ * Die drei Stufen der Selbsteinschätzung. Der Hinweis in Wiederholungen ist
+ * nur ein Anker, damit "ok" an einem müden Tag dasselbe heißt wie an einem
+ * guten – gespeichert wird die Stufe, keine Zahl.
+ */
+export const EFFORTS: ReadonlyArray<{ value: SetEffort; label: string; hint: string }> = [
+  { value: "max", label: "Am Limit", hint: "0–1 Wdh. übrig" },
+  { value: "ok", label: "Ok", hint: "2–3 Wdh. übrig" },
+  { value: "easy", label: "Leicht", hint: "4+ Wdh. übrig" },
+];
+
+export function effortLabel(effort: SetEffort): string {
+  return EFFORTS.find((e) => e.value === effort)?.label ?? effort;
+}
+
+/**
+ * Die Einschätzung eines Trainings an einer Übung: die des letzten
+ * bewerteten Arbeitssatzes. Wer nach der Bewertung noch einen Satz
+ * nachschiebt und den nicht bewertet, verliert sie so nicht.
+ */
+export function lastEffort(
+  sets: ReadonlyArray<{ isWarmup: boolean; effort: SetEffort | null }>,
+): SetEffort | null {
+  return setsOfKind(sets, false).findLast((s) => s.effort !== null)?.effort ?? null;
 }
 
 /** Ein einzelner Satz als Text: "40 kg × 12" bzw. "1:30". */

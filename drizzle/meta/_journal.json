@@ -43,6 +43,13 @@
       "when": 1788935738972,
       "tag": "0005_moaning_fantastic_four",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1790796404404,
+      "tag": "0006_set_effort",
+      "breakpoints": true
     }
   ]
 }

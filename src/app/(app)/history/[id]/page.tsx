@@ -9,7 +9,14 @@ import { Card, PageHeader, cx } from "@/components/ui";
 import { WorkoutNotesForm } from "@/components/WorkoutNotesForm";
 import { WorkoutTimesForm } from "@/components/WorkoutTimesForm";
 import { requireUser } from "@/lib/auth";
-import { describeSet, nthOfKind, ordinalOfKind, setLabel } from "@/lib/describe";
+import {
+  describeSet,
+  effortLabel,
+  lastEffort,
+  nthOfKind,
+  ordinalOfKind,
+  setLabel,
+} from "@/lib/describe";
 import {
   exerciseCount,
   formatDate,
@@ -151,6 +158,7 @@ export default async function WorkoutDetailPage({
         {entries.map((entry) => {
           const last = previous.get(entry.exerciseId);
           const isRecord = records.includes(entry);
+          const effort = lastEffort(entry.sets);
 
           return (
             <Card key={entry.exerciseId}>
@@ -164,6 +172,7 @@ export default async function WorkoutDetailPage({
                   </Link>
                   <p className="mt-0.5 text-sm text-muted tnum">
                     {sets(entry.sets.filter((s) => !s.isWarmup).length)} · {formatVolume(entry.volumeKg)}
+                    {effort ? ` · letzter Satz: ${effortLabel(effort)}` : ""}
                   </p>
                 </div>
                 {isRecord ? (

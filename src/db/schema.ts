@@ -18,6 +18,12 @@ export type TrackingMode =
   | "assisted_reps"
   | "time";
 
+/**
+ * Wie sich der letzte Arbeitssatz einer Übung angefühlt hat. Bewusst grob:
+ * es soll beim nächsten Mal nur sagen, ob noch Luft war.
+ */
+export type SetEffort = "max" | "ok" | "easy";
+
 export const users = sqliteTable(
   "users",
   {
@@ -253,6 +259,8 @@ export const workoutSets = sqliteTable(
     /** Nur für trackingMode "time". */
     durationSeconds: integer("duration_seconds"),
     isWarmup: integer("is_warmup", { mode: "boolean" }).notNull().default(false),
+    /** Selbsteinschätzung, nur beim letzten Arbeitssatz einer Übung gesetzt. */
+    effort: text("effort").$type<SetEffort>(),
     /** Vorberechnetes Volumen in kg, damit Statistiken ohne Joins auskommen. */
     volumeKg: real("volume_kg").notNull().default(0),
     completedAt: integer("completed_at").notNull().default(now),

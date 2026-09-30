@@ -8,6 +8,7 @@ import {
   plans,
   workouts,
   workoutSets,
+  type SetEffort,
   type TrackingMode,
   type User,
 } from "@/db/schema";
@@ -116,6 +117,8 @@ export type SetValues = {
   reps: number;
   durationSeconds?: number;
   isWarmup?: boolean;
+  /** Nur für den letzten Arbeitssatz gedacht, siehe rateSet. */
+  effort?: SetEffort | null;
 };
 
 /** Prüft, ob die Werte zur Messart der Übung passen. */
@@ -180,6 +183,8 @@ export async function logSet(
     reps: values.reps,
     durationSeconds: values.durationSeconds ?? null,
     isWarmup,
+    // Ein Aufwärmsatz sagt nichts darüber, ob beim Gewicht noch Luft war.
+    effort: isWarmup ? null : (values.effort ?? null),
     volumeKg,
   });
 
@@ -193,6 +198,7 @@ export async function getOwnedSet(userId: string, setId: string) {
       id: workoutSets.id,
       workoutId: workoutSets.workoutId,
       exerciseId: workoutSets.exerciseId,
+      isWarmup: workoutSets.isWarmup,
     })
     .from(workoutSets)
     .innerJoin(workouts, eq(workouts.id, workoutSets.workoutId))
@@ -220,6 +226,8 @@ export async function updateSet(
       reps: values.reps,
       durationSeconds: values.durationSeconds ?? null,
       isWarmup: values.isWarmup ?? false,
+      // Wird ein Satz nachträglich zum Aufwärmsatz, verliert er die Bewertung.
+      ...(values.isWarmup ? { effort: null } : {}),
       volumeKg: setVolume(
         exercise.trackingMode,
         values.weightKg,
@@ -228,6 +236,25 @@ export async function updateSet(
       ),
     })
     .where(eq(workoutSets.id, setId));
+}
+
+/**
+ * Wie hat sich der Satz angefühlt? Gedacht für den letzten Arbeitssatz einer
+ * Übung; null nimmt die Bewertung zurück. Geht auch nach dem Training noch,
+ * wenn man es erst im Verlauf nachträgt.
+ */
+export async function rateSet(
+  user: User,
+  setId: string,
+  effort: SetEffort | null,
+): Promise<{ workoutId: string }> {
+  const existing = await getOwnedSet(user.id, setId);
+  if (existing.isWarmup) {
+    throw new ServiceError("Aufwärmsätze werden nicht bewertet.");
+  }
+
+  await db.update(workoutSets).set({ effort }).where(eq(workoutSets.id, setId));
+  return { workoutId: existing.workoutId };
 }
 
 export async function deleteSet(user: User, setId: string): Promise<{ workoutId: string }> {
