@@ -21,7 +21,13 @@ import {
   formatRelativeDay,
   formatVolume,
 } from "@/lib/format";
-import { getExercise, getExerciseSessions } from "@/lib/queries";
+import {
+  getExercise,
+  getExerciseSessions,
+  getPreviousPerformances,
+  listExercises,
+  listMovements,
+} from "@/lib/queries";
 import { effectiveLoad, estimateOneRepMax, trendOf } from "@/lib/training";
 
 export const metadata: Metadata = { title: "Übung · GymTracker" };
@@ -41,7 +47,21 @@ export default async function ExerciseDetailPage({
   const exercise = await getExercise(user.id, id);
   if (!exercise) notFound();
 
-  const sessions = await getExerciseSessions(user.id, exercise.id);
+  const [sessions, movements, allExercises] = await Promise.all([
+    getExerciseSessions(user.id, exercise.id),
+    listMovements(user.id),
+    listExercises(user.id),
+  ]);
+  const movement = movements.find((m) => m.id === exercise.movementId) ?? null;
+  // Die anderen Geräte derselben Bewegung – mit eigenem Verlauf, denn die
+  // Gewichte sind von Gerät zu Gerät nicht vergleichbar.
+  const siblings = allExercises.filter(
+    (e) => e.movementId === exercise.movementId && e.id !== exercise.id,
+  );
+  const siblingLast = await getPreviousPerformances(
+    user.id,
+    siblings.map((e) => e.id),
+  );
   const isTimed = exercise.trackingMode === "time";
 
   const loadOf = (weightKg: number) =>
@@ -93,7 +113,11 @@ export default async function ExerciseDetailPage({
     <>
       <PageHeader
         title={exercise.name}
-        subtitle={[exercise.muscleGroup, `${sessions.length} Trainings`]
+        subtitle={[
+          movement && movement.name !== exercise.name ? movement.name : null,
+          exercise.muscleGroup,
+          `${sessions.length} Trainings`,
+        ]
           .filter(Boolean)
           .join(" · ")}
         action={
@@ -219,6 +243,44 @@ export default async function ExerciseDetailPage({
         </>
       )}
 
+      {movement ? (
+        <section className="mb-6">
+          <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+            Andere Geräte für {movement.name}
+          </h2>
+          <Card className="p-1">
+            <ul className="divide-y divide-line-soft">
+              {siblings.map((sibling) => {
+                const last = siblingLast.get(sibling.id);
+                return (
+                  <li key={sibling.id}>
+                    <Link
+                      href={`/exercises/${sibling.id}`}
+                      className="block rounded-xl px-3 py-3 hover:bg-surface-2"
+                    >
+                      <p className="font-semibold">{sibling.name}</p>
+                      <p className="mt-0.5 text-sm text-muted">
+                        {last
+                          ? `${describeSets(last.sets, sibling.trackingMode)} · ${formatRelativeDay(last.performedAt)}`
+                          : "Noch nicht trainiert"}
+                      </p>
+                    </Link>
+                  </li>
+                );
+              })}
+              <li>
+                <Link
+                  href={`/exercises/new?movement=${encodeURIComponent(movement.name)}`}
+                  className="block rounded-xl px-3 py-3 text-sm font-medium text-accent hover:bg-surface-2"
+                >
+                  + Weiteres Gerät für {movement.name}
+                </Link>
+              </li>
+            </ul>
+          </Card>
+        </section>
+      ) : null}
+
       <section className="mb-6">
         <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
           Bearbeiten
@@ -226,6 +288,8 @@ export default async function ExerciseDetailPage({
         <ExerciseForm
           action={updateExerciseAction.bind(null, exercise.id)}
           exercise={exercise}
+          movementName={movement?.name}
+          movements={movements}
           submitLabel="Änderungen speichern"
         />
       </section>

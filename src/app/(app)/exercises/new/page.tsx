@@ -4,10 +4,20 @@ import Link from "next/link";
 import { createExerciseAction } from "@/actions/exercises";
 import { ExerciseForm } from "@/components/ExerciseForm";
 import { PageHeader } from "@/components/ui";
+import { requireUser } from "@/lib/auth";
+import { listMovements } from "@/lib/queries";
 
 export const metadata: Metadata = { title: "Neue Übung · GymTracker" };
 
-export default function NewExercisePage() {
+export default async function NewExercisePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ movement?: string }>;
+}) {
+  const { movement } = await searchParams;
+  const user = await requireUser();
+  const movements = await listMovements(user.id);
+
   return (
     <>
       <PageHeader
@@ -19,7 +29,12 @@ export default function NewExercisePage() {
           </Link>
         }
       />
-      <ExerciseForm action={createExerciseAction} submitLabel="Übung anlegen" />
+      <ExerciseForm
+        action={createExerciseAction}
+        movementName={movement}
+        movements={movements}
+        submitLabel="Übung anlegen"
+      />
     </>
   );
 }

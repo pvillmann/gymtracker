@@ -8,13 +8,17 @@ import type { Exercise } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
 import { describeSets, trackingModeLabel } from "@/lib/describe";
 import { formatRelativeDay } from "@/lib/format";
-import { getPreviousPerformances, listExercises } from "@/lib/queries";
+import { getPreviousPerformances, listExercises, listMovements } from "@/lib/queries";
 
 export const metadata: Metadata = { title: "Übungen · GymTracker" };
 
 export default async function ExercisesPage() {
   const user = await requireUser();
-  const all = await listExercises(user.id, { includeArchived: true });
+  const [all, movements] = await Promise.all([
+    listExercises(user.id, { includeArchived: true }),
+    listMovements(user.id),
+  ]);
+  const movementName = new Map(movements.map((m) => [m.id, m.name]));
   const active = all.filter((e) => e.archivedAt === null);
   const archived = all.filter((e) => e.archivedAt !== null);
   const previous = await getPreviousPerformances(
@@ -22,12 +26,15 @@ export default async function ExercisesPage() {
     all.map((e) => e.id),
   );
 
-  const byGroup = new Map<string, Exercise[]>();
+  // Muskelgruppe → Bewegung → Geräte. Eine Bewegung mit nur einem Gerät
+  // erscheint wie bisher als einzelne Zeile.
+  const byGroup = new Map<string, Map<string, Exercise[]>>();
   for (const exercise of active) {
-    const key = exercise.muscleGroup ?? "Ohne Muskelgruppe";
-    const list = byGroup.get(key) ?? [];
-    list.push(exercise);
-    byGroup.set(key, list);
+    const group = exercise.muscleGroup ?? "Ohne Muskelgruppe";
+    const byMovement = byGroup.get(group) ?? new Map<string, Exercise[]>();
+    const key = exercise.movementId ?? exercise.id;
+    byMovement.set(key, [...(byMovement.get(key) ?? []), exercise]);
+    byGroup.set(group, byMovement);
   }
 
   function Row({ exercise }: { exercise: Exercise }) {
@@ -93,9 +100,25 @@ export default async function ExercisesPage() {
               </h2>
               <Card className="p-1">
                 <ul className="divide-y divide-line-soft">
-                  {list.map((exercise) => (
-                    <Row key={exercise.id} exercise={exercise} />
-                  ))}
+                  {[...list.entries()].map(([movementId, variants]) =>
+                    variants.length === 1 ? (
+                      <Row key={movementId} exercise={variants[0]} />
+                    ) : (
+                      <li key={movementId} className="py-1">
+                        <p className="px-3 pt-2 text-sm font-bold">
+                          {movementName.get(movementId) ?? variants[0].name}
+                          <span className="ml-1.5 font-normal text-faint">
+                            · {variants.length} Geräte
+                          </span>
+                        </p>
+                        <ul className="ml-3 border-l border-line-soft">
+                          {variants.map((exercise) => (
+                            <Row key={exercise.id} exercise={exercise} />
+                          ))}
+                        </ul>
+                      </li>
+                    ),
+                  )}
                 </ul>
               </Card>
             </section>

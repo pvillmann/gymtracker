@@ -24,6 +24,8 @@ import {
   listExercises,
   listPlanItems,
   listWorkoutSets,
+  listMovements,
+  listWorkoutVariants,
 } from "@/lib/queries";
 
 export const metadata: Metadata = { title: "Training · GymTracker" };
@@ -43,16 +45,68 @@ export default async function WorkoutPage({
   if (!workout) notFound();
   if (workout.finishedAt !== null) redirect(`/history/${workout.id}`);
 
-  const [planItems, loggedSets, allExercises] = await Promise.all([
+  const [planItems, loggedSets, allExercises, chosen, movements] = await Promise.all([
     workout.planId ? listPlanItems(workout.planId) : Promise.resolve([]),
     listWorkoutSets(workout.id),
     listExercises(user.id, { includeArchived: true }),
+    listWorkoutVariants(workout.id),
+    listMovements(user.id),
   ]);
+  const movementName = new Map(movements.map((m) => [m.id, m.name]));
+  /** "Seitheben Kabelturm" unter "Seitheben" heißt in der Auswahl nur "Kabelturm". */
+  const deviceLabel = (name: string, movementId: string) => {
+    const prefix = movementName.get(movementId);
+    return prefix && name !== prefix && name.startsWith(`${prefix} `)
+      ? name.slice(prefix.length + 1)
+      : name;
+  };
 
   const exerciseById = new Map(allExercises.map((exercise) => [exercise.id, exercise]));
   const extras = (Array.isArray(extra) ? extra : extra ? [extra] : []).filter((value) =>
     exerciseById.has(value),
   );
+
+  // Ein Planeintrag meint die Bewegung; die hinterlegte Übung ist nur das
+  // bevorzugte Gerät. Die anderen Geräte derselben Bewegung stehen zur Wahl.
+  const movementOf = (exerciseId: string) =>
+    exerciseById.get(exerciseId)?.movementId ?? exerciseId;
+  const variantsOf = (exerciseId: string) => {
+    const movementId = movementOf(exerciseId);
+    return allExercises.filter(
+      (e) =>
+        (e.movementId ?? e.id) === movementId &&
+        (e.archivedAt === null || e.id === exerciseId),
+    );
+  };
+
+  const candidateIds = new Set<string>([
+    ...planItems.flatMap((item) => variantsOf(item.exerciseId).map((e) => e.id)),
+    ...loggedSets.map((set) => set.exerciseId),
+    ...extras,
+  ]);
+  const previous = await getPreviousPerformances(user.id, [...candidateIds], {
+    excludeWorkoutId: workout.id,
+  });
+
+  /**
+   * Welches Gerät für einen Planeintrag gezeigt wird: die Wahl in diesem
+   * Training, sonst das, an dem heute schon Sätze stehen, sonst das zuletzt
+   * genutzte, sonst das im Plan hinterlegte.
+   */
+  const chooseFor = (exerciseId: string) => {
+    const movementId = movementOf(exerciseId);
+    const picked = chosen.get(movementId);
+    if (picked && exerciseById.has(picked)) return picked;
+    const variants = variantsOf(exerciseId);
+    const loggedToday = [...loggedSets]
+      .reverse()
+      .find((set) => variants.some((v) => v.id === set.exerciseId));
+    if (loggedToday) return loggedToday.exerciseId;
+    const lastUsed = variants
+      .map((v) => ({ id: v.id, at: previous.get(v.id)?.performedAt ?? -1 }))
+      .sort((a, b) => b.at - a.at)[0];
+    return lastUsed && lastUsed.at >= 0 ? lastUsed.id : exerciseId;
+  };
 
   // Reihenfolge: erst der Plan, dann spontan protokollierte Übungen, dann die
   // per Auswahl ergänzten. Doppelte fallen über das Set heraus.
@@ -64,14 +118,14 @@ export default async function WorkoutPage({
     orderedIds.push(exerciseId);
   };
 
-  planItems.forEach((item) => push(item.exerciseId));
+  planItems.forEach((item) => push(chooseFor(item.exerciseId)));
   loggedSets.forEach((set) => push(set.exerciseId));
   extras.forEach(push);
 
-  const previous = await getPreviousPerformances(user.id, orderedIds, {
-    excludeWorkoutId: workout.id,
-  });
-  const targetByExercise = new Map(planItems.map((item) => [item.exerciseId, item]));
+  // Das Ziel aus dem Plan gilt für jedes Gerät der Bewegung.
+  const targetByMovement = new Map(
+    planItems.map((item) => [movementOf(item.exerciseId), item]),
+  );
 
   const setsByExercise = new Map<string, LoggerSet[]>();
   for (const set of loggedSets) {
@@ -82,8 +136,13 @@ export default async function WorkoutPage({
 
   const totalVolume = loggedSets.reduce((sum, set) => sum + set.volumeKg, 0);
   const workingSets = loggedSets.filter((set) => !set.isWarmup).length;
+  // Geräte einer Bewegung aus dem Plan wählt man an der Übung selbst.
+  const planMovements = new Set(planItems.map((item) => movementOf(item.exerciseId)));
   const available = allExercises.filter(
-    (exercise) => !seen.has(exercise.id) && exercise.archivedAt === null,
+    (exercise) =>
+      !seen.has(exercise.id) &&
+      exercise.archivedAt === null &&
+      !planMovements.has(exercise.movementId ?? exercise.id),
   );
 
   // Wer das Beenden vergisst, hat ein Training mit absurder Dauer im Verlauf –
@@ -120,8 +179,25 @@ export default async function WorkoutPage({
         <div className="space-y-4">
           {orderedIds.map((exerciseId) => {
             const exercise = exerciseById.get(exerciseId)!;
-            const target = targetByExercise.get(exerciseId);
+            const movementId = movementOf(exerciseId);
+            const target = targetByMovement.get(movementId);
             const last = previous.get(exerciseId);
+            // Gewechselt wird nur bei Bewegungen aus dem Plan – spontan
+            // ergänzte Übungen sind schon eine bewusste Gerätewahl.
+            const variants = planMovements.has(movementId)
+              ? variantsOf(exerciseId).filter((v) => v.archivedAt === null)
+              : [];
+            // Lief die Bewegung zuletzt an einem anderen Gerät, gehört das als
+            // Hinweis dazu – nicht als Vergleich, die Kilos sind andere.
+            const elsewhere = variantsOf(exerciseId)
+              .filter((v) => v.id !== exerciseId)
+              .map((v) => ({ variant: v, performance: previous.get(v.id) }))
+              .filter(
+                (entry): entry is { variant: typeof entry.variant; performance: NonNullable<typeof entry.performance> } =>
+                  entry.performance !== undefined &&
+                  entry.performance.performedAt > (last?.performedAt ?? -1),
+              )
+              .sort((a, b) => b.performance.performedAt - a.performance.performedAt)[0];
 
             return (
               <ExerciseLogger
@@ -144,6 +220,23 @@ export default async function WorkoutPage({
                         targetDurationSeconds: target.targetDurationSeconds,
                         restSeconds: target.restSeconds,
                         notes: target.notes,
+                      }
+                    : null
+                }
+                variants={
+                  variants.length > 1
+                    ? variants.map((v) => ({ id: v.id, label: deviceLabel(v.name, movementId) }))
+                    : []
+                }
+                elsewhere={
+                  elsewhere
+                    ? {
+                        name: elsewhere.variant.name,
+                        relative: formatRelativeDay(elsewhere.performance.performedAt),
+                        summary: describeSets(
+                          elsewhere.performance.sets,
+                          elsewhere.variant.trackingMode,
+                        ),
                       }
                     : null
                 }

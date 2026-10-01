@@ -50,6 +50,13 @@
       "when": 1790796404404,
       "tag": "0006_set_effort",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1790849158593,
+      "tag": "0007_movements",
+      "breakpoints": true
     }
   ]
 }

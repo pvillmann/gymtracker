@@ -16,12 +16,15 @@ import {
 import { db } from "@/db";
 import {
   exercises,
+  movements,
   planExercises,
   plans,
   users,
   workouts,
   workoutSets,
+  workoutVariants,
   type Exercise,
+  type Movement,
   type SetEffort,
   type TrackingMode,
 } from "@/db/schema";
@@ -39,6 +42,14 @@ export async function listExercises(
         : and(eq(exercises.userId, userId), isNull(exercises.archivedAt)),
     )
     .orderBy(asc(exercises.muscleGroup), asc(exercises.name));
+}
+
+export async function listMovements(userId: string): Promise<Movement[]> {
+  return db
+    .select()
+    .from(movements)
+    .where(eq(movements.userId, userId))
+    .orderBy(asc(movements.muscleGroup), asc(movements.name));
 }
 
 export async function getExercise(
@@ -92,6 +103,7 @@ export type PlanItem = {
   restSeconds: number;
   notes: string | null;
   exerciseName: string;
+  movementId: string | null;
   muscleGroup: string | null;
   machineSetup: string | null;
   trackingMode: TrackingMode;
@@ -111,6 +123,7 @@ export async function listPlanItems(planId: string): Promise<PlanItem[]> {
       restSeconds: planExercises.restSeconds,
       notes: planExercises.notes,
       exerciseName: exercises.name,
+      movementId: exercises.movementId,
       muscleGroup: exercises.muscleGroup,
       machineSetup: exercises.machineSetup,
       trackingMode: exercises.trackingMode,
@@ -120,6 +133,15 @@ export async function listPlanItems(planId: string): Promise<PlanItem[]> {
     .innerJoin(exercises, eq(exercises.id, planExercises.exerciseId))
     .where(eq(planExercises.planId, planId))
     .orderBy(asc(planExercises.position));
+}
+
+/** Im Training gewählte Geräte: Bewegung → Übung. */
+export async function listWorkoutVariants(workoutId: string): Promise<Map<string, string>> {
+  const rows = await db
+    .select({ movementId: workoutVariants.movementId, exerciseId: workoutVariants.exerciseId })
+    .from(workoutVariants)
+    .where(eq(workoutVariants.workoutId, workoutId));
+  return new Map(rows.map((row) => [row.movementId, row.exerciseId]));
 }
 
 export async function getWorkout(userId: string, workoutId: string) {
