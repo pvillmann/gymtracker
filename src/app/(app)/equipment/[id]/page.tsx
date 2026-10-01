@@ -136,10 +136,13 @@ export default async function EquipmentDetailPage({
             <ul className="divide-y divide-line-soft">
               {gymRows.map(({ gym, present }) => (
                 <li key={gym.id} className="flex items-center gap-3 px-3 py-2">
-                  <span className={present ? "flex-1 font-semibold" : "flex-1 text-muted"}>
+                  <Link
+                    href={`/gyms/${gym.id}`}
+                    className={present ? "flex-1 font-semibold hover:underline" : "flex-1 text-muted hover:underline"}
+                  >
                     {present ? "✓ " : ""}
                     {gym.name}
-                  </span>
+                  </Link>
                   {present ? (
                     <InlineActionForm
                       action={setMachineInGymAction}
@@ -160,8 +163,8 @@ export default async function EquipmentDetailPage({
           ) : (
             <p className="px-3 py-3 text-sm text-muted">
               Noch kein Studio. Anlegen unter{" "}
-              <Link href="/settings" className="underline">
-                Einstellungen
+              <Link href="/gyms" className="underline">
+                Studios
               </Link>
               .
             </p>

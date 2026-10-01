@@ -56,16 +56,20 @@ export default async function ExercisesPage() {
         title="Übungen"
         subtitle={`${movements.length} im gemeinsamen Katalog`}
         action={
-          <div className="flex gap-2">
-            <ButtonLink href="/equipment" size="sm" variant="secondary">
-              Maschinen
-            </ButtonLink>
-            <ButtonLink href="/movements/new" size="sm">
-              + Neu
-            </ButtonLink>
-          </div>
+          <ButtonLink href="/movements/new" size="sm">
+            + Neu
+          </ButtonLink>
         }
       />
+      {/* Der übrige Katalog: Maschinen und Studios. */}
+      <div className="-mt-2 mb-4 grid grid-cols-2 gap-2">
+        <ButtonLink href="/equipment" size="sm" variant="secondary">
+          Maschinen
+        </ButtonLink>
+        <ButtonLink href="/gyms" size="sm" variant="secondary">
+          Studios
+        </ButtonLink>
+      </div>
 
       {movements.length === 0 ? (
         <EmptyState

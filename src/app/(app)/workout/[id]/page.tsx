@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { discardWorkoutAction, finishWorkoutAction } from "@/actions/workouts";
@@ -218,7 +219,14 @@ export default async function WorkoutPage({
             <p className="mt-0.5 text-sm text-muted tnum">
               <WorkoutClock startedAt={workout.startedAt} /> · {sets(workingSets)} ·{" "}
               {formatVolume(totalVolume)}
-              {gym ? ` · ${gym.name}` : ""}
+              {gym ? (
+                <>
+                  {" · "}
+                  <Link href={`/gyms/${gym.id}`} className="hover:text-fg hover:underline">
+                    {gym.name}
+                  </Link>
+                </>
+              ) : null}
             </p>
           </div>
           <form action={finishWorkoutAction.bind(null, workout.id, undefined)}>
