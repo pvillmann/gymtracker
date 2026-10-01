@@ -17,6 +17,7 @@ import {
   formatVolume,
   sets,
 } from "@/lib/format";
+import { getOrCreateVariant } from "@/lib/services/machines";
 import { IMPLAUSIBLE_SECONDS, lastSetAt } from "@/lib/services/workouts";
 import {
   getPreviousPerformances,
@@ -27,7 +28,9 @@ import {
   getGymExercises,
   getLastUsedInGym,
   listEquipment,
+  listGymMachineIds,
   listGyms,
+  listMachineLinks,
   listMovements,
   listWorkoutVariants,
 } from "@/lib/queries";
@@ -62,37 +65,41 @@ export default async function WorkoutPage({
   ]);
   const equipmentById = new Map(equipment.map((e) => [e.id, e]));
   const gym = gyms.find((g) => g.id === workout.gymId) ?? null;
-  const movementName = new Map(movements.map((m) => [m.id, m.name]));
-  /** "Seitheben Kabelturm" unter "Seitheben" heißt in der Auswahl nur "Kabelturm". */
-  const deviceLabel = (name: string, movementId: string) => {
-    const prefix = movementName.get(movementId);
-    return prefix && name !== prefix && name.startsWith(`${prefix} `)
-      ? name.slice(prefix.length + 1)
-      : name;
-  };
-
+  const movementById = new Map(movements.map((m) => [m.id, m]));
   const exerciseById = new Map(allExercises.map((exercise) => [exercise.id, exercise]));
-  const extras = (Array.isArray(extra) ? extra : extra ? [extra] : []).filter((value) =>
-    exerciseById.has(value),
+
+  // Spontan ergänzte Übungen (per Auswahl unten) kommen als Übungs-IDs in der URL.
+  const planMovementIds = new Set(planItems.map((item) => item.movementId));
+  const extras = (Array.isArray(extra) ? extra : extra ? [extra] : []).filter(
+    (value) => movementById.has(value) && !planMovementIds.has(value),
   );
 
-  // Ein Planeintrag meint die Bewegung; die hinterlegte Übung ist nur das
-  // bevorzugte Gerät. Die anderen Geräte derselben Bewegung stehen zur Wahl.
-  const movementOf = (exerciseId: string) =>
-    exerciseById.get(exerciseId)?.movementId ?? exerciseId;
-  const variantsOf = (exerciseId: string) => {
-    const movementId = movementOf(exerciseId);
-    return allExercises.filter(
-      (e) =>
-        (e.movementId ?? e.id) === movementId &&
-        (e.archivedAt === null || e.id === exerciseId),
-    );
+  /**
+   * Was im Training steht, sind Übungen. Die Maschine dazu ergibt sich aus
+   * dem Studio: angeboten werden die Maschinen, die zur Übung passen und
+   * dort stehen – steht dort noch keine, alle Maschinen der Übung.
+   */
+  type Slot = { movementId: string; preferred: string | null; target: (typeof planItems)[number] | null };
+  const slots: Slot[] = [
+    ...planItems.map((item) => ({ movementId: item.movementId, preferred: item.exerciseId, target: item })),
+    ...extras.map((movementId) => ({ movementId, preferred: null, target: null })),
+  ];
+  const slotMovementIds = slots.map((slot) => slot.movementId);
+  const [links, gymMachines] = await Promise.all([
+    listMachineLinks(slotMovementIds),
+    gym ? listGymMachineIds(gym.id) : Promise.resolve(new Set<string>()),
+  ]);
+  const variantsOf = (movementId: string) =>
+    allExercises.filter((e) => e.movementId === movementId);
+  const offeredMachines = (movementId: string) => {
+    const linked = links.get(movementId) ?? [];
+    const here = linked.filter((id) => gymMachines.has(id));
+    return { linked, here, offered: here.length > 0 ? here : linked };
   };
 
   const candidateIds = new Set<string>([
-    ...planItems.flatMap((item) => variantsOf(item.exerciseId).map((e) => e.id)),
+    ...slotMovementIds.flatMap((m) => variantsOf(m).map((e) => e.id)),
     ...loggedSets.map((set) => set.exerciseId),
-    ...extras,
   ]);
   const [previous, usedInGym] = await Promise.all([
     getPreviousPerformances(user.id, [...candidateIds], { excludeWorkoutId: workout.id }),
@@ -102,32 +109,47 @@ export default async function WorkoutPage({
   ]);
 
   /**
-   * Welches Gerät für einen Planeintrag gezeigt wird: die Wahl in diesem
-   * Training, sonst das, an dem heute schon Sätze stehen, sonst das zuletzt
-   * in diesem Studio genutzte, sonst das zuletzt überhaupt genutzte, sonst
-   * das im Plan hinterlegte.
+   * Die Variante (Übung × Maschine) für eine Übung im Training: die Wahl in
+   * diesem Training, sonst die mit Sätzen von heute, sonst die zuletzt in
+   * diesem Studio genutzte, sonst die zuletzt genutzte unter den angebotenen
+   * Maschinen, sonst die im Plan bevorzugte – und gibt es noch keine, wird
+   * sie für die erste angebotene Maschine angelegt.
    */
-  const chooseFor = (exerciseId: string) => {
-    const movementId = movementOf(exerciseId);
-    const picked = chosen.get(movementId);
+  const resolveSlot = async (slot: Slot): Promise<string> => {
+    const picked = chosen.get(slot.movementId);
     if (picked && exerciseById.has(picked)) return picked;
-    const variants = variantsOf(exerciseId);
-    const loggedToday = [...loggedSets]
-      .reverse()
-      .find((set) => variants.some((v) => v.id === set.exerciseId));
+    const variants = variantsOf(slot.movementId);
+    const loggedToday = [...loggedSets].reverse().find((set) => variants.some((v) => v.id === set.exerciseId));
     if (loggedToday) return loggedToday.exerciseId;
-    const lastInGym = variants
-      .map((v) => ({ id: v.id, at: usedInGym.get(v.id) ?? -1 }))
-      .sort((a, b) => b.at - a.at)[0];
-    if (lastInGym && lastInGym.at >= 0) return lastInGym.id;
-    const lastUsed = variants
-      .map((v) => ({ id: v.id, at: previous.get(v.id)?.performedAt ?? -1 }))
-      .sort((a, b) => b.at - a.at)[0];
-    return lastUsed && lastUsed.at >= 0 ? lastUsed.id : exerciseId;
+
+    const { here, offered } = offeredMachines(slot.movementId);
+    // Steht im Studio eine passende Maschine, kommen nur deren Varianten in Frage.
+    const fitting = variants.filter((v) =>
+      here.length > 0 ? v.equipmentId !== null && here.includes(v.equipmentId) : true,
+    );
+    const newest = (list: typeof variants, at: (id: string) => number) =>
+      list
+        .map((v) => ({ id: v.id, at: at(v.id) }))
+        .filter((v) => v.at >= 0)
+        .sort((a, b) => b.at - a.at)[0]?.id;
+    const chosenId =
+      newest(fitting, (id) => usedInGym.get(id) ?? -1) ??
+      newest(fitting, (id) => previous.get(id)?.performedAt ?? -1) ??
+      (slot.preferred && fitting.some((v) => v.id === slot.preferred) ? slot.preferred : undefined) ??
+      fitting.find((v) => v.archivedAt === null)?.id;
+    if (chosenId) return chosenId;
+    // Noch nie an einer passenden Maschine trainiert: die Variante entsteht jetzt.
+    const created = await getOrCreateVariant(user, slot.movementId, offered[0] ?? null);
+    const fresh = (await listExercises(user.id, { includeArchived: true })).find((e) => e.id === created);
+    if (fresh) {
+      allExercises.push(fresh);
+      exerciseById.set(fresh.id, fresh);
+    }
+    return created;
   };
 
-  // Reihenfolge: erst der Plan, dann spontan protokollierte Übungen, dann die
-  // per Auswahl ergänzten. Doppelte fallen über das Set heraus.
+  // Reihenfolge: erst der Plan, dann die ergänzten Übungen, dann alles, woran
+  // heute sonst noch Sätze stehen. Doppelte fallen über das Set heraus.
   const orderedIds: string[] = [];
   const seen = new Set<string>();
   const push = (exerciseId: string) => {
@@ -135,15 +157,39 @@ export default async function WorkoutPage({
     seen.add(exerciseId);
     orderedIds.push(exerciseId);
   };
-
-  planItems.forEach((item) => push(chooseFor(item.exerciseId)));
+  for (const slot of slots) push(await resolveSlot(slot));
   loggedSets.forEach((set) => push(set.exerciseId));
-  extras.forEach(push);
 
-  // Das Ziel aus dem Plan gilt für jedes Gerät der Bewegung.
-  const targetByMovement = new Map(
-    planItems.map((item) => [movementOf(item.exerciseId), item]),
-  );
+  // Das Ziel aus dem Plan gilt für jede Maschine der Übung.
+  const targetByMovement = new Map(planItems.map((item) => [item.movementId, item]));
+  const slotMovements = new Set(slotMovementIds);
+
+  /** Die Maschinen zum Umschalten – "none" steht für "ohne Gerät". */
+  const machineOptions = (movementId: string, currentEquipmentId: string | null) => {
+    // Erst, was im Studio steht, dann die übrigen Maschinen der Übung – die
+    // mit Stern. Wer an einer davon trainiert, trägt sie damit im Studio ein.
+    const { here, linked } = offeredMachines(movementId);
+    const keys = new Set<string>([...here, ...linked]);
+    if (currentEquipmentId) keys.add(currentEquipmentId);
+    const movement = movementById.get(movementId);
+    const options = [...keys].map((key) => ({
+      key,
+      label: equipmentById.get(key)?.name ?? "Maschine",
+      elsewhere: gym !== null && !gymMachines.has(key),
+    }));
+    // "Ohne Gerät" für Übungen mit Körpergewicht, ohne Maschinen oder wenn
+    // es schon so trainiert wurde.
+    const hasPlain = variantsOf(movementId).some((v) => v.equipmentId === null);
+    if (
+      options.length === 0 ||
+      hasPlain ||
+      currentEquipmentId === null ||
+      (movement && movement.trackingMode !== "weight_reps")
+    ) {
+      options.push({ key: "none", label: "ohne Gerät", elsewhere: false });
+    }
+    return options;
+  };
 
   const setsByExercise = new Map<string, LoggerSet[]>();
   for (const set of loggedSets) {
@@ -154,14 +200,8 @@ export default async function WorkoutPage({
 
   const totalVolume = loggedSets.reduce((sum, set) => sum + set.volumeKg, 0);
   const workingSets = loggedSets.filter((set) => !set.isWarmup).length;
-  // Geräte einer Bewegung aus dem Plan wählt man an der Übung selbst.
-  const planMovements = new Set(planItems.map((item) => movementOf(item.exerciseId)));
-  const available = allExercises.filter(
-    (exercise) =>
-      !seen.has(exercise.id) &&
-      exercise.archivedAt === null &&
-      !planMovements.has(exercise.movementId ?? exercise.id),
-  );
+  // Ergänzen lassen sich Übungen, die noch nicht im Training stehen.
+  const available = movements.filter((m) => !slotMovements.has(m.id));
 
   // Wer das Beenden vergisst, hat ein Training mit absurder Dauer im Verlauf –
   // und die verzerrt hinterher jede Auswertung über die Trainingszeit. Der
@@ -198,17 +238,17 @@ export default async function WorkoutPage({
         <div className="space-y-4">
           {orderedIds.map((exerciseId) => {
             const exercise = exerciseById.get(exerciseId)!;
-            const movementId = movementOf(exerciseId);
+            const movementId = exercise.movementId ?? exercise.id;
             const target = targetByMovement.get(movementId);
             const last = previous.get(exerciseId);
-            // Gewechselt wird nur bei Bewegungen aus dem Plan – spontan
-            // ergänzte Übungen sind schon eine bewusste Gerätewahl.
-            const variants = planMovements.has(movementId)
-              ? variantsOf(exerciseId).filter((v) => v.archivedAt === null)
+            // Umschalten zwischen den Maschinen der Übung – nur für Übungen,
+            // die im Training stehen, nicht für alte Einträge von heute.
+            const machines = slotMovements.has(movementId)
+              ? machineOptions(movementId, exercise.equipmentId)
               : [];
-            // Lief die Bewegung zuletzt an einem anderen Gerät, gehört das als
+            // Lief die Übung zuletzt an einer anderen Maschine, gehört das als
             // Hinweis dazu – nicht als Vergleich, die Kilos sind andere.
-            const elsewhere = variantsOf(exerciseId)
+            const elsewhere = variantsOf(movementId)
               .filter((v) => v.id !== exerciseId)
               .map((v) => ({ variant: v, performance: previous.get(v.id) }))
               .filter(
@@ -225,11 +265,8 @@ export default async function WorkoutPage({
                 bodyweightKg={user.bodyweightKg}
                 exercise={{
                   id: exercise.id,
-                  name: exercise.name,
+                  name: movementById.get(movementId)?.name ?? exercise.name,
                   trackingMode: exercise.trackingMode,
-                  // Was das Studio für dieses Gerät festhält, geht vor.
-                  weightStepKg:
-                    gymExercises.get(exerciseId)?.weightStepKg ?? exercise.weightStepKg,
                   machineSetup:
                     gymExercises.get(exerciseId)?.machineSetup ?? exercise.machineSetup,
                   imageId: exercise.equipmentId
@@ -256,15 +293,15 @@ export default async function WorkoutPage({
                       }
                     : null
                 }
-                variants={
-                  variants.length > 1
-                    ? variants.map((v) => ({ id: v.id, label: deviceLabel(v.name, movementId) }))
-                    : []
-                }
+                movementId={movementId}
+                machines={machines}
+                activeMachine={exercise.equipmentId ?? "none"}
                 elsewhere={
                   elsewhere
                     ? {
-                        name: elsewhere.variant.name,
+                        name: elsewhere.variant.equipmentId
+                          ? (equipmentById.get(elsewhere.variant.equipmentId)?.name ?? elsewhere.variant.name)
+                          : "ohne Gerät",
                         relative: formatRelativeDay(elsewhere.performance.performedAt),
                         summary: describeSets(
                           elsewhere.performance.sets,

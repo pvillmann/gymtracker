@@ -5,7 +5,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { gymExercises, gyms, plans, type User } from "@/db/schema";
 import { newId } from "@/lib/ids";
-import { assertCanEditCatalog } from "@/lib/services/catalog";
+import { assertCanDeleteCatalog } from "@/lib/services/catalog";
 import { ServiceError } from "@/lib/services/errors";
 import { requireOwnExercise } from "@/lib/services/workouts";
 
@@ -45,8 +45,7 @@ export async function findOrCreateGym(user: User, rawName: string): Promise<stri
 export async function renameGym(user: User, gymId: string, rawName: string): Promise<void> {
   const name = rawName.trim();
   if (!name) throw new ServiceError("Das Studio braucht einen Namen.");
-  const gym = await requireGym(gymId);
-  await assertCanEditCatalog(user, gym.userId, `Das Studio „${gym.name}“`);
+  await requireGym(gymId);
   try {
     await db.update(gyms).set({ name }).where(eq(gyms.id, gymId));
   } catch (error) {
@@ -60,11 +59,12 @@ export async function renameGym(user: User, gymId: string, rawName: string): Pro
 /**
  * Trainings und Pläne behalten ihre Daten, verlieren nur den Bezug zum
  * Studio; die Einstellungen der Geräte dort verschwinden mit – bei allen
- * Nutzern, deshalb nur durch den, der es angelegt hat, oder einen Admin.
+ * Nutzern. Umbenennen darf jeder, löschen nur, wer es angelegt hat, oder
+ * ein Admin.
  */
 export async function deleteGym(user: User, gymId: string): Promise<void> {
   const gym = await requireGym(gymId);
-  await assertCanEditCatalog(user, gym.userId, `Das Studio „${gym.name}“`);
+  await assertCanDeleteCatalog(user, gym.userId, `Das Studio „${gym.name}“`);
   await db.delete(gyms).where(eq(gyms.id, gymId));
 }
 
@@ -90,7 +90,7 @@ export async function markExerciseInGym(gymId: string, exerciseId: string): Prom
   await db.insert(gymExercises).values({ gymId, exerciseId }).onConflictDoNothing();
 }
 
-/** Einstellungen und Gewichtsstufe eines Geräts in einem Studio. Leer = Wert der Übung. */
+/** Einstellungen eines Geräts in einem Studio. Leer = Wert der Übung. */
 export async function setGymExerciseSettings(
   user: User,
   gymId: string,

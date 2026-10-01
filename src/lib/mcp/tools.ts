@@ -28,6 +28,8 @@ import {
   getPreviousPerformances,
   listEquipment,
   listExercises,
+  listGyms,
+  listMachineLinkRows,
   listMovements,
   listPlanItems,
   listPlans,
@@ -35,9 +37,15 @@ import {
   listWorkoutSummaries,
 } from "@/lib/queries";
 import { ServiceError, isServiceError } from "@/lib/services/errors";
-import { createExercise } from "@/lib/services/exercises";
 import { createEquipment, updateEquipment } from "@/lib/services/equipment";
-import { findOrCreateGym, markExerciseInGym } from "@/lib/services/gyms";
+import { findOrCreateGym } from "@/lib/services/gyms";
+import {
+  createMovement,
+  linkGymEquipment,
+  linkMovementEquipment,
+  unlinkGymEquipment,
+  unlinkMovementEquipment,
+} from "@/lib/services/machines";
 import { searchWger } from "@/lib/wger";
 import {
   addPlanItem,
@@ -45,9 +53,16 @@ import {
   removePlanItem,
   updatePlanItem,
 } from "@/lib/services/plans";
-import { resolveEquipment, resolveExercise, resolvePlan } from "@/lib/services/resolve";
+import {
+  resolveEquipment,
+  resolveMovement,
+  resolvePlan,
+  resolvePlanItem,
+  resolveVariant,
+} from "@/lib/services/resolve";
 import { totals, weekStreak } from "@/lib/stats";
 import {
+  chooseVariant,
   deleteLastSet,
   discardWorkout,
   finishWorkout,
@@ -145,6 +160,15 @@ function readTargets(args: {
   };
 }
 
+const machineSchema = z
+  .string()
+  .max(80)
+  .optional()
+  .describe(
+    "Maschine, falls nicht die im Training gewählte bzw. zuletzt benutzte gemeint ist; " +
+      "„ohne Gerät“ für die Variante ohne Maschine",
+  );
+
 /** Registriert alle Werkzeuge für genau ein Konto. */
 export function registerGymTools(server: McpServer, user: User): void {
   // ---------------------------------------------------------------- Lesen
@@ -154,48 +178,48 @@ export function registerGymTools(server: McpServer, user: User): void {
     {
       title: "Übungen auflisten",
       description:
-        "Alle angelegten Übungen des Kontos, gruppiert nach Bewegung, mit " +
-        "Muskelgruppe und Messart. Eine Bewegung (z. B. Seitheben) kann mehrere " +
-        "Geräte haben (Maschine, Kabelturm) – jedes ist eine eigene Übung mit " +
-        "eigenem Verlauf. Sätze werden immer auf eine Übung gebucht. Nutze das, " +
-        "um den genauen Namen zu finden.",
+        "Alle Übungen des gemeinsamen Katalogs mit Muskelgruppe, Messart und " +
+        "den Maschinen, an denen sie gehen. Eine Übung ist die Bewegung (z. B. " +
+        "Seitheben); verglichen wird aber nur an derselben Maschine, deshalb " +
+        "hat jede Maschine ihren eigenen Verlauf. Sätze nennen die Übung, die " +
+        "Maschine nur, wenn sie nicht klar ist. Nutze das, um genaue Namen zu finden.",
       inputSchema: {
         muscle_group: z.string().optional().describe("Nur diese Muskelgruppe"),
       },
     },
     async ({ muscle_group }) =>
       run(async () => {
-        const [all, movements] = await Promise.all([
-          listExercises(user.id),
+        const [movements, equipment, links, gyms] = await Promise.all([
           listMovements(),
+          listEquipment(),
+          listMachineLinkRows(),
+          listGyms(),
         ]);
         const filtered = muscle_group
-          ? all.filter(
-              (e) => e.muscleGroup?.toLowerCase() === muscle_group.toLowerCase(),
+          ? movements.filter(
+              (m) => m.muscleGroup?.toLowerCase() === muscle_group.toLowerCase(),
             )
-          : all;
-
+          : movements;
         if (filtered.length === 0) return "Keine Übungen gefunden.";
-        const describe = (e: (typeof all)[number]) =>
-          `${e.name} (${e.muscleGroup ?? "ohne Muskelgruppe"}, ${trackingModeLabel(
-            e.trackingMode,
-          )}, Stufe ${formatKg(e.weightStepKg)} kg)`;
 
-        const byMovement = new Map<string, typeof all>();
-        for (const e of filtered) {
-          const key = e.movementId ?? e.id;
-          byMovement.set(key, [...(byMovement.get(key) ?? []), e]);
-        }
-        const names = new Map(movements.map((m) => [m.id, m.name]));
-        return [...byMovement.entries()]
-          .map(([movementId, variants]) =>
-            variants.length === 1
-              ? `- ${describe(variants[0])}`
-              : [
-                  `- Bewegung ${names.get(movementId) ?? variants[0].name}:`,
-                  ...variants.map((e) => `  - ${describe(e)}`),
-                ].join("\n"),
-          )
+        const machineName = new Map(equipment.map((e) => [e.id, e.name]));
+        const gymName = new Map(gyms.map((g) => [g.id, g.name]));
+        const machineLine = (equipmentId: string) => {
+          const where = links.gymLinks
+            .filter((l) => l.equipmentId === equipmentId)
+            .map((l) => gymName.get(l.gymId))
+            .filter(Boolean);
+          return `${machineName.get(equipmentId)}${where.length ? ` (steht in: ${where.join(", ")})` : ""}`;
+        };
+        return filtered
+          .map((m) => {
+            const machines = links.movementLinks
+              .filter((l) => l.movementId === m.id)
+              .map((l) => machineLine(l.equipmentId));
+            return `- ${m.name} (${m.muscleGroup ?? "ohne Muskelgruppe"}, ${trackingModeLabel(
+              m.trackingMode,
+            )}): ${machines.length ? machines.join("; ") : "keine Maschine zugeordnet"}`;
+          })
           .join("\n");
       }),
   );
@@ -259,11 +283,17 @@ export function registerGymTools(server: McpServer, user: User): void {
       description:
         "Was beim letzten Training an dieser Übung stand – Sätze, Gewicht, " +
         "Wiederholungen und wann das war. Die wichtigste Frage vor einem Satz.",
-      inputSchema: { exercise: z.string().describe("Name der Übung") },
+      inputSchema: {
+        exercise: z.string().describe("Name der Übung"),
+        machine: machineSchema,
+      },
     },
-    async ({ exercise }) =>
+    async ({ exercise, machine }) =>
       run(async () => {
-        const found = await resolveExercise(user, exercise);
+        const found = await resolveVariant(user, exercise, {
+          machine,
+          workout: await getActiveWorkout(user.id),
+        });
         const previous = await getPreviousPerformances(user.id, [found.id]);
         const last = previous.get(found.id);
         if (!last) return `„${found.name}“ wurde noch nie trainiert.`;
@@ -285,16 +315,21 @@ export function registerGymTools(server: McpServer, user: User): void {
       description: "Die letzten Trainings an einer Übung, neueste zuerst.",
       inputSchema: {
         exercise: z.string().describe("Name der Übung"),
+        machine: machineSchema,
         limit: z.number().int().min(1).max(30).optional().describe("Wie viele Trainings"),
       },
     },
-    async ({ exercise, limit }) =>
+    async ({ exercise, machine, limit }) =>
       run(async () => {
-        const found = await resolveExercise(user, exercise, { includeArchived: true });
+        const found = await resolveVariant(user, exercise, {
+          machine,
+          workout: await getActiveWorkout(user.id),
+          includeArchived: true,
+        });
         const sessions = await getExerciseSessions(user.id, found.id, limit ?? 10);
         if (sessions.length === 0) return `„${found.name}“ wurde noch nie trainiert.`;
 
-        return sessions
+        return `${found.name}:\n` + sessions
           .map(
             (s) =>
               `${formatDate(s.performedAt)}: ${describeSets(s.sets, found.trackingMode)} · ${formatVolume(s.totalVolumeKg)}`,
@@ -361,65 +396,97 @@ export function registerGymTools(server: McpServer, user: User): void {
     {
       title: "Übung anlegen",
       description:
-        "Legt eine neue Übung oder Maschine an. Messarten: weight_reps " +
-        "(Gewicht × Wiederholungen, der Normalfall), bodyweight_reps " +
-        "(Körpergewicht plus optionalem Zusatzgewicht, z. B. Klimmzüge), " +
-        "assisted_reps (Maschine mit Gegengewicht, das die Last verringert, " +
-        "z. B. assistierte Klimmzugmaschine), time (Dauer, z. B. Plank).",
+        "Legt eine Übung (Bewegung, z. B. Seitheben) im gemeinsamen Katalog an " +
+        "und ordnet ihr optional Maschinen zu. Vorher mit list_exercises prüfen, " +
+        "ob es sie schon gibt. Messarten: weight_reps (Gewicht × Wiederholungen, " +
+        "der Normalfall), bodyweight_reps (Körpergewicht plus optionalem " +
+        "Zusatzgewicht, z. B. Klimmzüge), assisted_reps (Gegengewicht, das die " +
+        "Last verringert), time (Dauer, z. B. Plank).",
       inputSchema: {
-        name: z.string().min(1).max(80).describe("Name der Übung bzw. des Geräts, z. B. Seitheben Kabelturm"),
-        movement: z
-          .string()
-          .max(80)
-          .optional()
-          .describe(
-            "Bewegung, zu der das Gerät gehört, z. B. Seitheben. Gibt es sie schon, " +
-              "wird die Übung ein weiteres Gerät dafür; sonst wird sie angelegt. " +
-              "Ohne Angabe ist die Übung ihre eigene Bewegung.",
-          ),
-        muscle_group: z
-          .string()
-          .max(40)
-          .optional()
-          .describe("z. B. Rücken, Beine – gilt für die ganze Bewegung"),
+        name: z.string().min(1).max(80).describe("Name der Übung, z. B. Seitheben – ohne Maschine"),
+        muscle_group: z.string().max(40).optional().describe("z. B. Rücken, Beine"),
         wger_id: z
           .number()
           .int()
           .positive()
           .optional()
-          .describe(
-            "ID aus search_wger, wenn eine neue Bewegung aus wger übernommen wird; " +
-              "Lizenz und Urheber werden dann mitgespeichert",
-          ),
+          .describe("ID aus search_wger; Lizenz und Urheber werden dann mitgespeichert"),
         tracking_mode: z
           .enum(["weight_reps", "bodyweight_reps", "assisted_reps", "time"])
           .optional()
           .describe("Messart, Standard ist weight_reps"),
-        weight_step_kg: z
-          .number()
-          .positive()
-          .max(50)
+        machines: z
+          .array(z.string().max(80))
+          .max(20)
           .optional()
-          .describe("Kleinste Gewichtsstufe der Maschine, Standard 2.5"),
-        machine_setup: z
-          .string()
-          .max(500)
-          .optional()
-          .describe("Einstellungen wie Sitzhöhe oder Griff"),
+          .describe("Namen bestehender Maschinen, an denen die Übung geht"),
       },
     },
     async (args) =>
       run(async () => {
-        await createExercise(user, {
-          name: args.name,
-          movementName: args.movement ?? null,
-          muscleGroup: args.muscle_group ?? null,
-          wgerId: args.wger_id ?? null,
-          machineSetup: args.machine_setup ?? null,
-          trackingMode: args.tracking_mode ?? "weight_reps",
-          weightStepKg: args.weight_step_kg ?? 2.5,
-        });
-        return `Übung „${args.name}“ angelegt.`;
+        const machines = await Promise.all(
+          (args.machines ?? []).map((m) => resolveEquipment(user, m)),
+        );
+        const id = await createMovement(
+          user,
+          {
+            name: args.name,
+            muscleGroup: args.muscle_group ?? null,
+            trackingMode: args.tracking_mode ?? "weight_reps",
+          },
+          args.wger_id ?? null,
+        );
+        for (const machine of machines) await linkMovementEquipment(user, id, machine.id);
+        return `Übung „${args.name}“ angelegt${
+          machines.length ? ` – Maschinen: ${machines.map((m) => m.name).join(", ")}` : ""
+        }.`;
+      }),
+  );
+
+  server.registerTool(
+    "assign_machine",
+    {
+      title: "Maschine zuordnen",
+      description:
+        "Ordnet eine Maschine einer Übung zu (sie geht an ihr) und/oder trägt " +
+        "sie in einem Studio ein (sie steht dort). Danach schlägt das Training " +
+        "im Studio genau diese Maschine für die Übung vor. Mit remove: true " +
+        "wird eine falsche Zuordnung wieder entfernt.",
+      inputSchema: {
+        machine: z.string().describe("Name der Maschine"),
+        exercise: z.string().optional().describe("Übung, die an der Maschine geht"),
+        gym: z.string().max(60).optional().describe("Studio, in dem die Maschine steht"),
+        remove: z.boolean().optional().describe("Zuordnung entfernen statt anlegen"),
+      },
+    },
+    async (args) =>
+      run(async () => {
+        if (!args.exercise && !args.gym) {
+          throw new ServiceError("Bitte eine Übung, ein Studio oder beides angeben.");
+        }
+        const machine = await resolveEquipment(user, args.machine);
+        const lines: string[] = [];
+        if (args.exercise) {
+          const movement = await resolveMovement(args.exercise);
+          if (args.remove) {
+            await unlinkMovementEquipment(user, movement.id, machine.id);
+            lines.push(`„${machine.name}“ gehört nicht mehr zu „${movement.name}“.`);
+          } else {
+            await linkMovementEquipment(user, movement.id, machine.id);
+            lines.push(`„${machine.name}“ passt jetzt zu „${movement.name}“.`);
+          }
+        }
+        if (args.gym) {
+          const gymId = await findOrCreateGym(user, args.gym);
+          if (args.remove) {
+            await unlinkGymEquipment(user, gymId, machine.id);
+            lines.push(`„${machine.name}“ steht nicht mehr im Studio „${args.gym}“.`);
+          } else {
+            await linkGymEquipment(user, gymId, machine.id);
+            lines.push(`„${machine.name}“ steht im Studio „${args.gym}“.`);
+          }
+        }
+        return lines.join("\n");
       }),
   );
 
@@ -447,7 +514,8 @@ export function registerGymTools(server: McpServer, user: User): void {
     {
       title: "Übung zum Plan hinzufügen",
       description:
-        "Hängt eine bestehende Übung mit Zielvorgaben ans Ende eines Plans. " +
+        "Hängt eine Übung mit Zielvorgaben ans Ende eines Plans. Im Plan steht " +
+        "nur die Übung – die Maschine wird im Training je nach Studio gewählt. " +
         "Bei Übungen der Messart Zeit wird duration_seconds statt reps gebraucht.",
       inputSchema: {
         plan: z.string().describe("Name des Plans"),
@@ -458,9 +526,9 @@ export function registerGymTools(server: McpServer, user: User): void {
     async (args) =>
       run(async () => {
         const plan = await resolvePlan(user, args.plan);
-        const exercise = await resolveExercise(user, args.exercise);
-        await addPlanItem(user, plan.id, exercise.id, readTargets(args));
-        return `„${exercise.name}“ zum Plan „${plan.name}“ hinzugefügt.`;
+        const movement = await resolveMovement(args.exercise);
+        await addPlanItem(user, plan.id, movement.id, readTargets(args));
+        return `„${movement.name}“ zum Plan „${plan.name}“ hinzugefügt.`;
       }),
   );
 
@@ -479,13 +547,8 @@ export function registerGymTools(server: McpServer, user: User): void {
       run(async () => {
         const plan = await resolvePlan(user, args.plan);
         const items = await listPlanItems(plan.id);
-        const exercise = await resolveExercise(user, args.exercise);
-        const item = items.find((i) => i.exerciseId === exercise.id);
-        if (!item) {
-          throw new ServiceError(
-            `„${exercise.name}“ steht nicht im Plan „${plan.name}“.`,
-          );
-        }
+        if (items.length === 0) throw new ServiceError(`Der Plan „${plan.name}“ ist leer.`);
+        const item = resolvePlanItem(args.exercise, items);
 
         // Nicht angegebene Werte behalten, statt sie auf Standards zu setzen.
         await updatePlanItem(user, item.id, {
@@ -497,7 +560,7 @@ export function registerGymTools(server: McpServer, user: User): void {
           restSeconds: args.rest_seconds ?? item.restSeconds,
           notes: args.notes ?? item.notes,
         });
-        return `Zielwerte für „${exercise.name}“ im Plan „${plan.name}“ geändert.`;
+        return `Zielwerte für „${item.exerciseName}“ im Plan „${plan.name}“ geändert.`;
       }),
   );
 
@@ -517,14 +580,11 @@ export function registerGymTools(server: McpServer, user: User): void {
       run(async () => {
         const found = await resolvePlan(user, plan);
         const items = await listPlanItems(found.id);
-        const target = await resolveExercise(user, exercise);
-        const item = items.find((i) => i.exerciseId === target.id);
-        if (!item) {
-          throw new ServiceError(`„${target.name}“ steht nicht im Plan „${found.name}“.`);
-        }
+        if (items.length === 0) throw new ServiceError(`Der Plan „${found.name}“ ist leer.`);
+        const item = resolvePlanItem(exercise, items);
 
         await removePlanItem(user, item.id);
-        return `„${target.name}“ aus dem Plan „${found.name}“ entfernt.`;
+        return `„${item.exerciseName}“ aus dem Plan „${found.name}“ entfernt.`;
       }),
   );
 
@@ -536,7 +596,7 @@ export function registerGymTools(server: McpServer, user: User): void {
       title: "Training starten",
       description:
         "Startet ein Training, optional nach einem Plan und in einem Studio. " +
-        "Das Studio bestimmt, welches Gerät für eine Bewegung vorausgewählt " +
+        "Das Studio bestimmt, welche Maschine für eine Übung vorgeschlagen " +
         "wird. Ohne Angabe gilt das am Plan gemerkte Studio. Läuft bereits " +
         "eines, wird dieses zurückgegeben statt ein zweites zu starten.",
       inputSchema: {
@@ -613,9 +673,12 @@ export function registerGymTools(server: McpServer, user: User): void {
         "Trägt einen Satz ins laufende Training ein. Läuft noch kein Training, " +
         "wird automatisch ein freies gestartet. Bei Übungen der Messart Zeit " +
         "wird duration_seconds gebraucht, sonst reps. weight_kg meint bei " +
-        "assistierten Maschinen das eingestellte Gegengewicht.",
+        "assistierten Maschinen das eingestellte Gegengewicht. Die Maschine " +
+        "ergibt sich aus der Wahl im Training bzw. dem Studio; ist sie nicht " +
+        "eindeutig, nennt die Fehlermeldung die Auswahl – dann mit machine angeben.",
       inputSchema: {
         exercise: z.string().describe("Name der Übung"),
+        machine: machineSchema,
         weight_kg: z.number().min(0).max(1000).optional().describe("Gewicht in kg"),
         reps: z.number().int().min(1).max(500).optional().describe("Wiederholungen"),
         duration_seconds: z
@@ -637,8 +700,15 @@ export function registerGymTools(server: McpServer, user: User): void {
     },
     async (args) =>
       run(async () => {
-        const exercise = await resolveExercise(user, args.exercise);
         const workout = await ensureWorkout(user);
+        const active = await getActiveWorkout(user.id);
+        const exercise = await resolveVariant(user, args.exercise, {
+          machine: args.machine,
+          workout: active,
+          create: true,
+        });
+        // Die Wahl gilt für den Rest des Trainings – auch in der App.
+        if (exercise.movementId) await chooseVariant(user, workout.id, exercise.id);
 
         const result = await logSet(user, workout.id, exercise.id, {
           weightKg: args.weight_kg ?? 0,
@@ -660,14 +730,17 @@ export function registerGymTools(server: McpServer, user: User): void {
     {
       title: "Letzten Satz zurücknehmen",
       description: "Löscht den zuletzt gespeicherten Satz einer Übung im laufenden Training.",
-      inputSchema: { exercise: z.string().describe("Name der Übung") },
+      inputSchema: {
+        exercise: z.string().describe("Name der Übung"),
+        machine: machineSchema,
+      },
     },
-    async ({ exercise }) =>
+    async ({ exercise, machine }) =>
       run(async () => {
         const active = await getActiveWorkout(user.id);
         if (!active) throw new ServiceError("Es läuft gerade kein Training.");
 
-        const found = await resolveExercise(user, exercise);
+        const found = await resolveVariant(user, exercise, { machine, workout: active });
         const { ordinal, isWarmup } = await deleteLastSet(user, active.id, found.id);
         return `${isWarmup ? "Aufwärmsatz" : "Satz"} ${ordinal} bei „${found.name}“ wurde zurückgenommen.`;
       }),
@@ -778,7 +851,7 @@ export function registerGymTools(server: McpServer, user: User): void {
       description:
         "Sucht in der offenen Übungsdatenbank wger nach einer Bewegung (deutsche " +
         "Namen bevorzugt) und liefert Name, abgeleitete Muskelgruppe und Lizenz. " +
-        "Für eine neue Bewegung die ID als wger_id an create_exercise geben. " +
+        "Für eine neue Übung die ID als wger_id an create_exercise geben. " +
         "Braucht Internetzugang der Instanz.",
       inputSchema: { query: z.string().min(2).max(80).describe("Suchbegriff, z. B. Seitheben") },
     },
@@ -830,10 +903,12 @@ export function registerGymTools(server: McpServer, user: User): void {
     },
     async ({ query }) =>
       run(async () => {
-        const [all, exercises] = await Promise.all([
+        const [all, movements, links] = await Promise.all([
           listEquipment(),
-          listExercises(user.id),
+          listMovements(),
+          listMachineLinkRows(),
         ]);
+        const movementName = new Map(movements.map((m) => [m.id, m.name]));
         const needle = (query ?? "").toLowerCase().trim();
         const hits = all.filter((e) =>
           [e.name, e.manufacturer, e.model]
@@ -845,7 +920,10 @@ export function registerGymTools(server: McpServer, user: User): void {
         }
         return hits
           .map((e) => {
-            const used = exercises.filter((x) => x.equipmentId === e.id).map((x) => x.name);
+            const used = links.movementLinks
+              .filter((l) => l.equipmentId === e.id)
+              .map((l) => movementName.get(l.movementId))
+              .filter(Boolean);
             const meta = [
               [e.manufacturer, e.model].filter(Boolean).join(" "),
               e.loadFactor !== 1 ? `Übersetzung ${Math.round(1 / e.loadFactor)}:1` : null,
@@ -871,8 +949,8 @@ export function registerGymTools(server: McpServer, user: User): void {
         "den Nutzer, ob deine Erkennung stimmt. ERST NACH SEINER BESTÄTIGUNG " +
         "aufrufen – geraten wird nicht. Übersetzung und Eigengewicht nur " +
         "angeben, wenn sie am Gerät stehen oder der Nutzer sie nennt. " +
-        "Optional legt das Werkzeug gleich die Übung an diesem Gerät an " +
-        "(movement = Bewegung, z. B. Seitheben) und vermerkt sie im Studio. " +
+        "Optional ordnet das Werkzeug das Gerät gleich einer Übung zu " +
+        "(exercise, z. B. Seitheben) und trägt es im Studio ein. " +
         "Das Foto selbst kann nicht per MCP übertragen werden: gib dem Nutzer " +
         "den zurückgegebenen Link, dort lädt er es hoch.",
       inputSchema: {
@@ -883,17 +961,7 @@ export function registerGymTools(server: McpServer, user: User): void {
         ratio: ratioSchema,
         base_load_kg: z.number().min(0).max(500).optional().describe("Eigengewicht, z. B. Schlitten"),
         notes: z.string().max(1000).optional(),
-        movement: z
-          .string()
-          .max(80)
-          .optional()
-          .describe("Bewegung, für die das Gerät gleich als Übung angelegt wird"),
-        exercise_name: z
-          .string()
-          .max(80)
-          .optional()
-          .describe("Name dieser Übung; Standard: Bewegung + Gerätename"),
-        weight_step_kg: z.number().positive().max(50).optional(),
+        exercise: z.string().max(80).optional().describe("Übung, die an dem Gerät geht"),
         gym: z.string().max(60).optional().describe("Studio, in dem das Gerät steht"),
       },
     },
@@ -910,21 +978,15 @@ export function registerGymTools(server: McpServer, user: User): void {
         });
 
         const lines = [`Gerät „${args.name}“ angelegt.`];
-        if (args.movement) {
-          const exerciseName = args.exercise_name ?? `${args.movement} ${args.name}`;
-          const exerciseId = await createExercise(user, {
-            name: exerciseName,
-            movementName: args.movement,
-            equipmentId,
-            trackingMode: "weight_reps",
-            weightStepKg: args.weight_step_kg ?? 2.5,
-          });
-          lines.push(`Übung „${exerciseName}“ für die Bewegung „${args.movement}“ angelegt.`);
-          if (args.gym) {
-            const gymId = await findOrCreateGym(user, args.gym);
-            await markExerciseInGym(gymId, exerciseId);
-            lines.push(`Im Studio „${args.gym}“ vermerkt.`);
-          }
+        if (args.exercise) {
+          const movement = await resolveMovement(args.exercise);
+          await linkMovementEquipment(user, movement.id, equipmentId);
+          lines.push(`Passt zur Übung „${movement.name}“.`);
+        }
+        if (args.gym) {
+          const gymId = await findOrCreateGym(user, args.gym);
+          await linkGymEquipment(user, gymId, equipmentId);
+          lines.push(`Steht im Studio „${args.gym}“.`);
         }
         lines.push(`Foto hochladen: ${equipmentUrl(equipmentId)}`);
         return lines.join("\n");

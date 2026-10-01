@@ -6,6 +6,7 @@ import { db } from "@/db";
 import {
   equipment,
   exercises,
+  gymEquipment,
   gymExercises,
   gyms,
   plans,
@@ -58,6 +59,7 @@ export async function requireOwnExercise(userId: string, exerciseId: string) {
       name: exercises.name,
       trackingMode: exercises.trackingMode,
       movementId: exercises.movementId,
+      equipmentId: exercises.equipmentId,
       loadFactor: equipment.loadFactor,
       baseLoadKg: equipment.baseLoadKg,
     })
@@ -212,12 +214,19 @@ export async function logSet(
     volumeKg,
   });
 
-  // Ab dem ersten Satz gilt das Gerät als eines, das in diesem Studio steht.
+  // Ab dem ersten Satz gilt das Gerät als eines, das in diesem Studio steht –
+  // für die eigene Variante und im gemeinsamen Katalog für die Maschine.
   if (workout.gymId) {
     await db
       .insert(gymExercises)
       .values({ gymId: workout.gymId, exerciseId: exercise.id })
       .onConflictDoNothing();
+    if (exercise.equipmentId) {
+      await db
+        .insert(gymEquipment)
+        .values({ gymId: workout.gymId, equipmentId: exercise.equipmentId, addedBy: user.id })
+        .onConflictDoNothing();
+    }
   }
 
   return { setId, setNumber, ordinal, isWarmup, volumeKg, exerciseName: exercise.name };

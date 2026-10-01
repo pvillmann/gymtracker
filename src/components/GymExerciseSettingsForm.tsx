@@ -4,26 +4,21 @@ import { useActionState, useMemo } from "react";
 
 import { setGymExerciseSettingsAction } from "@/actions/exercises";
 import { SubmitButton } from "@/components/SubmitButton";
-import { ErrorMessage, Field, Input, Textarea } from "@/components/ui";
-import { formatKg } from "@/lib/format";
+import { ErrorMessage, Field, Textarea } from "@/components/ui";
 import type { FormState } from "@/lib/result";
 
 /**
  * Was an diesem Gerät in einem bestimmten Studio anders ist als sonst: die
- * Einstellungen und die Gewichtsstufe. Leer gilt der Wert der Übung.
+ * Einstellungen. Leer gilt der Wert der Übung.
  */
 export function GymExerciseSettingsForm({
   gymId,
   exerciseId,
   machineSetup,
-  weightStepKg,
-  fallbackStepKg,
 }: {
   gymId: string;
   exerciseId: string;
   machineSetup: string | null;
-  weightStepKg: number | null;
-  fallbackStepKg: number;
 }) {
   const action = useMemo(
     () => setGymExerciseSettingsAction.bind(null, gymId, exerciseId),
@@ -40,14 +35,6 @@ export function GymExerciseSettingsForm({
           maxLength={500}
           defaultValue={machineSetup ?? ""}
           placeholder="Sitz 4, Lehne 2 – leer: Einstellung der Übung"
-        />
-      </Field>
-      <Field label="Gewichtsstufe hier (kg)">
-        <Input
-          name="weightStepKg"
-          inputMode="decimal"
-          defaultValue={weightStepKg === null ? "" : formatKg(weightStepKg)}
-          placeholder={`leer: ${formatKg(fallbackStepKg)} kg wie bei der Übung`}
         />
       </Field>
       <ErrorMessage>{state.error}</ErrorMessage>

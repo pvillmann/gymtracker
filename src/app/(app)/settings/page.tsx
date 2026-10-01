@@ -14,7 +14,7 @@ import { requireUser } from "@/lib/auth";
 import { listApiTokens } from "@/lib/api-tokens";
 import { isAdmin } from "@/lib/groups";
 import { listGyms } from "@/lib/queries";
-import { canEditCatalog } from "@/lib/services/catalog";
+import { canDeleteCatalog } from "@/lib/services/catalog";
 
 export const metadata: Metadata = { title: "Einstellungen · GymTracker" };
 
@@ -49,7 +49,7 @@ export default async function SettingsPage() {
               gyms.map(async (g) => ({
                 id: g.id,
                 name: g.name,
-                editable: await canEditCatalog(user, g.userId),
+                deletable: await canDeleteCatalog(user, g.userId),
               })),
             )}
           />

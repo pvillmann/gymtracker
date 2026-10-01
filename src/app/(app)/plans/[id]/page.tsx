@@ -20,8 +20,8 @@ import { requireUser } from "@/lib/auth";
 import { exerciseCount, formatDuration, formatDurationLong, sets } from "@/lib/format";
 import {
   getPlan,
-  listExercises,
   listGyms,
+  listMachineLinks,
   listMovements,
   listPlanItems,
 } from "@/lib/queries";
@@ -38,24 +38,20 @@ export default async function PlanDetailPage({
   const plan = await getPlan(user.id, id);
   if (!plan) notFound();
 
-  const [items, exercises, movements, gyms] = await Promise.all([
+  const [items, movements, gyms, links] = await Promise.all([
     listPlanItems(plan.id),
-    listExercises(user.id),
     listMovements(),
     listGyms(),
+    listMachineLinks(),
   ]);
+  const exercises = movements;
   const rememberedGym = plan.rememberGym
     ? (gyms.find((g) => g.id === plan.defaultGymId)?.name ?? "ohne Studio")
     : null;
-  const movementName = new Map(movements.map((m) => [m.id, m.name]));
-  const deviceCount = (movementId: string | null) =>
-    movementId ? exercises.filter((e) => e.movementId === movementId).length : 1;
-  // Ein Planeintrag steht für die Bewegung – ein zweites Gerät derselben
-  // Bewegung wäre derselbe Eintrag noch einmal.
-  const usedMovements = new Set(items.map((item) => item.movementId ?? item.exerciseId));
-  const available = exercises.filter(
-    (exercise) => !usedMovements.has(exercise.movementId ?? exercise.id),
-  );
+  // Im Plan stehen Übungen; die Maschine wählt das Training nach Studio.
+  const machineCount = (movementId: string) => links.get(movementId)?.length ?? 0;
+  const usedMovements = new Set(items.map((item) => item.movementId));
+  const available = movements.filter((m) => !usedMovements.has(m.id));
 
   const totalSets = items.reduce((sum, item) => sum + item.targetSets, 0);
   // Grobe Schätzung: bei Zeit-Übungen die Zieldauer, sonst ~40 s Arbeitszeit
@@ -112,17 +108,16 @@ export default async function PlanDetailPage({
                 </span>
                 <div className="min-w-0 flex-1">
                   <Link
-                    href={`/exercises/${item.exerciseId}`}
+                    href={`/movements/${item.movementId}`}
                     className="font-semibold hover:text-accent"
                   >
-                    {deviceCount(item.movementId) > 1
-                      ? (movementName.get(item.movementId ?? "") ?? item.exerciseName)
-                      : item.exerciseName}
+                    {item.exerciseName}
                   </Link>
-                  {deviceCount(item.movementId) > 1 ? (
+                  {machineCount(item.movementId) > 0 ? (
                     <p className="text-xs text-faint">
-                      {deviceCount(item.movementId)} Geräte · bevorzugt {item.exerciseName}
-                      {" "}– gewählt wird im Training
+                      {machineCount(item.movementId)}{" "}
+                      {machineCount(item.movementId) === 1 ? "Maschine" : "Maschinen"} – gewählt
+                      wird im Training je nach Studio
                     </p>
                   ) : null}
                   <p className="mt-0.5 text-sm text-muted tnum">

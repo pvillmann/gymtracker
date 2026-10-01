@@ -12,6 +12,7 @@ import { ExerciseForm } from "@/components/ExerciseForm";
 import { GymExerciseSettingsForm } from "@/components/GymExerciseSettingsForm";
 import { SubmitButton } from "@/components/SubmitButton";
 import { TrendBadge } from "@/components/TrendBadge";
+import { WgerAttribution } from "@/components/WgerAttribution";
 import { Card, EmptyState, PageHeader } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
 import { describeSets } from "@/lib/describe";
@@ -129,7 +130,10 @@ export default async function ExerciseDetailPage({
           .filter(Boolean)
           .join(" · ")}
         action={
-          <Link href="/exercises" className="text-sm text-muted hover:text-fg">
+          <Link
+            href={movement ? `/movements/${movement.id}` : "/exercises"}
+            className="text-sm text-muted hover:text-fg"
+          >
             Zurück
           </Link>
         }
@@ -275,32 +279,7 @@ export default async function ExerciseDetailPage({
           <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
             Andere Geräte für {movement.name}
           </h2>
-          {movement.sourceUrl ? (
-            // CC-BY-SA verlangt Quelle, Urheber, Lizenz und den Hinweis auf
-            // Änderungen – hier, wo die Bewegung zu sehen ist.
-            <p className="mb-2 px-1 text-xs text-faint">
-              Bewegung aus{" "}
-              <a href={movement.sourceUrl} className="underline" target="_blank" rel="noreferrer">
-                wger
-              </a>
-              {movement.licenseAuthor ? ` · ${movement.licenseAuthor}` : ""}
-              {movement.licenseName ? (
-                <>
-                  {" · "}
-                  {movement.licenseUrl ? (
-                    <a href={movement.licenseUrl} className="underline" target="_blank" rel="noreferrer">
-                      {movement.licenseName}
-                    </a>
-                  ) : (
-                    movement.licenseName
-                  )}
-                </>
-              ) : null}
-              {movement.sourceName && movement.sourceName !== movement.name
-                ? ` · bearbeitet (Original: „${movement.sourceName}“)`
-                : ""}
-            </p>
-          ) : null}
+          <WgerAttribution movement={movement} className="mb-2 px-1 text-xs text-faint" />
           <Card className="p-1">
             <ul className="divide-y divide-line-soft">
               {siblings.map((sibling) => {
@@ -323,10 +302,10 @@ export default async function ExerciseDetailPage({
               })}
               <li>
                 <Link
-                  href={`/exercises/new?movement=${encodeURIComponent(movement.name)}`}
+                  href={`/movements/${movement.id}`}
                   className="block rounded-xl px-3 py-3 text-sm font-medium text-accent hover:bg-surface-2"
                 >
-                  + Weiteres Gerät für {movement.name}
+                  Maschinen für {movement.name} zuordnen
                 </Link>
               </li>
             </ul>
@@ -352,9 +331,6 @@ export default async function ExerciseDetailPage({
                           ? [
                               "steht hier",
                               settings.machineSetup ? "eigene Einstellung" : null,
-                              settings.weightStepKg !== null
-                                ? `Stufe ${formatKg(settings.weightStepKg)} kg`
-                                : null,
                             ]
                               .filter(Boolean)
                               .join(" · ")
@@ -366,8 +342,6 @@ export default async function ExerciseDetailPage({
                         gymId={gym.id}
                         exerciseId={exercise.id}
                         machineSetup={settings?.machineSetup ?? null}
-                        weightStepKg={settings?.weightStepKg ?? null}
-                        fallbackStepKg={exercise.weightStepKg}
                       />
                     </div>
                   </details>

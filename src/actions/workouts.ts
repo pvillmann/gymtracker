@@ -12,6 +12,7 @@ import { fail, type FormState } from "@/lib/result";
 import { getActiveWorkout, getPlan, listGyms } from "@/lib/queries";
 import { isServiceError } from "@/lib/services/errors";
 import { findOrCreateGym, setPlanGym } from "@/lib/services/gyms";
+import { getOrCreateVariant, requireMovement } from "@/lib/services/machines";
 import {
   chooseVariant,
   deleteSet,
@@ -20,7 +21,6 @@ import {
   getOwnedSet,
   logSet,
   rateSet,
-  requireOwnExercise,
   requireOwnWorkout,
   setWorkoutNotes,
   setWorkoutTimes,
@@ -172,11 +172,21 @@ export async function updateSetAction(
   return result;
 }
 
-export async function chooseVariantAction(
+/**
+ * Maschine für eine Übung im Training wählen. Die Variante (Übung ×
+ * Maschine) mit eigenem Verlauf entsteht dabei von selbst, falls neu.
+ */
+export async function chooseMachineAction(
   workoutId: string,
-  exerciseId: string,
+  movementId: string,
+  machineKey: string,
 ): Promise<void> {
   const user = await requireUser();
+  const exerciseId = await getOrCreateVariant(
+    user,
+    movementId,
+    machineKey === "none" ? null : machineKey,
+  );
   await chooseVariant(user, workoutId, exerciseId);
   revalidatePath(`/workout/${workoutId}`);
 }
@@ -258,21 +268,21 @@ export async function addExerciseToWorkoutAction(
   const workout = await requireOwnWorkout(user.id, workoutId);
   if (workout.finishedAt !== null) return fail("Dieses Training ist bereits beendet.");
 
-  const exerciseId = text(formData, "exerciseId");
-  if (!exerciseId) return fail("Bitte eine Übung auswählen.");
-  // Besitz prüfen, bevor die ID in die URL wandert.
+  // Ergänzt wird eine Übung; die Maschine wählt das Training nach Studio.
+  const movementId = text(formData, "exerciseId");
+  if (!movementId) return fail("Bitte eine Übung auswählen.");
   try {
-    await requireOwnExercise(user.id, exerciseId);
+    await requireMovement(movementId);
   } catch (error) {
     if (isServiceError(error)) return fail(error.message);
     throw error;
   }
 
   const extras = new Set(formData.getAll("extra").map(String).filter(Boolean));
-  extras.add(exerciseId);
+  extras.add(movementId);
 
   const query = [...extras].map((id) => `extra=${encodeURIComponent(id)}`).join("&");
-  redirect(`/workout/${workoutId}?${query}#uebung-${exerciseId}`);
+  redirect(`/workout/${workoutId}?${query}`);
 }
 
 /**

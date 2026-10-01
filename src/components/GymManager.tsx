@@ -8,16 +8,12 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { ErrorMessage, Input } from "@/components/ui";
 import type { FormState } from "@/lib/result";
 
-function GymRow({ id, name, editable }: { id: string; name: string; editable: boolean }) {
+function GymRow({ id, name, deletable }: { id: string; name: string; deletable: boolean }) {
   const rename = useMemo(() => renameGymAction.bind(null, id), [id]);
   const [state, formAction] = useActionState<FormState, FormData>(rename, {});
 
-  // Studios gehören allen: umbenennen und löschen darf nur, wer es angelegt
-  // hat, oder ein Admin.
-  if (!editable) {
-    return <li className="py-3 text-sm first:pt-0 last:pb-0">{name}</li>;
-  }
-
+  // Studios gehören allen: umbenennen darf jeder, löschen nur, wer es
+  // angelegt hat, oder ein Admin.
   return (
     <li className="space-y-2 py-3 first:pt-0 last:pb-0">
       <form action={formAction} className="flex gap-2">
@@ -27,14 +23,16 @@ function GymRow({ id, name, editable }: { id: string; name: string; editable: bo
         </SubmitButton>
       </form>
       <ErrorMessage>{state.error}</ErrorMessage>
-      <form action={deleteGymAction.bind(null, id)}>
-        <ConfirmSubmitButton
-          size="sm"
-          message={`Studio „${name}“ für alle löschen? Trainings bleiben erhalten, verlieren aber den Bezug zum Studio; die Geräteeinstellungen dort gehen verloren.`}
-        >
-          Löschen
-        </ConfirmSubmitButton>
-      </form>
+      {deletable ? (
+        <form action={deleteGymAction.bind(null, id)}>
+          <ConfirmSubmitButton
+            size="sm"
+            message={`Studio „${name}“ für alle löschen? Trainings bleiben erhalten, verlieren aber den Bezug zum Studio; die Geräteeinstellungen dort gehen verloren.`}
+          >
+            Löschen
+          </ConfirmSubmitButton>
+        </form>
+      ) : null}
     </li>
   );
 }
@@ -42,7 +40,7 @@ function GymRow({ id, name, editable }: { id: string; name: string; editable: bo
 export function GymManager({
   gyms,
 }: {
-  gyms: Array<{ id: string; name: string; editable: boolean }>;
+  gyms: Array<{ id: string; name: string; deletable: boolean }>;
 }) {
   const [state, formAction] = useActionState<FormState, FormData>(createGymAction, {});
 
@@ -51,13 +49,14 @@ export function GymManager({
       {gyms.length > 0 ? (
         <ul className="divide-y divide-line-soft">
           {gyms.map((gym) => (
-            <GymRow key={gym.id} id={gym.id} name={gym.name} editable={gym.editable} />
+            <GymRow key={gym.id} id={gym.id} name={gym.name} deletable={gym.deletable} />
           ))}
         </ul>
       ) : (
         <p className="text-sm text-muted">
-          Noch kein Studio. Studios gelten für alle Nutzer dieser Instanz. Mit Studio wählt das Training das Gerät vor, das du
-          dort zuletzt benutzt hast, und zeigt die Einstellungen von dort.
+          Noch kein Studio. Studios gelten für alle Nutzer dieser Instanz. Mit Studio wählt das
+          Training das Gerät vor, das du dort zuletzt benutzt hast, und zeigt die Einstellungen von
+          dort.
         </p>
       )}
       <form action={formAction} className="flex gap-2 border-t border-line-soft pt-4">

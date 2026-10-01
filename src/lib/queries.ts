@@ -19,8 +19,10 @@ import {
   equipment,
   equipmentImages,
   exercises,
+  gymEquipment,
   gymExercises,
   gyms,
+  movementEquipment,
   movements,
   planExercises,
   plans,
@@ -71,11 +73,12 @@ export async function listEquipment(): Promise<EquipmentSummary[]> {
       .from(equipmentImages)
       .where(inArray(equipmentImages.equipmentId, ids))
       .orderBy(asc(equipmentImages.createdAt)),
+    // Wie viele Übungen an der Maschine gehen – gemeinsamer Katalog.
     db
-      .select({ equipmentId: exercises.equipmentId, count: count() })
-      .from(exercises)
-      .where(inArray(exercises.equipmentId, ids))
-      .groupBy(exercises.equipmentId),
+      .select({ equipmentId: movementEquipment.equipmentId, count: count() })
+      .from(movementEquipment)
+      .where(inArray(movementEquipment.equipmentId, ids))
+      .groupBy(movementEquipment.equipmentId),
   ]);
   const firstImage = new Map<string, string>();
   for (const image of images) {
@@ -162,6 +165,16 @@ export async function listMovements(): Promise<Movement[]> {
   return db.select().from(movements).orderBy(asc(movements.muscleGroup), asc(movements.name));
 }
 
+export async function getMovement(movementId: string) {
+  const [row] = await db
+    .select({ movement: movements, ownerName: users.name })
+    .from(movements)
+    .leftJoin(users, eq(users.id, movements.userId))
+    .where(eq(movements.id, movementId))
+    .limit(1);
+  return row ? { ...row.movement, ownerName: row.ownerName } : null;
+}
+
 export async function getExercise(
   userId: string,
   exerciseId: string,
@@ -204,7 +217,10 @@ export async function getPlan(userId: string, planId: string) {
 
 export type PlanItem = {
   id: string;
-  exerciseId: string;
+  /** Die Übung (Bewegung) – das, was im Plan steht. */
+  movementId: string;
+  /** Bevorzugte Variante, falls gesetzt; sonst entscheidet das Training. */
+  exerciseId: string | null;
   position: number;
   targetSets: number;
   targetRepsMin: number;
@@ -212,18 +228,17 @@ export type PlanItem = {
   targetDurationSeconds: number | null;
   restSeconds: number;
   notes: string | null;
+  /** Name der Übung. */
   exerciseName: string;
-  movementId: string | null;
   muscleGroup: string | null;
-  machineSetup: string | null;
   trackingMode: TrackingMode;
-  weightStepKg: number;
 };
 
 export async function listPlanItems(planId: string): Promise<PlanItem[]> {
   return db
     .select({
       id: planExercises.id,
+      movementId: planExercises.movementId,
       exerciseId: planExercises.exerciseId,
       position: planExercises.position,
       targetSets: planExercises.targetSets,
@@ -232,17 +247,50 @@ export async function listPlanItems(planId: string): Promise<PlanItem[]> {
       targetDurationSeconds: planExercises.targetDurationSeconds,
       restSeconds: planExercises.restSeconds,
       notes: planExercises.notes,
-      exerciseName: exercises.name,
-      movementId: exercises.movementId,
-      muscleGroup: exercises.muscleGroup,
-      machineSetup: exercises.machineSetup,
-      trackingMode: exercises.trackingMode,
-      weightStepKg: exercises.weightStepKg,
+      exerciseName: movements.name,
+      muscleGroup: movements.muscleGroup,
+      trackingMode: movements.trackingMode,
     })
     .from(planExercises)
-    .innerJoin(exercises, eq(exercises.id, planExercises.exerciseId))
+    .innerJoin(movements, eq(movements.id, planExercises.movementId))
     .where(eq(planExercises.planId, planId))
     .orderBy(asc(planExercises.position));
+}
+
+/** Welche Maschinen zu welchen Übungen passen: Übung → Maschinen-IDs. */
+export async function listMachineLinks(
+  movementIds?: string[],
+): Promise<Map<string, string[]>> {
+  if (movementIds && movementIds.length === 0) return new Map();
+  const rows = await db
+    .select({
+      movementId: movementEquipment.movementId,
+      equipmentId: movementEquipment.equipmentId,
+      addedBy: movementEquipment.addedBy,
+    })
+    .from(movementEquipment)
+    .where(movementIds ? inArray(movementEquipment.movementId, movementIds) : undefined);
+  const map = new Map<string, string[]>();
+  for (const row of rows) map.set(row.movementId, [...(map.get(row.movementId) ?? []), row.equipmentId]);
+  return map;
+}
+
+/** Zuordnungen samt "angelegt von" – für Seiten, die sie entfernen lassen. */
+export async function listMachineLinkRows() {
+  const [movementLinks, gymLinks] = await Promise.all([
+    db.select().from(movementEquipment),
+    db.select().from(gymEquipment),
+  ]);
+  return { movementLinks, gymLinks };
+}
+
+/** Welche Maschinen in einem Studio stehen. */
+export async function listGymMachineIds(gymId: string): Promise<Set<string>> {
+  const rows = await db
+    .select({ id: gymEquipment.equipmentId })
+    .from(gymEquipment)
+    .where(eq(gymEquipment.gymId, gymId));
+  return new Set(rows.map((r) => r.id));
 }
 
 /** Im Training gewählte Geräte: Bewegung → Übung. */

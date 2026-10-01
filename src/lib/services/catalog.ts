@@ -8,23 +8,24 @@ import { getAdminUserIds, isAdmin } from "@/lib/groups";
 import { ServiceError } from "@/lib/services/errors";
 
 /**
- * Bewegungen, Geräte und Studios gehören der ganzen Instanz: jeder darf sie
- * benutzen und neue anlegen. Ändern oder löschen darf sie nur, wer sie
- * angelegt hat, oder ein Administrator – sonst könnte jeder anderen die
- * Muskelgruppe oder die Übersetzung unter den Füßen wegändern.
+ * Übungen, Maschinen und Studios gehören der ganzen Instanz: jeder darf sie
+ * benutzen, anlegen, bearbeiten und zuordnen – wer einen Fehler sieht,
+ * korrigiert ihn. Nur löschen darf, wer den Eintrag angelegt hat, oder ein
+ * Administrator: Ein Löschen nimmt allen Fotos, Zuordnungen und
+ * Einstellungen weg und lässt sich nicht mehr korrigieren.
  */
-export async function canEditCatalog(user: User, ownerId: string): Promise<boolean> {
+export async function canDeleteCatalog(user: User, ownerId: string): Promise<boolean> {
   return ownerId === user.id || (await isAdmin(user.id));
 }
 
-export async function assertCanEditCatalog(
+export async function assertCanDeleteCatalog(
   user: User,
   ownerId: string,
   what: string,
 ): Promise<void> {
-  if (!(await canEditCatalog(user, ownerId))) {
+  if (!(await canDeleteCatalog(user, ownerId))) {
     throw new ServiceError(
-      `${what} gehört zum gemeinsamen Katalog. Ändern kann es nur, wer es angelegt hat, oder ein Administrator.`,
+      `${what} gehört zum gemeinsamen Katalog. Löschen kann es nur, wer es angelegt hat, oder ein Administrator.`,
     );
   }
 }

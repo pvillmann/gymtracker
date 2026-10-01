@@ -47,10 +47,8 @@ const exerciseInput = z.object({
     .optional()
     .transform((v) => (v === undefined ? undefined : v || null)),
   trackingMode: z.enum(["weight_reps", "bodyweight_reps", "assisted_reps", "time"]),
-  weightStepKg: z.coerce
-    .number()
-    .positive("Die Gewichtsstufe muss größer als 0 sein.")
-    .max(50),
+  // Ohne +/- Tasten im Training ohne Bedeutung; bleibt nur für den Datensatz.
+  weightStepKg: z.coerce.number().positive().max(50).catch(2.5),
 });
 
 function readExerciseForm(formData: FormData) {
@@ -110,7 +108,7 @@ export async function updateExerciseAction(
   return { ok: true };
 }
 
-/** Einstellungen und Gewichtsstufe eines Geräts in einem Studio. */
+/** Einstellungen eines Geräts in einem Studio. */
 export async function setGymExerciseSettingsAction(
   gymId: string,
   exerciseId: string,
@@ -119,17 +117,12 @@ export async function setGymExerciseSettingsAction(
 ): Promise<FormState> {
   const user = await requireUser();
   const setup = optionalText(formData, "machineSetup")?.trim() ?? "";
-  const stepRaw = (optionalText(formData, "weightStepKg") ?? "").trim().replace(",", ".");
-  const step = stepRaw === "" ? null : Number(stepRaw);
   if (setup.length > 500) return fail("Die Einstellung ist zu lang.");
-  if (step !== null && (!Number.isFinite(step) || step <= 0 || step > 50)) {
-    return fail("Die Gewichtsstufe muss zwischen 0 und 50 kg liegen.");
-  }
 
   try {
     await setGymExerciseSettings(user, gymId, exerciseId, {
       machineSetup: setup || null,
-      weightStepKg: step,
+      weightStepKg: null,
     });
   } catch (error) {
     if (isServiceError(error)) return fail(error.message);

@@ -11,9 +11,9 @@ import {
   type User,
 } from "@/db/schema";
 import { newId } from "@/lib/ids";
-import { assertCanEditCatalog } from "@/lib/services/catalog";
 import { recomputeVolumes, requireEquipment } from "@/lib/services/equipment";
 import { ServiceError } from "@/lib/services/errors";
+import { linkMovementEquipment } from "@/lib/services/machines";
 import { getWgerExercise } from "@/lib/wger";
 
 export type ExerciseInput = {
@@ -51,13 +51,15 @@ async function resolveMovement(
   user: User,
   name: string,
   muscleGroup: string | null | undefined,
+  trackingMode: TrackingMode,
   wgerId?: number | null,
-): Promise<{ id: string; muscleGroup: string | null }> {
+): Promise<{ id: string; muscleGroup: string | null; trackingMode: TrackingMode; created: boolean }> {
   const userId = user.id;
   const [existing] = await db
     .select({
       id: movements.id,
       muscleGroup: movements.muscleGroup,
+      trackingMode: movements.trackingMode,
       ownerId: movements.userId,
     })
     .from(movements)
@@ -75,6 +77,7 @@ async function resolveMovement(
       userId,
       name,
       muscleGroup: group,
+      trackingMode,
       ...(source
         ? {
             sourceName: source.name,
@@ -85,17 +88,20 @@ async function resolveMovement(
           }
         : {}),
     });
-    return { id, muscleGroup: group };
+    return { id, muscleGroup: group, trackingMode, created: true };
   }
 
   if (muscleGroup !== undefined && muscleGroup !== existing.muscleGroup) {
-    // Die Bewegung gehört allen: ihre Muskelgruppe ändert nur, wer sie
-    // angelegt hat, oder ein Admin – sonst ändert sie sich bei allen mit.
-    await assertCanEditCatalog(user, existing.ownerId, `Die Bewegung „${name}“`);
+    // Die Übung gehört allen; die Muskelgruppe ändert sich bei allen mit.
     await setMovementMuscleGroup(existing.id, muscleGroup);
-    return { id: existing.id, muscleGroup };
+    return { id: existing.id, muscleGroup, trackingMode: existing.trackingMode, created: false };
   }
-  return { id: existing.id, muscleGroup: existing.muscleGroup };
+  return {
+    id: existing.id,
+    muscleGroup: existing.muscleGroup,
+    trackingMode: existing.trackingMode,
+    created: false,
+  };
 }
 
 /** Die Muskelgruppe gehört der Bewegung; die Varianten tragen eine Kopie. */
@@ -108,18 +114,20 @@ async function setMovementMuscleGroup(
 }
 
 /**
- * Bewegungen, die bei niemandem mehr ein Gerät haben, haben keinen Zweck
- * mehr. Gilt instanzweit: solange irgendwer sie benutzt, bleibt sie.
+ * Räumt eine Übung weg, die gerade eben für einen gescheiterten Versuch
+ * angelegt wurde. Sonst verschwinden Übungen nie von selbst: sie sind
+ * gemeinsamer Katalog und können ohne Variante, aber mit Maschinen oder
+ * in Plänen stehen.
  */
-async function deleteEmptyMovements(): Promise<void> {
+async function deleteJustCreatedMovement(movementId: string): Promise<void> {
   await db
     .delete(movements)
     .where(
-      notExists(
-        db
-          .select({ id: exercises.id })
-          .from(exercises)
-          .where(eq(exercises.movementId, movements.id)),
+      and(
+        eq(movements.id, movementId),
+        notExists(
+          db.select({ id: exercises.id }).from(exercises).where(eq(exercises.movementId, movementId)),
+        ),
       ),
     );
 }
@@ -135,6 +143,7 @@ export async function createExercise(
     input.movementName?.trim() || input.name,
     // Leer heißt beim Anlegen "keine Angabe", nicht "löschen".
     input.muscleGroup ?? undefined,
+    input.trackingMode,
     input.wgerId,
   );
   try {
@@ -146,16 +155,18 @@ export async function createExercise(
       muscleGroup: movement.muscleGroup,
       equipmentId: input.equipmentId ?? null,
       machineSetup: input.machineSetup ?? null,
-      trackingMode: input.trackingMode,
+      // Die Messart gehört der Übung.
+      trackingMode: movement.trackingMode,
       weightStepKg: input.weightStepKg,
     });
   } catch (error) {
-    await deleteEmptyMovements();
+    if (movement.created) await deleteJustCreatedMovement(movement.id);
     if (isDuplicateName(error)) {
       throw new ServiceError("Eine Übung mit diesem Namen gibt es schon.");
     }
     throw error;
   }
+  if (input.equipmentId) await linkMovementEquipment(user, movement.id, input.equipmentId);
   return id;
 }
 
@@ -178,6 +189,7 @@ export async function updateExercise(
     user,
     input.movementName?.trim() || input.name,
     input.muscleGroup ?? null,
+    input.trackingMode,
     input.wgerId,
   );
 
@@ -195,15 +207,14 @@ export async function updateExercise(
       })
       .where(and(eq(exercises.id, exerciseId), eq(exercises.userId, user.id)));
   } catch (error) {
-    await deleteEmptyMovements();
+    if (movement.created) await deleteJustCreatedMovement(movement.id);
     if (isDuplicateName(error)) {
       throw new ServiceError("Eine Übung mit diesem Namen gibt es schon.");
     }
     throw error;
   }
 
-  // Wer eine Übung einer anderen Bewegung zuordnet, lässt die alte leer zurück.
-  if (current.movementId !== movement.id) await deleteEmptyMovements();
+  if (input.equipmentId) await linkMovementEquipment(user, movement.id, input.equipmentId);
   // Anderes Gerät heißt andere Übersetzung: das bewegte Gewicht neu rechnen.
   if (input.equipmentId !== undefined && input.equipmentId !== current.equipmentId) {
     await recomputeVolumes({ exerciseIds: [exerciseId] });
@@ -262,6 +273,5 @@ export async function deleteExercise(
   await db
     .delete(exercises)
     .where(and(eq(exercises.id, exerciseId), eq(exercises.userId, user.id)));
-  await deleteEmptyMovements();
   return { archivedInstead: false };
 }
