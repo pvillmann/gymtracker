@@ -58,8 +58,9 @@ Homescreen.
   Verglichen wird nur an derselben Maschine – dieselben Kilos sind an
   Maschine und Kabelzug nicht dieselbe Last.
 - Studios: Beim Trainingsstart fragt die App, wo du bist – mit „Nicht erneut
-  fragen“ merkt sich der Plan das Studio. Einstellungen an der Maschine
-  lassen sich pro Studio hinterlegen
+  fragen“ merkt sich der Plan das Studio. Jedes Studio hat eine eigene Seite
+  (unter Übungen → Studios) mit den Maschinen, die dort stehen. Einstellungen
+  an der Maschine lassen sich pro Studio hinterlegen
 - Maschinen mit Foto, Hersteller, Übersetzung (z. B. 2:1 am Kabelzug),
   Eigengewicht. Übersetzung und Eigengewicht fließen ins bewegte Gewicht ein;
   Fotos werden verkleinert und ohne Metadaten (auch ohne GPS) im Daten-Volume

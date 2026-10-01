@@ -285,6 +285,22 @@ export async function listMachineLinkRows() {
 }
 
 /** Welche Maschinen in einem Studio stehen. */
+/** Eigene abgeschlossene Trainings je Studio: Anzahl und das letzte. */
+export async function getGymWorkoutStats(
+  userId: string,
+): Promise<Map<string, { count: number; lastAt: number }>> {
+  const rows = await db
+    .select({
+      gymId: workouts.gymId,
+      count: count(),
+      lastAt: sql<number>`max(${workouts.startedAt})`,
+    })
+    .from(workouts)
+    .where(and(eq(workouts.userId, userId), isNotNull(workouts.finishedAt), isNotNull(workouts.gymId)))
+    .groupBy(workouts.gymId);
+  return new Map(rows.map((r) => [r.gymId!, { count: r.count, lastAt: r.lastAt }]));
+}
+
 export async function listGymMachineIds(gymId: string): Promise<Set<string>> {
   const rows = await db
     .select({ id: gymEquipment.equipmentId })
