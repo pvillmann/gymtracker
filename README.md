@@ -58,6 +58,10 @@ Homescreen.
   fragen“ merkt sich der Plan das Studio. Vorausgewählt wird das Gerät, das du
   dort zuletzt benutzt hast; Einstellungen und Gewichtsstufe lassen sich pro
   Studio hinterlegen
+- Geräte mit Foto, Hersteller, Übersetzung (z. B. 2:1 am Kabelzug) und
+  Eigengewicht. Übersetzung und Eigengewicht fließen ins bewegte Gewicht ein;
+  Fotos werden verkleinert und ohne Metadaten (auch ohne GPS) im Daten-Volume
+  gespeichert und nur dem eigenen Konto ausgeliefert
 - Vier Messarten: Gewicht × Wiederholungen, Körpergewicht (+ Zusatzgewicht),
   Körpergewicht − Gegengewicht (assistierte Maschinen) und Zeit
 
@@ -88,6 +92,8 @@ Homescreen.
 - Jeder Nutzer erzeugt sich in den Einstellungen seinen eigenen Schlüssel
 - Lesen (Pläne, Verlauf, letzte Leistung, Statistik) und Schreiben (Übungen und
   Pläne anlegen, Training starten, Sätze protokollieren, Training beenden)
+- Geräte aus einem Foto anlegen: Claude erkennt die Maschine im Chat, legt sie
+  nach deiner Bestätigung an und gibt dir den Link für den Foto-Upload
 
 **Benutzergruppen**
 - Gruppenmodell als Grundlage, aktuell mit der Systemgruppe *Administratoren*

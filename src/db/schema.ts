@@ -161,6 +161,65 @@ export const apiTokens = sqliteTable(
   ],
 );
 
+/** Bauart eines Geräts – bestimmt, wie man sich die Last vorstellen muss. */
+export type EquipmentKind =
+  | "stack"
+  | "plates"
+  | "cable"
+  | "free"
+  | "bodyweight"
+  | "other";
+
+/**
+ * Ein Gerätetyp: "Matrix Ultra Lateral Raise", "Kabelturm", "Kurzhantel".
+ * Übungen (die Geräte-Varianten einer Bewegung) verweisen darauf. Übersetzung
+ * und Eigengewicht machen das bewegte Gewicht ehrlicher – verglichen wird
+ * trotzdem nur am selben Gerät.
+ */
+export const equipment = sqliteTable(
+  "equipment",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    manufacturer: text("manufacturer"),
+    model: text("model"),
+    kind: text("kind").notNull().default("other").$type<EquipmentKind>(),
+    /**
+     * Anteil des eingestellten Gewichts, der tatsächlich als Last ankommt:
+     * 1 bei 1:1, 0.5 bei einem Kabelzug mit 2:1-Übersetzung.
+     */
+    loadFactor: real("load_factor").notNull().default(1),
+    /** Was ohne Gewicht schon bewegt wird, z. B. der Schlitten der Beinpresse. */
+    baseLoadKg: real("base_load_kg").notNull().default(0),
+    notes: text("notes"),
+    createdAt: integer("created_at").notNull().default(now),
+  },
+  (t) => [uniqueIndex("equipment_user_name_unique").on(t.userId, t.name)],
+);
+
+/**
+ * Fotos eines Geräts. Die Datei liegt verkleinert im Daten-Verzeichnis neben
+ * der Datenbank (images/<id>.webp und images/<id>-thumb.webp), hier nur die
+ * Verwaltungsdaten.
+ */
+export const equipmentImages = sqliteTable(
+  "equipment_images",
+  {
+    id: text("id").primaryKey(),
+    equipmentId: text("equipment_id")
+      .notNull()
+      .references(() => equipment.id, { onDelete: "cascade" }),
+    width: integer("width").notNull(),
+    height: integer("height").notNull(),
+    bytes: integer("bytes").notNull(),
+    createdAt: integer("created_at").notNull().default(now),
+  },
+  (t) => [index("equipment_images_equipment_idx").on(t.equipmentId)],
+);
+
 /**
  * Eine Bewegung, unabhängig vom Gerät: "Seitheben", "Rudern eng". Die Geräte,
  * an denen man sie macht, sind ihre Varianten (Tabelle exercises). Ein
@@ -197,6 +256,10 @@ export const exercises = sqliteTable(
      * Migration füllt sie für alle Bestandsübungen, neue bekommen sie immer.
      */
     movementId: text("movement_id").references(() => movements.id),
+    /** Der Gerätetyp, an dem diese Variante gemacht wird – optional. */
+    equipmentId: text("equipment_id").references(() => equipment.id, {
+      onDelete: "set null",
+    }),
     /**
      * Muskelgruppe, z.B. "Brust", "Rücken". Führend ist die der Bewegung; hier
      * steht eine Kopie, damit Statistik und Listen ohne Join auskommen.
@@ -379,6 +442,8 @@ export type User = typeof users.$inferSelect;
 export type ApiToken = typeof apiTokens.$inferSelect;
 export type Group = typeof groups.$inferSelect;
 export type GroupMember = typeof groupMembers.$inferSelect;
+export type Equipment = typeof equipment.$inferSelect;
+export type EquipmentImage = typeof equipmentImages.$inferSelect;
 export type Gym = typeof gyms.$inferSelect;
 export type GymExercise = typeof gymExercises.$inferSelect;
 export type Movement = typeof movements.$inferSelect;

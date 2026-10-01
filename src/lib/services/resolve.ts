@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { User } from "@/db/schema";
-import { listExercises, listPlans } from "@/lib/queries";
+import { listEquipment, listExercises, listPlans } from "@/lib/queries";
 import { ServiceError } from "@/lib/services/errors";
 
 /**
@@ -82,4 +82,9 @@ export async function resolvePlan(user: User, query: string) {
     noun: "Plan",
     feminine: false,
   });
+}
+
+export async function resolveEquipment(user: User, query: string) {
+  const candidates = await listEquipment(user.id);
+  return pick(query, candidates, { noun: "Gerät", feminine: false });
 }

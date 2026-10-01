@@ -28,6 +28,7 @@ import {
   getPreviousPerformances,
   listExercises,
   getExerciseGymSettings,
+  listEquipment,
   listGyms,
   listMovements,
 } from "@/lib/queries";
@@ -50,13 +51,15 @@ export default async function ExerciseDetailPage({
   const exercise = await getExercise(user.id, id);
   if (!exercise) notFound();
 
-  const [sessions, movements, allExercises, gyms, gymSettings] = await Promise.all([
+  const [sessions, movements, allExercises, gyms, gymSettings, equipment] = await Promise.all([
     getExerciseSessions(user.id, exercise.id),
     listMovements(user.id),
     listExercises(user.id),
     listGyms(user.id),
     getExerciseGymSettings(exercise.id),
+    listEquipment(user.id),
   ]);
+  const device = equipment.find((e) => e.id === exercise.equipmentId) ?? null;
   const movement = movements.find((m) => m.id === exercise.movementId) ?? null;
   // Die anderen Geräte derselben Bewegung – mit eigenem Verlauf, denn die
   // Gewichte sind von Gerät zu Gerät nicht vergleichbar.
@@ -138,6 +141,25 @@ export default async function ExerciseDetailPage({
             Diese Übung ist archiviert und taucht bei neuen Plänen nicht mehr auf.
           </p>
         </Card>
+      ) : null}
+
+      {device ? (
+        <Link
+          href={`/equipment/${device.id}`}
+          className="mb-4 flex items-center gap-3 rounded-2xl border border-line bg-surface p-3 hover:border-faint"
+        >
+          {device.imageId ? (
+            <img
+              src={`/api/equipment-images/${device.imageId}?thumb`}
+              alt=""
+              className="h-14 w-14 shrink-0 rounded-lg object-cover"
+            />
+          ) : null}
+          <span className="min-w-0">
+            <span className="block text-xs text-muted">Gerät</span>
+            <span className="block truncate font-semibold">{device.name}</span>
+          </span>
+        </Link>
       ) : null}
 
       {exercise.machineSetup ? (
@@ -339,6 +361,7 @@ export default async function ExerciseDetailPage({
           exercise={exercise}
           movementName={movement?.name}
           movements={movements}
+          equipment={equipment.map((e) => ({ id: e.id, name: e.name }))}
           submitLabel="Änderungen speichern"
         />
       </section>

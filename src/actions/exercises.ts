@@ -39,6 +39,12 @@ const exerciseInput = z.object({
     .max(500)
     .optional()
     .transform((v) => (v ? v : null)),
+  // Nicht übermittelt = unverändert lassen; leer gewählt = kein Gerät.
+  equipmentId: z
+    .string()
+    .trim()
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v || null)),
   trackingMode: z.enum(["weight_reps", "bodyweight_reps", "assisted_reps", "time"]),
   weightStepKg: z.coerce
     .number()
@@ -50,6 +56,7 @@ function readExerciseForm(formData: FormData) {
   return exerciseInput.safeParse({
     name: text(formData, "name"),
     movementName: optionalText(formData, "movementName"),
+    equipmentId: optionalText(formData, "equipmentId"),
     muscleGroup: optionalText(formData, "muscleGroup"),
     machineSetup: optionalText(formData, "machineSetup"),
     trackingMode: text(formData, "trackingMode", "weight_reps"),

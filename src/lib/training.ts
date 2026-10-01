@@ -5,14 +5,27 @@ import type { TrackingMode } from "@/db/schema";
  * Körpergewicht mit, sonst wären Klimmzüge im Volumen immer 0.
  * Zeit-Übungen tragen kein Volumen bei.
  */
+/**
+ * Wie ein Gerät die eingestellte Last weitergibt: Übersetzung (0.5 bei einem
+ * 2:1-Kabelzug) und Eigengewicht (Schlitten der Beinpresse).
+ */
+export type LoadTransfer = { loadFactor: number; baseLoadKg: number };
+
 export function setVolume(
   mode: TrackingMode,
   weightKg: number,
   reps: number,
   bodyweightKg: number,
+  transfer?: LoadTransfer | null,
 ): number {
   if (mode === "time") return 0;
-  return Math.max(0, effectiveLoad(mode, weightKg, bodyweightKg) * reps);
+  // Übersetzung und Eigengewicht gelten nur für Gewicht × Wiederholungen –
+  // bei Körpergewichts-Übungen ist die Last der Körper, nicht das Gerät.
+  const load =
+    mode === "weight_reps" && transfer
+      ? transfer.baseLoadKg + weightKg * transfer.loadFactor
+      : effectiveLoad(mode, weightKg, bodyweightKg);
+  return Math.max(0, load * reps);
 }
 
 /**

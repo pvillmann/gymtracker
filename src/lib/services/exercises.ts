@@ -11,6 +11,7 @@ import {
   type User,
 } from "@/db/schema";
 import { newId } from "@/lib/ids";
+import { recomputeVolumes, requireOwnEquipment } from "@/lib/services/equipment";
 import { ServiceError } from "@/lib/services/errors";
 
 export type ExerciseInput = {
@@ -22,6 +23,8 @@ export type ExerciseInput = {
   movementName?: string | null;
   /** Gilt für die ganze Bewegung, also für alle ihre Geräte. */
   muscleGroup?: string | null;
+  /** Gerätetyp; undefined lässt ihn beim Bearbeiten unverändert. */
+  equipmentId?: string | null;
   machineSetup?: string | null;
   trackingMode: TrackingMode;
   weightStepKg: number;
@@ -94,6 +97,7 @@ export async function createExercise(
   input: ExerciseInput,
 ): Promise<string> {
   const id = newId();
+  if (input.equipmentId) await requireOwnEquipment(user.id, input.equipmentId);
   const movement = await resolveMovement(
     user.id,
     input.movementName?.trim() || input.name,
@@ -107,6 +111,7 @@ export async function createExercise(
       name: input.name,
       movementId: movement.id,
       muscleGroup: movement.muscleGroup,
+      equipmentId: input.equipmentId ?? null,
       machineSetup: input.machineSetup ?? null,
       trackingMode: input.trackingMode,
       weightStepKg: input.weightStepKg,
@@ -127,11 +132,12 @@ export async function updateExercise(
   input: ExerciseInput,
 ): Promise<void> {
   const [current] = await db
-    .select({ movementId: exercises.movementId })
+    .select({ movementId: exercises.movementId, equipmentId: exercises.equipmentId })
     .from(exercises)
     .where(and(eq(exercises.id, exerciseId), eq(exercises.userId, user.id)))
     .limit(1);
   if (!current) throw new ServiceError("Diese Übung gibt es nicht.");
+  if (input.equipmentId) await requireOwnEquipment(user.id, input.equipmentId);
 
   // Beim Bearbeiten steht die Muskelgruppe im Formular – auch ein leeres Feld
   // ist dann eine Angabe.
@@ -148,6 +154,7 @@ export async function updateExercise(
         name: input.name,
         movementId: movement.id,
         muscleGroup: movement.muscleGroup,
+        ...(input.equipmentId !== undefined ? { equipmentId: input.equipmentId } : {}),
         machineSetup: input.machineSetup ?? null,
         trackingMode: input.trackingMode,
         weightStepKg: input.weightStepKg,
@@ -163,6 +170,10 @@ export async function updateExercise(
 
   // Wer eine Übung einer anderen Bewegung zuordnet, lässt die alte leer zurück.
   if (current.movementId !== movement.id) await deleteEmptyMovements(user.id);
+  // Anderes Gerät heißt andere Übersetzung: das bewegte Gewicht neu rechnen.
+  if (input.equipmentId !== undefined && input.equipmentId !== current.equipmentId) {
+    await recomputeVolumes(user.id, { exerciseIds: [exerciseId] });
+  }
 }
 
 /** Legt die Standardübungen an; vorhandene Namen werden übersprungen. */

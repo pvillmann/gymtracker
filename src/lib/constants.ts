@@ -1,4 +1,4 @@
-import type { TrackingMode } from "@/db/schema";
+import type { EquipmentKind, TrackingMode } from "@/db/schema";
 
 export const MUSCLE_GROUPS = [
   "Brust",
@@ -71,4 +71,24 @@ export const DEFAULT_EXERCISES: Array<{
     weightStepKg: 5,
   },
   { name: "Laufband", muscleGroup: "Cardio", trackingMode: "time" },
+];
+
+export const EQUIPMENT_KINDS: Array<{ value: EquipmentKind; label: string }> = [
+  { value: "stack", label: "Maschine mit Steckgewicht" },
+  { value: "plates", label: "Maschine mit Scheiben" },
+  { value: "cable", label: "Kabelzug" },
+  { value: "free", label: "Freie Gewichte" },
+  { value: "bodyweight", label: "Körpergewicht / Station" },
+  { value: "other", label: "Sonstiges" },
+];
+
+/**
+ * Übersetzungen, wie sie an Geräten stehen. Gespeichert wird der Anteil, der
+ * als Last ankommt: bei 2:1 die Hälfte des eingestellten Gewichts.
+ */
+export const LOAD_RATIOS: Array<{ factor: number; label: string }> = [
+  { factor: 1, label: "1:1 – das eingestellte Gewicht" },
+  { factor: 0.5, label: "2:1 – die Hälfte" },
+  { factor: 1 / 3, label: "3:1 – ein Drittel" },
+  { factor: 0.25, label: "4:1 – ein Viertel" },
 ];

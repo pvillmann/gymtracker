@@ -4,6 +4,7 @@ import { and, asc, desc, eq, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
+  equipment,
   exercises,
   gymExercises,
   gyms,
@@ -20,7 +21,7 @@ import { formatDateTime } from "@/lib/format";
 import { newId } from "@/lib/ids";
 import { getActiveWorkout } from "@/lib/queries";
 import { ServiceError } from "@/lib/services/errors";
-import { setVolume } from "@/lib/training";
+import { setVolume, type LoadTransfer } from "@/lib/training";
 
 /**
  * Fachlogik rund um Trainings, unabhängig davon, wer sie aufruft.
@@ -57,14 +58,21 @@ export async function requireOwnExercise(userId: string, exerciseId: string) {
       name: exercises.name,
       trackingMode: exercises.trackingMode,
       movementId: exercises.movementId,
+      loadFactor: equipment.loadFactor,
+      baseLoadKg: equipment.baseLoadKg,
     })
     .from(exercises)
+    .leftJoin(equipment, eq(equipment.id, exercises.equipmentId))
     .where(and(eq(exercises.id, exerciseId), eq(exercises.userId, userId)))
     .limit(1);
 
-  const exercise = rows[0];
-  if (!exercise) throw new ServiceError("Diese Übung gibt es nicht.");
-  return exercise;
+  const row = rows[0];
+  if (!row) throw new ServiceError("Diese Übung gibt es nicht.");
+  const { loadFactor, baseLoadKg, ...exercise } = row;
+  // Ohne Gerät kommt das eingestellte Gewicht 1:1 an.
+  const transfer: LoadTransfer | null =
+    loadFactor === null || baseLoadKg === null ? null : { loadFactor, baseLoadKg };
+  return { ...exercise, transfer };
 }
 
 /** Schließt Lücken in der Satz-Nummerierung, etwa nach dem Löschen. */
@@ -187,6 +195,7 @@ export async function logSet(
     values.weightKg,
     values.reps,
     user.bodyweightKg,
+    exercise.transfer,
   );
 
   await db.insert(workoutSets).values({
@@ -256,6 +265,7 @@ export async function updateSet(
         values.weightKg,
         values.reps,
         user.bodyweightKg,
+        exercise.transfer,
       ),
     })
     .where(eq(workoutSets.id, setId));

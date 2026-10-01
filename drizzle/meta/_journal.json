@@ -64,6 +64,13 @@
       "when": 1790849924809,
       "tag": "0008_gyms",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1790850950070,
+      "tag": "0009_equipment",
+      "breakpoints": true
     }
   ]
 }

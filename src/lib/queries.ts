@@ -16,6 +16,8 @@ import {
 
 import { db } from "@/db";
 import {
+  equipment,
+  equipmentImages,
   exercises,
   gymExercises,
   gyms,
@@ -26,6 +28,8 @@ import {
   workouts,
   workoutSets,
   workoutVariants,
+  type Equipment,
+  type EquipmentImage,
   type Exercise,
   type Gym,
   type GymExercise,
@@ -47,6 +51,63 @@ export async function listExercises(
         : and(eq(exercises.userId, userId), isNull(exercises.archivedAt)),
     )
     .orderBy(asc(exercises.muscleGroup), asc(exercises.name));
+}
+
+export type EquipmentSummary = Equipment & {
+  /** Erstes Foto als Vorschaubild, falls vorhanden. */
+  imageId: string | null;
+  exerciseCount: number;
+};
+
+export async function listEquipment(userId: string): Promise<EquipmentSummary[]> {
+  const rows = await db
+    .select()
+    .from(equipment)
+    .where(eq(equipment.userId, userId))
+    .orderBy(asc(equipment.name));
+  if (rows.length === 0) return [];
+
+  const ids = rows.map((r) => r.id);
+  const [images, counts] = await Promise.all([
+    db
+      .select({ id: equipmentImages.id, equipmentId: equipmentImages.equipmentId })
+      .from(equipmentImages)
+      .where(inArray(equipmentImages.equipmentId, ids))
+      .orderBy(asc(equipmentImages.createdAt)),
+    db
+      .select({ equipmentId: exercises.equipmentId, count: count() })
+      .from(exercises)
+      .where(inArray(exercises.equipmentId, ids))
+      .groupBy(exercises.equipmentId),
+  ]);
+  const firstImage = new Map<string, string>();
+  for (const image of images) {
+    if (!firstImage.has(image.equipmentId)) firstImage.set(image.equipmentId, image.id);
+  }
+  const countBy = new Map(counts.map((c) => [c.equipmentId, c.count]));
+
+  return rows.map((row) => ({
+    ...row,
+    imageId: firstImage.get(row.id) ?? null,
+    exerciseCount: countBy.get(row.id) ?? 0,
+  }));
+}
+
+export async function getEquipment(userId: string, equipmentId: string) {
+  const [row] = await db
+    .select()
+    .from(equipment)
+    .where(and(eq(equipment.id, equipmentId), eq(equipment.userId, userId)))
+    .limit(1);
+  return row ?? null;
+}
+
+export async function listEquipmentImages(equipmentId: string): Promise<EquipmentImage[]> {
+  return db
+    .select()
+    .from(equipmentImages)
+    .where(eq(equipmentImages.equipmentId, equipmentId))
+    .orderBy(asc(equipmentImages.createdAt));
 }
 
 export async function listGyms(userId: string): Promise<Gym[]> {

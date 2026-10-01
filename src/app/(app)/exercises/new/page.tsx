@@ -5,7 +5,7 @@ import { createExerciseAction } from "@/actions/exercises";
 import { ExerciseForm } from "@/components/ExerciseForm";
 import { PageHeader } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
-import { listMovements } from "@/lib/queries";
+import { listEquipment, listMovements } from "@/lib/queries";
 
 export const metadata: Metadata = { title: "Neue Übung · GymTracker" };
 
@@ -16,7 +16,10 @@ export default async function NewExercisePage({
 }) {
   const { movement } = await searchParams;
   const user = await requireUser();
-  const movements = await listMovements(user.id);
+  const [movements, equipment] = await Promise.all([
+    listMovements(user.id),
+    listEquipment(user.id),
+  ]);
 
   return (
     <>
@@ -33,6 +36,7 @@ export default async function NewExercisePage({
         action={createExerciseAction}
         movementName={movement}
         movements={movements}
+        equipment={equipment.map((e) => ({ id: e.id, name: e.name }))}
         submitLabel="Übung anlegen"
       />
     </>
