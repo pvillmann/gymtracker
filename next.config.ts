@@ -9,6 +9,19 @@ const nextConfig: NextConfig = {
     serverActions: { bodySizeLimit: "16mb" },
   },
   typedRoutes: false,
+  async headers() {
+    // Upload-Links tragen ihren Schlüssel in der URL – nie weitergeben.
+    return [
+      {
+        source: "/upload/:token*",
+        headers: [
+          { key: "Referrer-Policy", value: "no-referrer" },
+          { key: "X-Robots-Tag", value: "noindex" },
+          { key: "Cache-Control", value: "no-store" },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

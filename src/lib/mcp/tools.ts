@@ -39,6 +39,7 @@ import {
 import { ServiceError, isServiceError } from "@/lib/services/errors";
 import { createEquipment, updateEquipment } from "@/lib/services/equipment";
 import { findOrCreateGym } from "@/lib/services/gyms";
+import { UPLOAD_LINK_MINUTES, createPhotoUploadLink } from "@/lib/services/photo-upload";
 import {
   createMovement,
   linkGymEquipment,
@@ -943,16 +944,18 @@ export function registerGymTools(server: McpServer, user: User): void {
     {
       title: "Gerät anlegen",
       description:
-        "Legt ein Gerät (eine Maschine) an. Typischer Ablauf: der Nutzer " +
-        "schickt ein Foto, du erkennst Hersteller und Modell (am besten am " +
-        "Typenschild), prüfst mit search_equipment auf Dubletten und fragst " +
-        "den Nutzer, ob deine Erkennung stimmt. ERST NACH SEINER BESTÄTIGUNG " +
-        "aufrufen – geraten wird nicht. Übersetzung und Eigengewicht nur " +
-        "angeben, wenn sie am Gerät stehen oder der Nutzer sie nennt. " +
-        "Optional ordnet das Werkzeug das Gerät gleich einer Übung zu " +
-        "(exercise, z. B. Seitheben) und trägt es im Studio ein. " +
-        "Das Foto selbst kann nicht per MCP übertragen werden: gib dem Nutzer " +
-        "den zurückgegebenen Link, dort lädt er es hoch.",
+        "Legt ein Gerät (eine Maschine; auch freie Gewichte wie Kurzhanteln) an. " +
+        "Typischer Ablauf: der Nutzer schickt ein Foto, du erkennst Hersteller " +
+        "und Modell (am besten am Typenschild), prüfst mit search_equipment auf " +
+        "Dubletten und darfst online nach Daten suchen (Datenblatt, " +
+        "Übersetzung, Eigengewicht). Recherchierte Werte sind Vorschläge: " +
+        "nenne sie dem Nutzer mit Quelle und rufe das Werkzeug ERST NACH SEINER " +
+        "BESTÄTIGUNG auf – geraten wird nicht. Optional ordnet das Werkzeug das " +
+        "Gerät gleich einer Übung zu und trägt es im Studio ein. Das Foto kann " +
+        "nicht per MCP übertragen werden: die Antwort enthält einen Einmal-Link " +
+        "(30 Minuten, ein Foto), den du dem Nutzer gibst – dort wählt er sein " +
+        "Foto aus. Lade niemals Bilder aus dem Netz hoch (Urheberrecht); nur " +
+        "eigene Fotos des Nutzers.",
       inputSchema: {
         name: z.string().min(1).max(80).describe("Name, z. B. Matrix Ultra Lateral Raise"),
         manufacturer: z.string().max(80).optional(),
@@ -988,7 +991,10 @@ export function registerGymTools(server: McpServer, user: User): void {
           await linkGymEquipment(user, gymId, equipmentId);
           lines.push(`Steht im Studio „${args.gym}“.`);
         }
-        lines.push(`Foto hochladen: ${equipmentUrl(equipmentId)}`);
+        const link = await createPhotoUploadLink(user, equipmentId);
+        lines.push(
+          `Foto hochladen (Einmal-Link, ${UPLOAD_LINK_MINUTES} Minuten gültig, ein Foto): ${link.url}`,
+        );
         return lines.join("\n");
       }),
   );
@@ -1026,6 +1032,25 @@ export function registerGymTools(server: McpServer, user: User): void {
           notes: args.notes ?? found.notes,
         });
         return `Gerät „${args.name ?? found.name}“ gespeichert. Fotos: ${equipmentUrl(found.id)}`;
+      }),
+  );
+
+  server.registerTool(
+    "photo_upload_link",
+    {
+      title: "Link für ein Maschinenfoto",
+      description:
+        "Gibt einen Einmal-Link aus, über den der Nutzer ein Foto für eine " +
+        "bestehende Maschine hochlädt – ohne Anmeldung, 30 Minuten gültig, " +
+        "für genau ein Foto. Nutze das, wenn der Nutzer ein Foto nachreichen " +
+        "will; Fotos selbst kann MCP nicht übertragen.",
+      inputSchema: { equipment: z.string().describe("Name der Maschine") },
+    },
+    async ({ equipment }) =>
+      run(async () => {
+        const found = await resolveEquipment(user, equipment);
+        const link = await createPhotoUploadLink(user, found.id);
+        return `Foto für „${found.name}“ hochladen (${UPLOAD_LINK_MINUTES} Minuten gültig, ein Foto): ${link.url}`;
       }),
   );
 }
