@@ -55,6 +55,24 @@ input[type="number"] {
   -moz-appearance: textfield;
 }
 
+/*
+ * iOS Safari gibt Datums- und Zeitfeldern eine eigene Mindestbreite, die
+ * width: 100% überstimmt – zwei davon nebeneinander liefen über den
+ * Kartenrand. Ohne native Optik gelten Breite und Höhe wieder, ein leeres
+ * Feld fällt nicht mehr flacher aus, und der Wert steht links wie in jedem
+ * anderen Feld. Der Picker beim Antippen bleibt unverändert.
+ */
+input[type="date"],
+input[type="datetime-local"],
+input[type="time"] {
+  -webkit-appearance: none;
+  appearance: none;
+  min-width: 0;
+}
+input::-webkit-date-and-time-value {
+  text-align: left;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
