@@ -199,6 +199,8 @@ export const equipment = sqliteTable(
     loadFactor: real("load_factor").notNull().default(1),
     /** Was ohne Gewicht schon bewegt wird, z. B. der Schlitten der Beinpresse. */
     baseLoadKg: real("base_load_kg").notNull().default(0),
+    /** Kleinster Gewichtssprung – steuert die +/- Tasten; pro Studio überschreibbar. */
+    weightStepKg: real("weight_step_kg").notNull().default(2.5),
     notes: text("notes"),
     createdAt: integer("created_at").notNull().default(now),
   },
@@ -249,6 +251,11 @@ export const movements = sqliteTable(
     name: text("name").notNull(),
     /** Gilt für alle Varianten und wird dorthin gespiegelt, siehe exercises.muscleGroup. */
     muscleGroup: text("muscle_group"),
+    /** Wie die Übung gemessen wird – gilt für alle ihre Maschinen. */
+    trackingMode: text("tracking_mode")
+      .notNull()
+      .default("weight_reps")
+      .$type<TrackingMode>(),
     /**
      * Aus wger übernommen: die Angaben, die CC-BY-SA verlangt – Quelle,
      * Urheber, Lizenz – sowie der Name zum Zeitpunkt der Übernahme, damit
@@ -358,9 +365,12 @@ export const planExercises = sqliteTable(
     planId: text("plan_id")
       .notNull()
       .references(() => plans.id, { onDelete: "cascade" }),
-    exerciseId: text("exercise_id")
+    /** Der Plan nennt die Übung; die Maschine wird im Training gewählt. */
+    movementId: text("movement_id")
       .notNull()
-      .references(() => exercises.id, { onDelete: "cascade" }),
+      .references(() => movements.id, { onDelete: "cascade" }),
+    /** Bevorzugte Variante (Übung × Maschine) – nur ein Vorschlag, optional. */
+    exerciseId: text("exercise_id").references(() => exercises.id, { onDelete: "set null" }),
     position: integer("position").notNull(),
     targetSets: integer("target_sets").notNull().default(3),
     targetRepsMin: integer("target_reps_min").notNull().default(8),
@@ -389,6 +399,46 @@ export const workouts = sqliteTable(
     notes: text("notes"),
   },
   (t) => [index("workouts_user_started_idx").on(t.userId, t.startedAt)],
+);
+
+/**
+ * Welche Maschinen zu welcher Übung passen – der Kabelturm passt zu
+ * Seitheben, Trizepsdrücken und Face Pulls. Gemeinsamer Katalog: anlegen darf
+ * jeder, entfernen wer es angelegt hat oder ein Admin.
+ */
+export const movementEquipment = sqliteTable(
+  "movement_equipment",
+  {
+    movementId: text("movement_id")
+      .notNull()
+      .references(() => movements.id, { onDelete: "cascade" }),
+    equipmentId: text("equipment_id")
+      .notNull()
+      .references(() => equipment.id, { onDelete: "cascade" }),
+    addedBy: text("added_by").references(() => users.id, { onDelete: "set null" }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.movementId, t.equipmentId] }),
+    index("movement_equipment_equipment_idx").on(t.equipmentId),
+  ],
+);
+
+/** Welche Maschinen in welchem Studio stehen – gemeinsamer Katalog. */
+export const gymEquipment = sqliteTable(
+  "gym_equipment",
+  {
+    gymId: text("gym_id")
+      .notNull()
+      .references(() => gyms.id, { onDelete: "cascade" }),
+    equipmentId: text("equipment_id")
+      .notNull()
+      .references(() => equipment.id, { onDelete: "cascade" }),
+    addedBy: text("added_by").references(() => users.id, { onDelete: "set null" }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.gymId, t.equipmentId] }),
+    index("gym_equipment_equipment_idx").on(t.equipmentId),
+  ],
 );
 
 /**

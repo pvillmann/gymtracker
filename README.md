@@ -49,24 +49,27 @@ Homescreen.
 - Mehrere Trainingspläne mit sortierter Übungsreihenfolge und Zielvorgaben
   (Sätze, Wiederholungsbereich, Pausenlänge)
 - Ein Startpaket gängiger Geräte lässt sich per Klick anlegen
-- Bewegungen mit mehreren Geräten: „Seitheben“ an der Maschine und am
-  Kabelturm sind zwei Geräte derselben Bewegung. Der Plan nennt die Bewegung,
-  das Gerät wählst du im Training (vorausgewählt ist das zuletzt genutzte).
-  Verglichen wird nur am selben Gerät – dieselben Kilos sind an Maschine und
-  Kabelzug nicht dieselbe Last.
+- Übung, Maschine, Studio: Eine Übung (z. B. „Seitheben“) geht an mehreren
+  Maschinen, eine Maschine steht in mehreren Studios – beides wird einmal
+  zugeordnet und gilt für alle. Im Plan steht nur die Übung; im Training
+  schlägt die App die Maschine vor, die im gewählten Studio steht (bei
+  mehreren die dort zuletzt benutzte). Andere Maschinen der Übung lassen sich
+  umschalten; wer an einer trainiert, trägt sie damit im Studio ein.
+  Verglichen wird nur an derselben Maschine – dieselben Kilos sind an
+  Maschine und Kabelzug nicht dieselbe Last.
 - Studios: Beim Trainingsstart fragt die App, wo du bist – mit „Nicht erneut
-  fragen“ merkt sich der Plan das Studio. Vorausgewählt wird das Gerät, das du
-  dort zuletzt benutzt hast; Einstellungen und Gewichtsstufe lassen sich pro
-  Studio hinterlegen
-- Geräte mit Foto, Hersteller, Übersetzung (z. B. 2:1 am Kabelzug) und
-  Eigengewicht. Übersetzung und Eigengewicht fließen ins bewegte Gewicht ein;
+  fragen“ merkt sich der Plan das Studio. Einstellungen und Gewichtsstufe
+  lassen sich pro Studio hinterlegen
+- Maschinen mit Foto, Hersteller, Übersetzung (z. B. 2:1 am Kabelzug),
+  Eigengewicht und Gewichtsstufe. Übersetzung und Eigengewicht fließen ins bewegte Gewicht ein;
   Fotos werden verkleinert und ohne Metadaten (auch ohne GPS) im Daten-Volume
   gespeichert
-- Gemeinsamer Katalog: Bewegungen, Geräte (samt Fotos) und Studios gelten für
+- Gemeinsamer Katalog: Übungen, Maschinen (samt Fotos), Studios und ihre
+  Zuordnungen gelten für
   alle Nutzer der Instanz. Jeder darf sie benutzen und neue anlegen; ändern
   oder löschen nur, wer sie angelegt hat, oder ein Administrator. Trainings,
   Pläne und Einstellungen bleiben privat.
-- Neue Bewegungen lassen sich aus der offenen Übungsdatenbank
+- Neue Übungen lassen sich aus der offenen Übungsdatenbank
   [wger](https://wger.de) übernehmen (Name und Muskelgruppe). Lizenz und
   Urheber werden pro Eintrag mitgespeichert und angezeigt (CC-BY-SA);
   braucht Internetzugang der Instanz, `WGER_URL` stellt eine eigene
@@ -101,6 +104,9 @@ Homescreen.
 - Jeder Nutzer erzeugt sich in den Einstellungen seinen eigenen Schlüssel
 - Lesen (Pläne, Verlauf, letzte Leistung, Statistik) und Schreiben (Übungen und
   Pläne anlegen, Training starten, Sätze protokollieren, Training beenden)
+- Sätze nennen die Übung; die Maschine ergibt sich aus Training und Studio
+  oder wird bei Bedarf dazugesagt. Maschinen lassen sich per Chat Übungen
+  und Studios zuordnen
 - Geräte aus einem Foto anlegen: Claude erkennt die Maschine im Chat, legt sie
   nach deiner Bestätigung an und gibt dir den Link für den Foto-Upload
 

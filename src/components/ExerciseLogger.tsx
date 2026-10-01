@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useActionState, useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 import {
-  chooseVariantAction,
+  chooseMachineAction,
   deleteSetAction,
   logSetAction,
   rateSetAction,
@@ -66,7 +66,11 @@ export type LoggerTarget = {
 };
 
 /** Ein anderes Gerät derselben Bewegung, zum Umschalten im Training. */
-export type LoggerVariant = { id: string; label: string };
+/**
+ * Eine Maschine, an der die Übung laufen kann. key ist die Maschinen-ID oder
+ * "none" für "ohne Gerät"; elsewhere heißt: steht nicht im gewählten Studio.
+ */
+export type LoggerMachine = { key: string; label: string; elsewhere: boolean };
 
 /** Die letzte Leistung an einem anderen Gerät – Hinweis, kein Vergleich. */
 export type LoggerElsewhere = { name: string; relative: string; summary: string };
@@ -172,7 +176,9 @@ export function ExerciseLogger({
   loggedSets,
   previous,
   bodyweightKg,
-  variants = [],
+  movementId,
+  machines = [],
+  activeMachine = "none",
   elsewhere = null,
 }: {
   workoutId: string;
@@ -182,7 +188,10 @@ export function ExerciseLogger({
   previous: LoggerPrevious | null;
   bodyweightKg: number;
   /** Alle Geräte der Bewegung, wenn es mehr als eines gibt. */
-  variants?: LoggerVariant[];
+  movementId?: string;
+  /** Die Maschinen der Übung zum Umschalten. */
+  machines?: LoggerMachine[];
+  activeMachine?: string;
   elsewhere?: LoggerElsewhere | null;
 }) {
   const boundAction = useMemo(
@@ -365,19 +374,20 @@ export function ExerciseLogger({
         </span>
       </div>
 
-      {variants.length > 1 ? (
-        <div className="mt-3 flex flex-wrap gap-1.5" role="group" aria-label="Gerät">
-          {variants.map((variant) => {
-            const active = variant.id === exercise.id;
+      {movementId && machines.length > 0 ? (
+        <div className="mt-3 flex flex-wrap gap-1.5" role="group" aria-label="Maschine">
+          {machines.map((machine) => {
+            const active = machine.key === activeMachine;
             return (
               <button
-                key={variant.id}
+                key={machine.key}
                 type="button"
                 aria-pressed={active}
                 disabled={active || isPending}
+                title={machine.elsewhere ? "Steht laut Katalog nicht in diesem Studio" : undefined}
                 onClick={() => {
                   startTransition(() => {
-                    void chooseVariantAction(workoutId, variant.id);
+                    void chooseMachineAction(workoutId, movementId, machine.key);
                   });
                 }}
                 className={cx(
@@ -387,7 +397,8 @@ export function ExerciseLogger({
                     : "border-line bg-surface-2 text-muted hover:text-fg disabled:opacity-60",
                 )}
               >
-                {variant.label}
+                {machine.label}
+                {machine.elsewhere ? <span className="text-faint"> *</span> : null}
               </button>
             );
           })}

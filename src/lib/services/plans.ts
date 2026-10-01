@@ -4,7 +4,7 @@ import { and, asc, eq, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
-  exercises,
+  movements,
   planExercises,
   plans,
   type TrackingMode,
@@ -83,12 +83,12 @@ export async function getOwnedPlanItem(userId: string, itemId: string) {
       id: planExercises.id,
       planId: planExercises.planId,
       position: planExercises.position,
-      trackingMode: exercises.trackingMode,
-      exerciseName: exercises.name,
+      trackingMode: movements.trackingMode,
+      exerciseName: movements.name,
     })
     .from(planExercises)
     .innerJoin(plans, eq(plans.id, planExercises.planId))
-    .innerJoin(exercises, eq(exercises.id, planExercises.exerciseId))
+    .innerJoin(movements, eq(movements.id, planExercises.movementId))
     .where(and(eq(planExercises.id, itemId), eq(plans.userId, userId)))
     .limit(1);
 
@@ -140,24 +140,33 @@ export async function deletePlan(user: User, planId: string): Promise<void> {
   await db.delete(plans).where(and(eq(plans.id, planId), eq(plans.userId, user.id)));
 }
 
+/**
+ * Nimmt eine Übung in den Plan. Die Maschine steht nicht im Plan – sie wird
+ * im Training je nach Studio gewählt.
+ */
 export async function addPlanItem(
   user: User,
   planId: string,
-  exerciseId: string,
+  movementId: string,
   targets: PlanTargets,
 ): Promise<{ itemId: string; position: number }> {
   await requireOwnPlan(user.id, planId);
 
-  const owned = await db
-    .select({ id: exercises.id, trackingMode: exercises.trackingMode })
-    .from(exercises)
-    .where(and(eq(exercises.id, exerciseId), eq(exercises.userId, user.id)))
+  const [movement] = await db
+    .select({ id: movements.id, trackingMode: movements.trackingMode })
+    .from(movements)
+    .where(eq(movements.id, movementId))
     .limit(1);
+  if (!movement) throw new ServiceError("Diese Übung gibt es nicht.");
 
-  const exercise = owned[0];
-  if (!exercise) throw new ServiceError("Diese Übung gibt es nicht.");
+  const [already] = await db
+    .select({ id: planExercises.id })
+    .from(planExercises)
+    .where(and(eq(planExercises.planId, planId), eq(planExercises.movementId, movementId)))
+    .limit(1);
+  if (already) throw new ServiceError("Diese Übung steht schon im Plan.");
 
-  const resolved = resolveTargets(exercise.trackingMode, targets);
+  const resolved = resolveTargets(movement.trackingMode, targets);
 
   const [last] = await db
     .select({ max: sql<number | null>`max(${planExercises.position})` })
@@ -170,7 +179,7 @@ export async function addPlanItem(
   await db.insert(planExercises).values({
     id: itemId,
     planId,
-    exerciseId,
+    movementId,
     position,
     ...resolved,
   });

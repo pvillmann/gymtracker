@@ -1,0 +1,222 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+
+import {
+  linkMovementMachineAction,
+  unlinkMovementMachineAction,
+  updateMovementAction,
+} from "@/actions/movements";
+import { InlineActionForm } from "@/components/InlineActionForm";
+import { MovementForm } from "@/components/MovementForm";
+import { WgerAttribution } from "@/components/WgerAttribution";
+import { Card, PageHeader, Select } from "@/components/ui";
+import { requireUser } from "@/lib/auth";
+import { TRACKING_MODES } from "@/lib/constants";
+import { describeSets } from "@/lib/describe";
+import { formatRelativeDay } from "@/lib/format";
+import {
+  getMovement,
+  getPreviousPerformances,
+  listEquipment,
+  listExercises,
+  listGyms,
+  listMachineLinkRows,
+} from "@/lib/queries";
+import { canEditCatalog } from "@/lib/services/catalog";
+
+export const metadata: Metadata = { title: "Übung · GymTracker" };
+
+/**
+ * Eine Übung mit allen Maschinen, an denen sie geht – und wo diese stehen.
+ * Im Training schlägt die App daraus die Maschine im aktuellen Studio vor.
+ */
+export default async function MovementPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const user = await requireUser();
+  const movement = await getMovement(id);
+  if (!movement) notFound();
+
+  const [equipment, gyms, links, variants] = await Promise.all([
+    listEquipment(),
+    listGyms(),
+    listMachineLinkRows(),
+    listExercises(user.id, { includeArchived: true }),
+  ]);
+  const own = variants.filter((v) => v.movementId === movement.id);
+  const previous = await getPreviousPerformances(
+    user.id,
+    own.map((v) => v.id),
+  );
+  const gymName = new Map(gyms.map((g) => [g.id, g.name]));
+  const linked = links.movementLinks.filter((l) => l.movementId === movement.id);
+  const linkedIds = new Set(linked.map((l) => l.equipmentId));
+
+  const machines = await Promise.all(
+    equipment
+      .filter((e) => linkedIds.has(e.id))
+      .map(async (machine) => {
+        const link = linked.find((l) => l.equipmentId === machine.id)!;
+        const variant = own.find((v) => v.equipmentId === machine.id);
+        return {
+          machine,
+          variant,
+          last: variant ? previous.get(variant.id) : undefined,
+          gyms: links.gymLinks
+            .filter((g) => g.equipmentId === machine.id)
+            .map((g) => gymName.get(g.gymId))
+            .filter((n): n is string => Boolean(n))
+            .sort(),
+          removable: await canEditCatalog(user, link.addedBy ?? ""),
+        };
+      }),
+  );
+  const bare = own.find((v) => v.equipmentId === null);
+  const addable = equipment.filter((e) => !linkedIds.has(e.id));
+  const editable = await canEditCatalog(user, movement.userId);
+  const mode = TRACKING_MODES.find((m) => m.value === movement.trackingMode)?.label;
+
+  return (
+    <>
+      <PageHeader
+        title={movement.name}
+        subtitle={[
+          movement.muscleGroup,
+          mode,
+          movement.ownerName ? `angelegt von ${movement.ownerName}` : null,
+        ]
+          .filter(Boolean)
+          .join(" · ")}
+        action={
+          <Link href="/exercises" className="text-sm text-muted hover:text-fg">
+            Zurück
+          </Link>
+        }
+      />
+      <WgerAttribution movement={movement} className="-mt-3 mb-5 px-1 text-xs text-faint" />
+
+      <section className="mb-6">
+        <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+          Maschinen
+        </h2>
+        <Card className="p-1">
+          {machines.length === 0 && !bare ? (
+            <p className="px-3 py-3 text-sm text-muted">
+              Noch keine Maschine. Ordne unten zu, woran die Übung geht – im
+              Training bekommst du dann die Maschine vorgeschlagen, die in deinem
+              Studio steht.
+            </p>
+          ) : (
+            <ul className="divide-y divide-line-soft">
+              {machines.map(({ machine, variant, last, gyms: where, removable }) => (
+                <li key={machine.id} className="flex items-start gap-3 px-3 py-3">
+                  {machine.imageId ? (
+                    <img
+                      src={`/api/equipment-images/${machine.imageId}?thumb`}
+                      alt=""
+                      className="size-12 shrink-0 rounded-lg object-cover"
+                    />
+                  ) : (
+                    <div className="size-12 shrink-0 rounded-lg bg-surface-2" aria-hidden="true" />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <Link href={`/equipment/${machine.id}`} className="font-semibold hover:underline">
+                      {machine.name}
+                    </Link>
+                    <p className="mt-0.5 text-sm text-muted">
+                      {where.length > 0 ? `steht in: ${where.join(", ")}` : "in keinem Studio eingetragen"}
+                    </p>
+                    {last && variant ? (
+                      <p className="mt-0.5 text-xs text-faint">
+                        {describeSets(last.sets, variant.trackingMode)} · {formatRelativeDay(last.performedAt)}{" "}
+                        ·{" "}
+                        <Link href={`/exercises/${variant.id}`} className="underline">
+                          Verlauf
+                        </Link>
+                      </p>
+                    ) : null}
+                  </div>
+                  {removable ? (
+                    <InlineActionForm
+                      action={unlinkMovementMachineAction}
+                      fields={{ movementId: movement.id, equipmentId: machine.id }}
+                      label="Entfernen"
+                      variant="ghost"
+                    />
+                  ) : null}
+                </li>
+              ))}
+              {bare ? (
+                <li className="flex items-start gap-3 px-3 py-3">
+                  <div className="size-12 shrink-0 rounded-lg bg-surface-2" aria-hidden="true" />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold">ohne Gerät</p>
+                    {previous.get(bare.id) ? (
+                      <p className="mt-0.5 text-xs text-faint">
+                        {describeSets(previous.get(bare.id)!.sets, bare.trackingMode)} ·{" "}
+                        {formatRelativeDay(previous.get(bare.id)!.performedAt)} ·{" "}
+                        <Link href={`/exercises/${bare.id}`} className="underline">
+                          Verlauf
+                        </Link>
+                      </p>
+                    ) : null}
+                  </div>
+                </li>
+              ) : null}
+            </ul>
+          )}
+        </Card>
+
+        <Card className="mt-3 space-y-2">
+          {addable.length > 0 ? (
+            <InlineActionForm
+              action={linkMovementMachineAction}
+              fields={{ movementId: movement.id }}
+              label="Zuordnen"
+              pendingLabel="…"
+              variant="primary"
+            >
+              <Select name="equipmentId" aria-label="Maschine" defaultValue="" required className="h-9 py-0 text-sm">
+                <option value="" disabled>
+                  Maschine wählen …
+                </option>
+                {addable.map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.name}
+                  </option>
+                ))}
+              </Select>
+            </InlineActionForm>
+          ) : null}
+          <p className="text-xs text-faint">
+            Fehlt die Maschine?{" "}
+            <Link href="/equipment/new" className="font-medium text-accent">
+              Neue Maschine anlegen
+            </Link>{" "}
+            – danach hier zuordnen. Zuordnungen gelten für alle; entfernen kann sie,
+            wer sie angelegt hat, oder ein Administrator.
+          </p>
+        </Card>
+      </section>
+
+      {editable ? (
+        <section className="mb-6">
+          <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+            Bearbeiten
+          </h2>
+          <MovementForm
+            action={updateMovementAction.bind(null, movement.id)}
+            movement={movement}
+            submitLabel="Änderungen speichern"
+          />
+        </section>
+      ) : (
+        <p className="px-1 text-sm text-muted">
+          Die Übung gehört zum gemeinsamen Katalog. Ändern kann sie{" "}
+          {movement.ownerName ?? "der Ersteller"} oder ein Administrator; Maschinen
+          zuordnen kann jeder.
+        </p>
+      )}
+    </>
+  );
+}

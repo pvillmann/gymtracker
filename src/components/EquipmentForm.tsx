@@ -88,6 +88,16 @@ export function EquipmentForm({
             defaultValue={formatKg(equipment?.baseLoadKg ?? 0)}
           />
         </Field>
+        <Field
+          label="Gewichtsstufe (kg)"
+          hint="Kleinster Sprung an der Maschine – steuert die +/− Tasten im Training. Pro Studio lässt er sich in der Übung abweichend einstellen."
+        >
+          <Input
+            name="weightStepKg"
+            inputMode="decimal"
+            defaultValue={String(equipment?.weightStepKg ?? 2.5).replace(".", ",")}
+          />
+        </Field>
         <Field label="Notiz">
           <Textarea
             name="notes"

@@ -26,6 +26,8 @@ export type EquipmentInput = {
   kind: EquipmentKind;
   loadFactor: number;
   baseLoadKg: number;
+  /** Kleinster Gewichtssprung – steuert die +/− Tasten im Training. */
+  weightStepKg?: number;
   notes?: string | null;
 };
 

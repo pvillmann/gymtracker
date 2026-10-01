@@ -85,6 +85,13 @@
       "when": 1790852936243,
       "tag": "0011_movement_source",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1790867642265,
+      "tag": "0012_machines_in_gyms",
+      "breakpoints": true
     }
   ]
 }

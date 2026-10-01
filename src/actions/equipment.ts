@@ -38,6 +38,9 @@ const equipmentInput = z.object({
   baseLoadKg: decimal.pipe(
     z.number().min(0, "Das Eigengewicht kann nicht negativ sein.").max(500),
   ),
+  weightStepKg: decimal.pipe(
+    z.number().min(0.25, "Die Gewichtsstufe muss mindestens 0,25 kg sein.").max(50),
+  ),
   notes: z
     .string()
     .trim()
@@ -54,6 +57,7 @@ function readForm(formData: FormData) {
     kind: text(formData, "kind", "other"),
     loadFactor: text(formData, "loadFactor", "1"),
     baseLoadKg: text(formData, "baseLoadKg", "0"),
+    weightStepKg: text(formData, "weightStepKg", "2.5"),
     notes: optionalText(formData, "notes"),
   });
 }
