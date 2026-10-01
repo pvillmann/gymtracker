@@ -73,9 +73,14 @@ export default async function ExercisesPage() {
         title="Übungen"
         subtitle={`${active.length} aktiv${archived.length > 0 ? ` · ${archived.length} archiviert` : ""}`}
         action={
-          <ButtonLink href="/exercises/new" size="sm">
-            + Neu
-          </ButtonLink>
+          <div className="flex gap-2">
+            <ButtonLink href="/equipment" size="sm" variant="secondary">
+              Geräte
+            </ButtonLink>
+            <ButtonLink href="/exercises/new" size="sm">
+              + Neu
+            </ButtonLink>
+          </div>
         }
       />
 

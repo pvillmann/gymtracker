@@ -26,6 +26,7 @@ import {
   getExerciseSessions,
   getPlan,
   getPreviousPerformances,
+  listEquipment,
   listExercises,
   listMovements,
   listPlanItems,
@@ -35,14 +36,15 @@ import {
 } from "@/lib/queries";
 import { ServiceError, isServiceError } from "@/lib/services/errors";
 import { createExercise } from "@/lib/services/exercises";
-import { findOrCreateGym } from "@/lib/services/gyms";
+import { createEquipment, updateEquipment } from "@/lib/services/equipment";
+import { findOrCreateGym, markExerciseInGym } from "@/lib/services/gyms";
 import {
   addPlanItem,
   createPlan,
   removePlanItem,
   updatePlanItem,
 } from "@/lib/services/plans";
-import { resolveExercise, resolvePlan } from "@/lib/services/resolve";
+import { resolveEquipment, resolveExercise, resolvePlan } from "@/lib/services/resolve";
 import { totals, weekStreak } from "@/lib/stats";
 import {
   deleteLastSet,
@@ -755,6 +757,177 @@ export function registerGymTools(server: McpServer, user: User): void {
         await discardWorkout(user, workout.id);
 
         return `Training „${workout.name}“ vom ${formatDate(workout.startedAt)} gelöscht.`;
+      }),
+  );
+
+  // ---------------------------------------------------------------- Geräte
+
+  /** Fotos lassen sich nicht per MCP übertragen – hochgeladen wird im Browser. */
+  const equipmentUrl = (id: string) =>
+    `${(process.env.APP_URL ?? "").replace(/\/$/, "")}/equipment/${id}`;
+
+  const ratioSchema = z
+    .enum(["1:1", "2:1", "3:1", "4:1"])
+    .optional()
+    .describe("Übersetzung wie am Gerät angegeben; 2:1 heißt: halbe Last kommt an");
+  const factorOf = (ratio: string | undefined) =>
+    ratio ? 1 / Number(ratio.split(":")[0]) : undefined;
+  const kindSchema = z
+    .enum(["stack", "plates", "cable", "free", "bodyweight", "other"])
+    .optional()
+    .describe(
+      "stack = Steckgewicht, plates = Scheiben, cable = Kabelzug, free = Hanteln, " +
+        "bodyweight = Station für Körpergewicht, other = sonstiges",
+    );
+
+  server.registerTool(
+    "search_equipment",
+    {
+      title: "Geräte suchen",
+      description:
+        "Durchsucht die angelegten Geräte (Maschinen) nach Name, Hersteller " +
+        "und Modell. Vor create_equipment aufrufen, damit nichts doppelt " +
+        "angelegt wird – etwa nachdem du ein Gerät auf einem Foto erkannt hast.",
+      inputSchema: {
+        query: z.string().optional().describe("Suchbegriff; leer listet alle"),
+      },
+    },
+    async ({ query }) =>
+      run(async () => {
+        const [all, exercises] = await Promise.all([
+          listEquipment(user.id),
+          listExercises(user.id),
+        ]);
+        const needle = (query ?? "").toLowerCase().trim();
+        const hits = all.filter((e) =>
+          [e.name, e.manufacturer, e.model]
+            .filter(Boolean)
+            .some((v) => v!.toLowerCase().includes(needle)),
+        );
+        if (hits.length === 0) {
+          return needle ? `Kein Gerät passt zu „${query}“.` : "Noch keine Geräte angelegt.";
+        }
+        return hits
+          .map((e) => {
+            const used = exercises.filter((x) => x.equipmentId === e.id).map((x) => x.name);
+            const meta = [
+              [e.manufacturer, e.model].filter(Boolean).join(" "),
+              e.loadFactor !== 1 ? `Übersetzung ${Math.round(1 / e.loadFactor)}:1` : null,
+              e.baseLoadKg > 0 ? `Eigengewicht ${formatKg(e.baseLoadKg)} kg` : null,
+              e.imageId ? "mit Foto" : "ohne Foto",
+            ]
+              .filter(Boolean)
+              .join(", ");
+            return `- ${e.name} (${meta})${used.length ? ` – Übungen: ${used.join(", ")}` : ""}`;
+          })
+          .join("\n");
+      }),
+  );
+
+  server.registerTool(
+    "create_equipment",
+    {
+      title: "Gerät anlegen",
+      description:
+        "Legt ein Gerät (eine Maschine) an. Typischer Ablauf: der Nutzer " +
+        "schickt ein Foto, du erkennst Hersteller und Modell (am besten am " +
+        "Typenschild), prüfst mit search_equipment auf Dubletten und fragst " +
+        "den Nutzer, ob deine Erkennung stimmt. ERST NACH SEINER BESTÄTIGUNG " +
+        "aufrufen – geraten wird nicht. Übersetzung und Eigengewicht nur " +
+        "angeben, wenn sie am Gerät stehen oder der Nutzer sie nennt. " +
+        "Optional legt das Werkzeug gleich die Übung an diesem Gerät an " +
+        "(movement = Bewegung, z. B. Seitheben) und vermerkt sie im Studio. " +
+        "Das Foto selbst kann nicht per MCP übertragen werden: gib dem Nutzer " +
+        "den zurückgegebenen Link, dort lädt er es hoch.",
+      inputSchema: {
+        name: z.string().min(1).max(80).describe("Name, z. B. Matrix Ultra Lateral Raise"),
+        manufacturer: z.string().max(80).optional(),
+        model: z.string().max(80).optional(),
+        kind: kindSchema,
+        ratio: ratioSchema,
+        base_load_kg: z.number().min(0).max(500).optional().describe("Eigengewicht, z. B. Schlitten"),
+        notes: z.string().max(1000).optional(),
+        movement: z
+          .string()
+          .max(80)
+          .optional()
+          .describe("Bewegung, für die das Gerät gleich als Übung angelegt wird"),
+        exercise_name: z
+          .string()
+          .max(80)
+          .optional()
+          .describe("Name dieser Übung; Standard: Bewegung + Gerätename"),
+        weight_step_kg: z.number().positive().max(50).optional(),
+        gym: z.string().max(60).optional().describe("Studio, in dem das Gerät steht"),
+      },
+    },
+    async (args) =>
+      run(async () => {
+        const equipmentId = await createEquipment(user, {
+          name: args.name,
+          manufacturer: args.manufacturer ?? null,
+          model: args.model ?? null,
+          kind: args.kind ?? "other",
+          loadFactor: factorOf(args.ratio) ?? 1,
+          baseLoadKg: args.base_load_kg ?? 0,
+          notes: args.notes ?? null,
+        });
+
+        const lines = [`Gerät „${args.name}“ angelegt.`];
+        if (args.movement) {
+          const exerciseName = args.exercise_name ?? `${args.movement} ${args.name}`;
+          const exerciseId = await createExercise(user, {
+            name: exerciseName,
+            movementName: args.movement,
+            equipmentId,
+            trackingMode: "weight_reps",
+            weightStepKg: args.weight_step_kg ?? 2.5,
+          });
+          lines.push(`Übung „${exerciseName}“ für die Bewegung „${args.movement}“ angelegt.`);
+          if (args.gym) {
+            const gymId = await findOrCreateGym(user, args.gym);
+            await markExerciseInGym(gymId, exerciseId);
+            lines.push(`Im Studio „${args.gym}“ vermerkt.`);
+          }
+        }
+        lines.push(`Foto hochladen: ${equipmentUrl(equipmentId)}`);
+        return lines.join("\n");
+      }),
+  );
+
+  server.registerTool(
+    "update_equipment",
+    {
+      title: "Gerät ändern",
+      description:
+        "Ändert Angaben eines Geräts, z. B. die Übersetzung, sobald sie am " +
+        "Gerät abgelesen wurde. Nicht genannte Felder bleiben unverändert. " +
+        "Eine geänderte Übersetzung oder ein geändertes Eigengewicht rechnet " +
+        "das bewegte Gewicht bisheriger Sätze an diesem Gerät neu.",
+      inputSchema: {
+        equipment: z.string().describe("Name des Geräts"),
+        name: z.string().min(1).max(80).optional(),
+        manufacturer: z.string().max(80).optional(),
+        model: z.string().max(80).optional(),
+        kind: kindSchema,
+        ratio: ratioSchema,
+        base_load_kg: z.number().min(0).max(500).optional(),
+        notes: z.string().max(1000).optional(),
+      },
+    },
+    async (args) =>
+      run(async () => {
+        const found = await resolveEquipment(user, args.equipment);
+        await updateEquipment(user, found.id, {
+          name: args.name ?? found.name,
+          manufacturer: args.manufacturer ?? found.manufacturer,
+          model: args.model ?? found.model,
+          kind: args.kind ?? found.kind,
+          loadFactor: factorOf(args.ratio) ?? found.loadFactor,
+          baseLoadKg: args.base_load_kg ?? found.baseLoadKg,
+          notes: args.notes ?? found.notes,
+        });
+        return `Gerät „${args.name ?? found.name}“ gespeichert. Fotos: ${equipmentUrl(found.id)}`;
       }),
   );
 }

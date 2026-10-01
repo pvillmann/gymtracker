@@ -26,6 +26,7 @@ import {
   listWorkoutSets,
   getGymExercises,
   getLastUsedInGym,
+  listEquipment,
   listGyms,
   listMovements,
   listWorkoutVariants,
@@ -48,7 +49,7 @@ export default async function WorkoutPage({
   if (!workout) notFound();
   if (workout.finishedAt !== null) redirect(`/history/${workout.id}`);
 
-  const [planItems, loggedSets, allExercises, chosen, movements, gyms, gymExercises] =
+  const [planItems, loggedSets, allExercises, chosen, movements, gyms, gymExercises, equipment] =
     await Promise.all([
     workout.planId ? listPlanItems(workout.planId) : Promise.resolve([]),
     listWorkoutSets(workout.id),
@@ -57,7 +58,9 @@ export default async function WorkoutPage({
     listMovements(user.id),
     listGyms(user.id),
     workout.gymId ? getGymExercises(workout.gymId) : Promise.resolve(new Map()),
+    listEquipment(user.id),
   ]);
+  const equipmentById = new Map(equipment.map((e) => [e.id, e]));
   const gym = gyms.find((g) => g.id === workout.gymId) ?? null;
   const movementName = new Map(movements.map((m) => [m.id, m.name]));
   /** "Seitheben Kabelturm" unter "Seitheben" heißt in der Auswahl nur "Kabelturm". */
@@ -229,6 +232,17 @@ export default async function WorkoutPage({
                     gymExercises.get(exerciseId)?.weightStepKg ?? exercise.weightStepKg,
                   machineSetup:
                     gymExercises.get(exerciseId)?.machineSetup ?? exercise.machineSetup,
+                  imageId: exercise.equipmentId
+                    ? (equipmentById.get(exercise.equipmentId)?.imageId ?? null)
+                    : null,
+                  transfer: (() => {
+                    const device = exercise.equipmentId
+                      ? equipmentById.get(exercise.equipmentId)
+                      : undefined;
+                    return device
+                      ? { loadFactor: device.loadFactor, baseLoadKg: device.baseLoadKg }
+                      : null;
+                  })(),
                 }}
                 target={
                   target

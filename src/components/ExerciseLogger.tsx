@@ -26,7 +26,13 @@ import {
 } from "@/lib/describe";
 import { formatDuration, formatKg, parseDurationInput } from "@/lib/format";
 import type { FormState } from "@/lib/result";
-import { compareSets, percentChange, setVolume, trendOf } from "@/lib/training";
+import {
+  compareSets,
+  percentChange,
+  setVolume,
+  trendOf,
+  type LoadTransfer,
+} from "@/lib/training";
 
 export type LoggerSet = {
   id: string;
@@ -44,6 +50,10 @@ export type LoggerExercise = {
   trackingMode: TrackingMode;
   weightStepKg: number;
   machineSetup: string | null;
+  /** Vorschaubild des Geräts, damit man die Maschine im Studio wiederfindet. */
+  imageId?: string | null;
+  /** Übersetzung und Eigengewicht des Geräts – fürs bewegte Gewicht. */
+  transfer?: LoadTransfer | null;
 };
 
 export type LoggerTarget = {
@@ -282,7 +292,14 @@ export function ExerciseLogger({
   const volumeOf = (sets: LoggerSet[]) =>
     sets.reduce(
       (sum, set) =>
-        sum + setVolume(exercise.trackingMode, set.weightKg, set.reps, bodyweightKg),
+        sum +
+        setVolume(
+          exercise.trackingMode,
+          set.weightKg,
+          set.reps,
+          bodyweightKg,
+          exercise.transfer,
+        ),
       0,
     );
 
@@ -301,7 +318,21 @@ export function ExerciseLogger({
   return (
     <Card id={`uebung-${exercise.id}`} className="scroll-mt-20">
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+        {exercise.imageId ? (
+          <a
+            href={`/api/equipment-images/${exercise.imageId}`}
+            target="_blank"
+            rel="noreferrer"
+            className="shrink-0"
+          >
+            <img
+              src={`/api/equipment-images/${exercise.imageId}?thumb`}
+              alt="Foto des Geräts"
+              className="h-11 w-11 rounded-lg object-cover"
+            />
+          </a>
+        ) : null}
+        <div className="min-w-0 flex-1">
           <Link
             href={`/exercises/${exercise.id}`}
             className="font-semibold hover:text-accent"

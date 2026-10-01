@@ -9,12 +9,14 @@ import { MUSCLE_GROUPS, TRACKING_MODES } from "@/lib/constants";
 import type { FormState } from "@/lib/result";
 
 export type MovementOption = { name: string; muscleGroup: string | null };
+export type EquipmentOption = { id: string; name: string };
 
 export function ExerciseForm({
   action,
   exercise,
   movementName,
   movements,
+  equipment,
   submitLabel,
 }: {
   action: (prev: FormState, formData: FormData) => Promise<FormState>;
@@ -22,6 +24,7 @@ export function ExerciseForm({
   /** Vorbelegung, z. B. beim Anlegen eines weiteren Geräts für eine Bewegung. */
   movementName?: string;
   movements: MovementOption[];
+  equipment: EquipmentOption[];
   submitLabel: string;
 }) {
   const [state, formAction] = useActionState<FormState, FormData>(action, {});
@@ -87,6 +90,20 @@ export function ExerciseForm({
             {MUSCLE_GROUPS.map((group) => (
               <option key={group} value={group}>
                 {group}
+              </option>
+            ))}
+          </Select>
+        </Field>
+
+        <Field
+          label="Gerät"
+          hint="Die Maschine, an der die Übung läuft – mit Foto, Übersetzung und Eigengewicht. Anlegen unter Übungen → Geräte."
+        >
+          <Select name="equipmentId" defaultValue={exercise?.equipmentId ?? ""}>
+            <option value="">– kein Gerät –</option>
+            {equipment.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
               </option>
             ))}
           </Select>
