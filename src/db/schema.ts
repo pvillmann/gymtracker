@@ -230,6 +230,31 @@ export const equipmentImages = sqliteTable(
 );
 
 /**
+ * Einmal-Links für ein Maschinenfoto. Ein Sprachmodell sieht ein Foto im
+ * Chat, kann die Datei aber nicht weiterreichen – also gibt das MCP-Werkzeug
+ * einen Link aus, über den genau ein Foto hochgeladen werden kann. Gespeichert
+ * wird nur der Hash; der Link läuft nach kurzer Zeit ab.
+ */
+export const photoUploadTokens = sqliteTable(
+  "photo_upload_tokens",
+  {
+    id: text("id").primaryKey(),
+    tokenHash: text("token_hash").notNull(),
+    equipmentId: text("equipment_id")
+      .notNull()
+      .references(() => equipment.id, { onDelete: "cascade" }),
+    /** Für wen der Link ausgestellt wurde – gilt als Uploader des Fotos. */
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    expiresAt: integer("expires_at").notNull(),
+    usedAt: integer("used_at"),
+    createdAt: integer("created_at").notNull().default(now),
+  },
+  (t) => [uniqueIndex("photo_upload_tokens_hash_unique").on(t.tokenHash)],
+);
+
+/**
  * Eine Bewegung, unabhängig vom Gerät: "Seitheben", "Rudern eng". Die Geräte,
  * an denen man sie macht, sind ihre Varianten (Tabelle exercises). Ein
  * Planeintrag meint die Bewegung – an welchem Gerät trainiert wird, entscheidet

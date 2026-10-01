@@ -1,0 +1,122 @@
+import "server-only";
+
+import { and, eq, gt, isNull, lt } from "drizzle-orm";
+import { randomBytes } from "node:crypto";
+
+import { db } from "@/db";
+import { equipment, photoUploadTokens, type User } from "@/db/schema";
+import { sha256Hex } from "@/lib/hash";
+import { newId } from "@/lib/ids";
+import { addEquipmentImage, requireEquipment } from "@/lib/services/equipment";
+import { ServiceError } from "@/lib/services/errors";
+
+/**
+ * Einmal-Link für ein Maschinenfoto – das Muster einer vorab signierten
+ * Upload-URL. Ein Sprachmodell sieht ein Foto im Chat, kann die Datei aber
+ * nicht an ein MCP-Werkzeug weiterreichen; also bekommt der Nutzer einen
+ * Link, über den er genau ein Foto hochlädt, ohne sich anmelden zu müssen.
+ *
+ * Der Link steht im Chatverlauf. Deshalb gilt er kurz, nur einmal und nur
+ * für diese eine Maschine; gespeichert wird nur sein Hash.
+ */
+
+export const UPLOAD_LINK_MINUTES = 30;
+
+const now = () => Math.floor(Date.now() / 1000);
+
+export function uploadUrl(token: string): string {
+  return `${(process.env.APP_URL ?? "").replace(/\/$/, "")}/upload/${token}`;
+}
+
+export async function createPhotoUploadLink(
+  user: User,
+  equipmentId: string,
+): Promise<{ url: string; expiresAt: number }> {
+  await requireEquipment(equipmentId);
+  // Alte Links räumen, damit die Tabelle nicht wächst.
+  await db.delete(photoUploadTokens).where(lt(photoUploadTokens.expiresAt, now() - 86_400));
+
+  const token = randomBytes(32).toString("base64url");
+  const expiresAt = now() + UPLOAD_LINK_MINUTES * 60;
+  await db.insert(photoUploadTokens).values({
+    id: newId(),
+    tokenHash: sha256Hex(token),
+    equipmentId,
+    userId: user.id,
+    expiresAt,
+  });
+  return { url: uploadUrl(token), expiresAt };
+}
+
+export type UploadLinkState =
+  | { status: "ok"; equipmentId: string; equipmentName: string; expiresAt: number }
+  | { status: "used"; equipmentId: string; equipmentName: string }
+  | { status: "expired" | "unknown" };
+
+/** Was hinter einem Link steckt – für die Upload-Seite. */
+export async function inspectPhotoUploadLink(token: string): Promise<UploadLinkState> {
+  const [row] = await db
+    .select({
+      equipmentId: photoUploadTokens.equipmentId,
+      equipmentName: equipment.name,
+      expiresAt: photoUploadTokens.expiresAt,
+      usedAt: photoUploadTokens.usedAt,
+    })
+    .from(photoUploadTokens)
+    .innerJoin(equipment, eq(equipment.id, photoUploadTokens.equipmentId))
+    .where(eq(photoUploadTokens.tokenHash, sha256Hex(token)))
+    .limit(1);
+  if (!row) return { status: "unknown" };
+  if (row.usedAt !== null) {
+    return { status: "used", equipmentId: row.equipmentId, equipmentName: row.equipmentName };
+  }
+  if (row.expiresAt <= now()) return { status: "expired" };
+  return {
+    status: "ok",
+    equipmentId: row.equipmentId,
+    equipmentName: row.equipmentName,
+    expiresAt: row.expiresAt,
+  };
+}
+
+/**
+ * Lädt das Foto über den Link hoch. Der Link wird vorher atomar belegt, damit
+ * zwei gleichzeitige Uploads nicht beide durchgehen; scheitert das Foto
+ * (unlesbar, zu groß), wird er wieder frei – ein Tippfehler bei der Auswahl
+ * soll den Link nicht kosten.
+ */
+export async function uploadPhotoWithLink(
+  token: string,
+  input: Buffer,
+): Promise<{ equipmentId: string }> {
+  const hash = sha256Hex(token);
+  const [claimed] = await db
+    .update(photoUploadTokens)
+    .set({ usedAt: now() })
+    .where(
+      and(
+        eq(photoUploadTokens.tokenHash, hash),
+        isNull(photoUploadTokens.usedAt),
+        gt(photoUploadTokens.expiresAt, now()),
+      ),
+    )
+    .returning({
+      id: photoUploadTokens.id,
+      equipmentId: photoUploadTokens.equipmentId,
+      userId: photoUploadTokens.userId,
+    });
+  if (!claimed) {
+    throw new ServiceError("Dieser Link ist abgelaufen oder wurde schon benutzt.");
+  }
+
+  try {
+    await addEquipmentImage({ id: claimed.userId }, claimed.equipmentId, input);
+  } catch (error) {
+    await db
+      .update(photoUploadTokens)
+      .set({ usedAt: null })
+      .where(eq(photoUploadTokens.id, claimed.id));
+    throw error;
+  }
+  return { equipmentId: claimed.equipmentId };
+}

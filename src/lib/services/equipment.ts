@@ -88,7 +88,7 @@ export async function deleteEquipment(user: User, equipmentId: string): Promise<
 }
 
 export async function addEquipmentImage(
-  user: User,
+  user: Pick<User, "id">,
   equipmentId: string,
   input: Buffer,
 ): Promise<string> {

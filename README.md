@@ -107,8 +107,9 @@ Homescreen.
 - Sätze nennen die Übung; die Maschine ergibt sich aus Training und Studio
   oder wird bei Bedarf dazugesagt. Maschinen lassen sich per Chat Übungen
   und Studios zuordnen
-- Geräte aus einem Foto anlegen: Claude erkennt die Maschine im Chat, legt sie
-  nach deiner Bestätigung an und gibt dir den Link für den Foto-Upload
+- Geräte aus einem Foto anlegen: Claude erkennt die Maschine im Chat, recherchiert
+  Daten wie die Übersetzung, legt sie nach deiner Bestätigung an und gibt dir
+  einen Einmal-Link für das Foto (30 Minuten gültig, ein Foto, ohne Anmeldung)
 
 **Benutzergruppen**
 - Gruppenmodell als Grundlage, aktuell mit der Systemgruppe *Administratoren*
@@ -367,12 +368,21 @@ dort nichts Brauchbares steht.
 | `start_workout`, `current_workout`, `finish_workout` | Training führen |
 | `edit_workout`, `delete_workout` | Zeiten eines Trainings korrigieren oder es löschen |
 | `log_set`, `undo_last_set` | Sätze protokollieren und korrigieren |
+| `search_equipment`, `create_equipment`, `update_equipment` | Maschinen suchen, anlegen, ändern |
+| `photo_upload_link` | Einmal-Link für ein Maschinenfoto |
 
 Übungen und Pläne werden über ihren **Namen** angesprochen, nicht über IDs:
 „Latzug" findet die Übung auch als Teilwort und ohne Rücksicht auf Groß- und
 Kleinschreibung. Passen mehrere, fragt der Server nach, statt zu raten. Ist noch
 kein Training offen, startet `log_set` selbst ein freies Training — mitten in der
 Übung will niemand erst einen Plan auswählen.
+
+**Fotos per Chat:** Ein Sprachmodell sieht ein Foto im Chat, kann die Datei
+aber nicht an einen MCP-Server weiterreichen – dafür gibt es in MCP noch keinen
+Standard. Deshalb liefern `create_equipment` und `photo_upload_link` einen
+Einmal-Link (`/upload/…`): 30 Minuten gültig, genau ein Foto, nur für diese
+Maschine, ohne Anmeldung. Gespeichert wird nur der Hash des Schlüssels. Der
+Link baut auf `APP_URL` auf – die Adresse muss vom Handy aus erreichbar sein.
 
 Trainings werden über ihr **Datum** angesprochen (`2026-09-08`); ohne Angabe
 ist das zuletzt beendete gemeint. Zeiten dürfen als `2026-09-08T20:12` oder
