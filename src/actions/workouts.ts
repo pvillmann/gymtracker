@@ -9,7 +9,9 @@ import { requireUser } from "@/lib/auth";
 import { parseDurationInput } from "@/lib/format";
 import { optionalText, text } from "@/lib/formdata";
 import { fail, type FormState } from "@/lib/result";
+import { getActiveWorkout, getPlan, listGyms } from "@/lib/queries";
 import { isServiceError } from "@/lib/services/errors";
+import { findOrCreateGym, setPlanGym } from "@/lib/services/gyms";
 import {
   chooseVariant,
   deleteSet,
@@ -74,12 +76,60 @@ async function guarded(run: () => Promise<void>): Promise<FormState> {
   }
 }
 
-export async function startWorkoutAction(planId: string | null): Promise<void> {
+/**
+ * Startet ein Training. Ohne Studio-Angabe im Formular wird gefragt – außer
+ * der Plan hat "Nicht erneut fragen" gesetzt, oder es ist ein freies Training
+ * und noch kein Studio angelegt (dann gäbe es nichts zu wählen).
+ */
+export async function startWorkoutAction(
+  planId: string | null,
+  formData?: FormData,
+): Promise<void> {
   const user = await requireUser();
-  const started = await startWorkout(user, planId);
+
+  // Läuft schon eines, geht es dorthin zurück – ohne Rückfrage.
+  const active = await getActiveWorkout(user.id);
+  if (active) redirect(`/workout/${active.id}`);
+
+  const startPage = `/workout/start${planId ? `?plan=${encodeURIComponent(planId)}` : ""}`;
+  const choice = formData?.get("gym");
+  let gymId: string | null = null;
+
+  if (typeof choice === "string" && choice !== "") {
+    if (choice === "new") {
+      const name = String(formData?.get("newGym") ?? "").trim();
+      if (!name || name.length > 60) {
+        redirect(`${startPage}${planId ? "&" : "?"}fehler=name`);
+      }
+      gymId = await findOrCreateGym(user, name);
+    } else if (choice !== "none") {
+      gymId = choice;
+    }
+    if (planId && formData?.get("remember") === "on") {
+      await setPlanGym(user, planId, true, gymId);
+    }
+  } else if (planId) {
+    const plan = await getPlan(user.id, planId);
+    if (!plan) redirect("/plans");
+    if (!plan.rememberGym) redirect(startPage);
+    gymId = plan.defaultGymId;
+  } else if ((await listGyms(user.id)).length > 0) {
+    redirect(startPage);
+  }
+
+  const started = await startWorkout(user, planId, gymId);
 
   revalidatePath("/");
   redirect(`/workout/${started.workoutId}`);
+}
+
+/** "Nicht erneut fragen" am Plan setzen oder wieder entfernen. */
+export async function setPlanGymAction(planId: string, formData: FormData): Promise<void> {
+  const user = await requireUser();
+  const remember = formData.get("remember") === "on";
+  const gym = String(formData.get("gym") ?? "");
+  await setPlanGym(user, planId, remember, gym && gym !== "none" ? gym : null);
+  revalidatePath(`/plans/${planId}`);
 }
 
 export async function logSetAction(

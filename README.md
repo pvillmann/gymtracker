@@ -54,6 +54,10 @@ Homescreen.
   das Gerät wählst du im Training (vorausgewählt ist das zuletzt genutzte).
   Verglichen wird nur am selben Gerät – dieselben Kilos sind an Maschine und
   Kabelzug nicht dieselbe Last.
+- Studios: Beim Trainingsstart fragt die App, wo du bist – mit „Nicht erneut
+  fragen“ merkt sich der Plan das Studio. Vorausgewählt wird das Gerät, das du
+  dort zuletzt benutzt hast; Einstellungen und Gewichtsstufe lassen sich pro
+  Studio hinterlegen
 - Vier Messarten: Gewicht × Wiederholungen, Körpergewicht (+ Zusatzgewicht),
   Körpergewicht − Gegengewicht (assistierte Maschinen) und Zeit
 

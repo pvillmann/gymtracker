@@ -57,6 +57,13 @@
       "when": 1790849158593,
       "tag": "0007_movements",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1790849924809,
+      "tag": "0008_gyms",
+      "breakpoints": true
     }
   ]
 }

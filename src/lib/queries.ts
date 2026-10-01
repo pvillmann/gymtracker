@@ -10,12 +10,15 @@ import {
   isNotNull,
   isNull,
   lt,
+  ne,
   sql,
 } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
   exercises,
+  gymExercises,
+  gyms,
   movements,
   planExercises,
   plans,
@@ -24,6 +27,8 @@ import {
   workoutSets,
   workoutVariants,
   type Exercise,
+  type Gym,
+  type GymExercise,
   type Movement,
   type SetEffort,
   type TrackingMode,
@@ -42,6 +47,54 @@ export async function listExercises(
         : and(eq(exercises.userId, userId), isNull(exercises.archivedAt)),
     )
     .orderBy(asc(exercises.muscleGroup), asc(exercises.name));
+}
+
+export async function listGyms(userId: string): Promise<Gym[]> {
+  return db.select().from(gyms).where(eq(gyms.userId, userId)).orderBy(asc(gyms.name));
+}
+
+/** Was ein Studio für die Geräte dort abweichend festhält: Übung → Werte. */
+export async function getGymExercises(gymId: string): Promise<Map<string, GymExercise>> {
+  const rows = await db.select().from(gymExercises).where(eq(gymExercises.gymId, gymId));
+  return new Map(rows.map((row) => [row.exerciseId, row]));
+}
+
+/** Was die Studios für eine Übung festhalten: Studio → Werte. */
+export async function getExerciseGymSettings(
+  exerciseId: string,
+): Promise<Map<string, GymExercise>> {
+  const rows = await db
+    .select()
+    .from(gymExercises)
+    .where(eq(gymExercises.exerciseId, exerciseId));
+  return new Map(rows.map((row) => [row.gymId, row]));
+}
+
+/** Pro Übung: wann sie zuletzt in diesem Studio trainiert wurde. */
+export async function getLastUsedInGym(
+  userId: string,
+  gymId: string,
+  exerciseIds: string[],
+  excludeWorkoutId: string,
+): Promise<Map<string, number>> {
+  if (exerciseIds.length === 0) return new Map();
+  const rows = await db
+    .select({
+      exerciseId: workoutSets.exerciseId,
+      lastAt: sql<number>`max(${workouts.startedAt})`,
+    })
+    .from(workoutSets)
+    .innerJoin(workouts, eq(workouts.id, workoutSets.workoutId))
+    .where(
+      and(
+        eq(workouts.userId, userId),
+        eq(workouts.gymId, gymId),
+        inArray(workoutSets.exerciseId, exerciseIds),
+        ne(workouts.id, excludeWorkoutId),
+      ),
+    )
+    .groupBy(workoutSets.exerciseId);
+  return new Map(rows.map((row) => [row.exerciseId, row.lastAt]));
 }
 
 export async function listMovements(userId: string): Promise<Movement[]> {

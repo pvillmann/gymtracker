@@ -15,6 +15,8 @@ export function SubmitButton({
   size = "md",
   className,
   formAction,
+  name,
+  value,
 }: {
   children: React.ReactNode;
   pendingLabel?: string;
@@ -22,6 +24,9 @@ export function SubmitButton({
   size?: ButtonSize;
   className?: string;
   formAction?: (formData: FormData) => void | Promise<void>;
+  /** Mehrere Absende-Buttons in einem Formular unterscheiden sich über name/value. */
+  name?: string;
+  value?: string;
 }) {
   const { pending } = useFormStatus();
 
@@ -29,6 +34,8 @@ export function SubmitButton({
     <button
       type="submit"
       formAction={formAction}
+      name={name}
+      value={value}
       disabled={pending}
       aria-busy={pending}
       className={buttonClass(variant, size, className)}

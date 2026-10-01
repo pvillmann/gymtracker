@@ -8,17 +8,19 @@ import {
   ProfileForm,
 } from "@/components/SettingsForms";
 import { ApiTokenManager } from "@/components/ApiTokenManager";
+import { GymManager } from "@/components/GymManager";
 import { ButtonLink, Card, PageHeader } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
 import { listApiTokens } from "@/lib/api-tokens";
 import { isAdmin } from "@/lib/groups";
+import { listGyms } from "@/lib/queries";
 
 export const metadata: Metadata = { title: "Einstellungen · GymTracker" };
 
 export default async function SettingsPage() {
   const user = await requireUser();
   const userIsAdmin = await isAdmin(user.id);
-  const tokens = await listApiTokens(user.id);
+  const [tokens, gyms] = await Promise.all([listApiTokens(user.id), listGyms(user.id)]);
   // APP_URL ist für den Mailversand ohnehin gesetzt; fehlt sie, zeigen wir
   // nur den Pfad statt einer erfundenen Adresse.
   const mcpUrl = `${(process.env.APP_URL ?? "").replace(/\/$/, "")}/api/mcp`;
@@ -33,6 +35,15 @@ export default async function SettingsPage() {
         </h2>
         <Card>
           <ProfileForm name={user.name} bodyweightKg={user.bodyweightKg} />
+        </Card>
+      </section>
+
+      <section className="mb-6">
+        <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+          Studios
+        </h2>
+        <Card>
+          <GymManager gyms={gyms.map((g) => ({ id: g.id, name: g.name }))} />
         </Card>
       </section>
 

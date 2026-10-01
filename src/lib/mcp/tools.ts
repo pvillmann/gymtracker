@@ -24,6 +24,7 @@ import {
 import {
   getActiveWorkout,
   getExerciseSessions,
+  getPlan,
   getPreviousPerformances,
   listExercises,
   listMovements,
@@ -34,6 +35,7 @@ import {
 } from "@/lib/queries";
 import { ServiceError, isServiceError } from "@/lib/services/errors";
 import { createExercise } from "@/lib/services/exercises";
+import { findOrCreateGym } from "@/lib/services/gyms";
 import {
   addPlanItem,
   createPlan,
@@ -520,16 +522,29 @@ export function registerGymTools(server: McpServer, user: User): void {
     {
       title: "Training starten",
       description:
-        "Startet ein Training, optional nach einem Plan. Läuft bereits eines, " +
-        "wird dieses zurückgegeben statt ein zweites zu starten.",
+        "Startet ein Training, optional nach einem Plan und in einem Studio. " +
+        "Das Studio bestimmt, welches Gerät für eine Bewegung vorausgewählt " +
+        "wird. Ohne Angabe gilt das am Plan gemerkte Studio. Läuft bereits " +
+        "eines, wird dieses zurückgegeben statt ein zweites zu starten.",
       inputSchema: {
         plan: z.string().optional().describe("Name des Plans, sonst freies Training"),
+        gym: z
+          .string()
+          .max(60)
+          .optional()
+          .describe("Name des Studios; ein unbekannter Name legt es an"),
       },
     },
-    async ({ plan }) =>
+    async ({ plan, gym }) =>
       run(async () => {
-        const planId = plan ? (await resolvePlan(user, plan)).id : null;
-        const started = await startWorkout(user, planId);
+        const found = plan ? await resolvePlan(user, plan) : null;
+        const planRow = found ? await getPlan(user.id, found.id) : null;
+        const gymId = gym
+          ? await findOrCreateGym(user, gym)
+          : planRow?.rememberGym
+            ? planRow.defaultGymId
+            : null;
+        const started = await startWorkout(user, found?.id ?? null, gymId);
         return started.resumed
           ? `Es läuft bereits ein Training: „${started.name}“.`
           : `Training „${started.name}“ gestartet.`;

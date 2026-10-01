@@ -5,6 +5,8 @@ import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   exercises,
+  gymExercises,
+  gyms,
   plans,
   workouts,
   workoutSets,
@@ -34,6 +36,7 @@ async function requireOpenWorkout(userId: string, workoutId: string) {
       id: workouts.id,
       startedAt: workouts.startedAt,
       finishedAt: workouts.finishedAt,
+      gymId: workouts.gymId,
     })
     .from(workouts)
     .where(and(eq(workouts.id, workoutId), eq(workouts.userId, userId)))
@@ -91,6 +94,7 @@ export type StartedWorkout = { workoutId: string; name: string; resumed: boolean
 export async function startWorkout(
   user: User,
   planId: string | null,
+  gymId: string | null = null,
 ): Promise<StartedWorkout> {
   const running = await getActiveWorkout(user.id);
   if (running) {
@@ -109,7 +113,16 @@ export async function startWorkout(
   }
 
   const workoutId = newId();
-  await db.insert(workouts).values({ id: workoutId, userId: user.id, planId, name });
+  if (gymId) {
+    const [gym] = await db
+      .select({ id: gyms.id })
+      .from(gyms)
+      .where(and(eq(gyms.id, gymId), eq(gyms.userId, user.id)))
+      .limit(1);
+    if (!gym) throw new ServiceError("Dieses Studio gibt es nicht.");
+  }
+
+  await db.insert(workouts).values({ id: workoutId, userId: user.id, planId, name, gymId });
 
   return { workoutId, name, resumed: false };
 }
@@ -149,7 +162,7 @@ export async function logSet(
   exerciseId: string,
   values: SetValues,
 ): Promise<LoggedSet> {
-  await requireOpenWorkout(user.id, workoutId);
+  const workout = await requireOpenWorkout(user.id, workoutId);
   const exercise = await requireOwnExercise(user.id, exerciseId);
   assertValuesFit(exercise.trackingMode, values);
 
@@ -189,6 +202,14 @@ export async function logSet(
     effort: isWarmup ? null : (values.effort ?? null),
     volumeKg,
   });
+
+  // Ab dem ersten Satz gilt das Gerät als eines, das in diesem Studio steht.
+  if (workout.gymId) {
+    await db
+      .insert(gymExercises)
+      .values({ gymId: workout.gymId, exerciseId: exercise.id })
+      .onConflictDoNothing();
+  }
 
   return { setId, setNumber, ordinal, isWarmup, volumeKg, exerciseName: exercise.name };
 }
