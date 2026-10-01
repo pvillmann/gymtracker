@@ -125,7 +125,7 @@ export async function startWorkout(
     const [gym] = await db
       .select({ id: gyms.id })
       .from(gyms)
-      .where(and(eq(gyms.id, gymId), eq(gyms.userId, user.id)))
+      .where(eq(gyms.id, gymId))
       .limit(1);
     if (!gym) throw new ServiceError("Dieses Studio gibt es nicht.");
   }

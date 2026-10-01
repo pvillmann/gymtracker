@@ -27,7 +27,7 @@ export default async function StartWorkoutPage({
 
   const [plan, gyms] = await Promise.all([
     planId ? getPlan(user.id, planId) : Promise.resolve(null),
-    listGyms(user.id),
+    listGyms(),
   ]);
   if (planId && !plan) redirect("/plans");
 

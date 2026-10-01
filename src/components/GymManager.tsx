@@ -8,9 +8,15 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { ErrorMessage, Input } from "@/components/ui";
 import type { FormState } from "@/lib/result";
 
-function GymRow({ id, name }: { id: string; name: string }) {
+function GymRow({ id, name, editable }: { id: string; name: string; editable: boolean }) {
   const rename = useMemo(() => renameGymAction.bind(null, id), [id]);
   const [state, formAction] = useActionState<FormState, FormData>(rename, {});
+
+  // Studios gehören allen: umbenennen und löschen darf nur, wer es angelegt
+  // hat, oder ein Admin.
+  if (!editable) {
+    return <li className="py-3 text-sm first:pt-0 last:pb-0">{name}</li>;
+  }
 
   return (
     <li className="space-y-2 py-3 first:pt-0 last:pb-0">
@@ -24,7 +30,7 @@ function GymRow({ id, name }: { id: string; name: string }) {
       <form action={deleteGymAction.bind(null, id)}>
         <ConfirmSubmitButton
           size="sm"
-          message={`Studio „${name}“ löschen? Trainings bleiben erhalten, verlieren aber den Bezug zum Studio; die Geräteeinstellungen dort gehen verloren.`}
+          message={`Studio „${name}“ für alle löschen? Trainings bleiben erhalten, verlieren aber den Bezug zum Studio; die Geräteeinstellungen dort gehen verloren.`}
         >
           Löschen
         </ConfirmSubmitButton>
@@ -33,7 +39,11 @@ function GymRow({ id, name }: { id: string; name: string }) {
   );
 }
 
-export function GymManager({ gyms }: { gyms: Array<{ id: string; name: string }> }) {
+export function GymManager({
+  gyms,
+}: {
+  gyms: Array<{ id: string; name: string; editable: boolean }>;
+}) {
   const [state, formAction] = useActionState<FormState, FormData>(createGymAction, {});
 
   return (
@@ -41,12 +51,12 @@ export function GymManager({ gyms }: { gyms: Array<{ id: string; name: string }>
       {gyms.length > 0 ? (
         <ul className="divide-y divide-line-soft">
           {gyms.map((gym) => (
-            <GymRow key={gym.id} id={gym.id} name={gym.name} />
+            <GymRow key={gym.id} id={gym.id} name={gym.name} editable={gym.editable} />
           ))}
         </ul>
       ) : (
         <p className="text-sm text-muted">
-          Noch kein Studio. Mit Studio wählt das Training das Gerät vor, das du
+          Noch kein Studio. Studios gelten für alle Nutzer dieser Instanz. Mit Studio wählt das Training das Gerät vor, das du
           dort zuletzt benutzt hast, und zeigt die Einstellungen von dort.
         </p>
       )}

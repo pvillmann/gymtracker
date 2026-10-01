@@ -85,6 +85,6 @@ export async function resolvePlan(user: User, query: string) {
 }
 
 export async function resolveEquipment(user: User, query: string) {
-  const candidates = await listEquipment(user.id);
+  const candidates = await listEquipment();
   return pick(query, candidates, { noun: "Gerät", feminine: false });
 }

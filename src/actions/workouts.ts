@@ -113,7 +113,7 @@ export async function startWorkoutAction(
     if (!plan) redirect("/plans");
     if (!plan.rememberGym) redirect(startPage);
     gymId = plan.defaultGymId;
-  } else if ((await listGyms(user.id)).length > 0) {
+  } else if ((await listGyms()).length > 0) {
     redirect(startPage);
   }
 

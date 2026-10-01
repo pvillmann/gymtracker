@@ -14,13 +14,14 @@ import { requireUser } from "@/lib/auth";
 import { listApiTokens } from "@/lib/api-tokens";
 import { isAdmin } from "@/lib/groups";
 import { listGyms } from "@/lib/queries";
+import { canEditCatalog } from "@/lib/services/catalog";
 
 export const metadata: Metadata = { title: "Einstellungen · GymTracker" };
 
 export default async function SettingsPage() {
   const user = await requireUser();
   const userIsAdmin = await isAdmin(user.id);
-  const [tokens, gyms] = await Promise.all([listApiTokens(user.id), listGyms(user.id)]);
+  const [tokens, gyms] = await Promise.all([listApiTokens(user.id), listGyms()]);
   // APP_URL ist für den Mailversand ohnehin gesetzt; fehlt sie, zeigen wir
   // nur den Pfad statt einer erfundenen Adresse.
   const mcpUrl = `${(process.env.APP_URL ?? "").replace(/\/$/, "")}/api/mcp`;
@@ -43,7 +44,15 @@ export default async function SettingsPage() {
           Studios
         </h2>
         <Card>
-          <GymManager gyms={gyms.map((g) => ({ id: g.id, name: g.name }))} />
+          <GymManager
+            gyms={await Promise.all(
+              gyms.map(async (g) => ({
+                id: g.id,
+                name: g.name,
+                editable: await canEditCatalog(user, g.userId),
+              })),
+            )}
+          />
         </Card>
       </section>
 

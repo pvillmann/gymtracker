@@ -10,7 +10,7 @@ export const metadata: Metadata = { title: "Geräte · GymTracker" };
 
 export default async function EquipmentPage() {
   const user = await requireUser();
-  const all = await listEquipment(user.id);
+  const all = await listEquipment();
   const kindLabel = new Map(EQUIPMENT_KINDS.map((k) => [k.value, k.label]));
 
   return (

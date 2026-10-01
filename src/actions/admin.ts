@@ -14,6 +14,7 @@ import {
   removeUserFromGroup,
 } from "@/lib/groups";
 import { sendVerificationLink } from "@/lib/verification";
+import { handOverCatalog } from "@/lib/services/catalog";
 
 /** Rückmeldungen der Admin-Aktionen, als Banner über der Nutzerliste. */
 export type AdminStatus =
@@ -148,6 +149,9 @@ export async function deleteUserAction(userId: string): Promise<void> {
   await guard(userId, { blockSelf: true, blockAdminTarget: true });
   await loadTarget(userId);
 
+  // Bewegungen, Geräte und Studios gehören allen – sie bleiben, nur ihr
+  // "angelegt von" wechselt.
+  await handOverCatalog(userId);
   await db.delete(users).where(eq(users.id, userId));
 
   done("deleted");

@@ -16,7 +16,7 @@ export default async function ExercisesPage() {
   const user = await requireUser();
   const [all, movements] = await Promise.all([
     listExercises(user.id, { includeArchived: true }),
-    listMovements(user.id),
+    listMovements(),
   ]);
   const movementName = new Map(movements.map((m) => [m.id, m.name]));
   const active = all.filter((e) => e.archivedAt === null);
