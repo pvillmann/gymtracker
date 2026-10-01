@@ -8,6 +8,7 @@ import {
   plans,
   workouts,
   workoutSets,
+  workoutVariants,
   type SetEffort,
   type TrackingMode,
   type User,
@@ -52,6 +53,7 @@ export async function requireOwnExercise(userId: string, exerciseId: string) {
       id: exercises.id,
       name: exercises.name,
       trackingMode: exercises.trackingMode,
+      movementId: exercises.movementId,
     })
     .from(exercises)
     .where(and(eq(exercises.id, exerciseId), eq(exercises.userId, userId)))
@@ -236,6 +238,28 @@ export async function updateSet(
       ),
     })
     .where(eq(workoutSets.id, setId));
+}
+
+/**
+ * Merkt sich, an welchem Gerät eine Bewegung in diesem Training gemacht wird.
+ * Der Plan nennt nur die Bewegung; ohne Wahl gilt das zuletzt genutzte Gerät.
+ */
+export async function chooseVariant(
+  user: User,
+  workoutId: string,
+  exerciseId: string,
+): Promise<void> {
+  await requireOpenWorkout(user.id, workoutId);
+  const exercise = await requireOwnExercise(user.id, exerciseId);
+  if (!exercise.movementId) throw new ServiceError("Diese Übung hat keine Bewegung.");
+
+  await db
+    .insert(workoutVariants)
+    .values({ workoutId, movementId: exercise.movementId, exerciseId })
+    .onConflictDoUpdate({
+      target: [workoutVariants.workoutId, workoutVariants.movementId],
+      set: { exerciseId },
+    });
 }
 
 /**

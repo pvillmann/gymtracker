@@ -3,7 +3,12 @@
 import Link from "next/link";
 import { useActionState, useEffect, useMemo, useRef, useState, useTransition } from "react";
 
-import { deleteSetAction, logSetAction, rateSetAction } from "@/actions/workouts";
+import {
+  chooseVariantAction,
+  deleteSetAction,
+  logSetAction,
+  rateSetAction,
+} from "@/actions/workouts";
 import { RestTimer } from "@/components/RestTimer";
 import { SubmitButton } from "@/components/SubmitButton";
 import { TrendBadge } from "@/components/TrendBadge";
@@ -49,6 +54,12 @@ export type LoggerTarget = {
   restSeconds: number;
   notes: string | null;
 };
+
+/** Ein anderes Gerät derselben Bewegung, zum Umschalten im Training. */
+export type LoggerVariant = { id: string; label: string };
+
+/** Die letzte Leistung an einem anderen Gerät – Hinweis, kein Vergleich. */
+export type LoggerElsewhere = { name: string; relative: string; summary: string };
 
 export type LoggerPrevious = {
   relative: string;
@@ -151,6 +162,8 @@ export function ExerciseLogger({
   loggedSets,
   previous,
   bodyweightKg,
+  variants = [],
+  elsewhere = null,
 }: {
   workoutId: string;
   exercise: LoggerExercise;
@@ -158,6 +171,9 @@ export function ExerciseLogger({
   loggedSets: LoggerSet[];
   previous: LoggerPrevious | null;
   bodyweightKg: number;
+  /** Alle Geräte der Bewegung, wenn es mehr als eines gibt. */
+  variants?: LoggerVariant[];
+  elsewhere?: LoggerElsewhere | null;
 }) {
   const boundAction = useMemo(
     () => logSetAction.bind(null, workoutId),
@@ -318,6 +334,35 @@ export function ExerciseLogger({
         </span>
       </div>
 
+      {variants.length > 1 ? (
+        <div className="mt-3 flex flex-wrap gap-1.5" role="group" aria-label="Gerät">
+          {variants.map((variant) => {
+            const active = variant.id === exercise.id;
+            return (
+              <button
+                key={variant.id}
+                type="button"
+                aria-pressed={active}
+                disabled={active || isPending}
+                onClick={() => {
+                  startTransition(() => {
+                    void chooseVariantAction(workoutId, variant.id);
+                  });
+                }}
+                className={cx(
+                  "rounded-full border px-3 py-1 text-sm font-medium",
+                  active
+                    ? "border-accent bg-accent/12 text-accent"
+                    : "border-line bg-surface-2 text-muted hover:text-fg disabled:opacity-60",
+                )}
+              >
+                {variant.label}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+
       {exercise.machineSetup ? (
         <p className="mt-2 rounded-lg bg-surface-2 px-3 py-2 text-sm text-muted">
           <span className="font-medium text-fg">Einstellung:</span>{" "}
@@ -343,9 +388,20 @@ export function ExerciseLogger({
             ) : null}
           </>
         ) : (
-          <span className="text-faint">noch nie trainiert – heute setzt du die Marke</span>
+          <span className="text-faint">
+            {elsewhere
+              ? "an diesem Gerät noch nie – heute setzt du die Marke"
+              : "noch nie trainiert – heute setzt du die Marke"}
+          </span>
         )}
       </p>
+
+      {elsewhere ? (
+        <p className="mt-1 text-sm text-faint">
+          Zuletzt an {elsewhere.name}:{" "}
+          <span className="tnum">{elsewhere.summary}</span> · {elsewhere.relative}
+        </p>
+      ) : null}
 
       {loggedSets.length > 0 ? (
         <ul className="mt-3 space-y-1.5">

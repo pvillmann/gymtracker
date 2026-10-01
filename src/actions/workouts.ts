@@ -11,6 +11,7 @@ import { optionalText, text } from "@/lib/formdata";
 import { fail, type FormState } from "@/lib/result";
 import { isServiceError } from "@/lib/services/errors";
 import {
+  chooseVariant,
   deleteSet,
   discardWorkout,
   finishWorkout,
@@ -119,6 +120,15 @@ export async function updateSetAction(
     revalidatePath(`/history/${existing.workoutId}`);
   }
   return result;
+}
+
+export async function chooseVariantAction(
+  workoutId: string,
+  exerciseId: string,
+): Promise<void> {
+  const user = await requireUser();
+  await chooseVariant(user, workoutId, exerciseId);
+  revalidatePath(`/workout/${workoutId}`);
 }
 
 export async function rateSetAction(

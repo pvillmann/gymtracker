@@ -26,6 +26,7 @@ import {
   getExerciseSessions,
   getPreviousPerformances,
   listExercises,
+  listMovements,
   listPlanItems,
   listPlans,
   listWorkoutSets,
@@ -148,15 +149,21 @@ export function registerGymTools(server: McpServer, user: User): void {
     {
       title: "Übungen auflisten",
       description:
-        "Alle angelegten Übungen des Kontos mit Muskelgruppe und Messart. " +
-        "Nutze das, um den genauen Namen einer Übung zu finden.",
+        "Alle angelegten Übungen des Kontos, gruppiert nach Bewegung, mit " +
+        "Muskelgruppe und Messart. Eine Bewegung (z. B. Seitheben) kann mehrere " +
+        "Geräte haben (Maschine, Kabelturm) – jedes ist eine eigene Übung mit " +
+        "eigenem Verlauf. Sätze werden immer auf eine Übung gebucht. Nutze das, " +
+        "um den genauen Namen zu finden.",
       inputSchema: {
         muscle_group: z.string().optional().describe("Nur diese Muskelgruppe"),
       },
     },
     async ({ muscle_group }) =>
       run(async () => {
-        const all = await listExercises(user.id);
+        const [all, movements] = await Promise.all([
+          listExercises(user.id),
+          listMovements(user.id),
+        ]);
         const filtered = muscle_group
           ? all.filter(
               (e) => e.muscleGroup?.toLowerCase() === muscle_group.toLowerCase(),
@@ -164,12 +171,25 @@ export function registerGymTools(server: McpServer, user: User): void {
           : all;
 
         if (filtered.length === 0) return "Keine Übungen gefunden.";
-        return filtered
-          .map(
-            (e) =>
-              `- ${e.name} (${e.muscleGroup ?? "ohne Muskelgruppe"}, ${trackingModeLabel(
-                e.trackingMode,
-              )}, Stufe ${formatKg(e.weightStepKg)} kg)`,
+        const describe = (e: (typeof all)[number]) =>
+          `${e.name} (${e.muscleGroup ?? "ohne Muskelgruppe"}, ${trackingModeLabel(
+            e.trackingMode,
+          )}, Stufe ${formatKg(e.weightStepKg)} kg)`;
+
+        const byMovement = new Map<string, typeof all>();
+        for (const e of filtered) {
+          const key = e.movementId ?? e.id;
+          byMovement.set(key, [...(byMovement.get(key) ?? []), e]);
+        }
+        const names = new Map(movements.map((m) => [m.id, m.name]));
+        return [...byMovement.entries()]
+          .map(([movementId, variants]) =>
+            variants.length === 1
+              ? `- ${describe(variants[0])}`
+              : [
+                  `- Bewegung ${names.get(movementId) ?? variants[0].name}:`,
+                  ...variants.map((e) => `  - ${describe(e)}`),
+                ].join("\n"),
           )
           .join("\n");
       }),
@@ -342,8 +362,21 @@ export function registerGymTools(server: McpServer, user: User): void {
         "assisted_reps (Maschine mit Gegengewicht, das die Last verringert, " +
         "z. B. assistierte Klimmzugmaschine), time (Dauer, z. B. Plank).",
       inputSchema: {
-        name: z.string().min(1).max(80).describe("Name der Übung"),
-        muscle_group: z.string().max(40).optional().describe("z. B. Rücken, Beine"),
+        name: z.string().min(1).max(80).describe("Name der Übung bzw. des Geräts, z. B. Seitheben Kabelturm"),
+        movement: z
+          .string()
+          .max(80)
+          .optional()
+          .describe(
+            "Bewegung, zu der das Gerät gehört, z. B. Seitheben. Gibt es sie schon, " +
+              "wird die Übung ein weiteres Gerät dafür; sonst wird sie angelegt. " +
+              "Ohne Angabe ist die Übung ihre eigene Bewegung.",
+          ),
+        muscle_group: z
+          .string()
+          .max(40)
+          .optional()
+          .describe("z. B. Rücken, Beine – gilt für die ganze Bewegung"),
         tracking_mode: z
           .enum(["weight_reps", "bodyweight_reps", "assisted_reps", "time"])
           .optional()
@@ -365,6 +398,7 @@ export function registerGymTools(server: McpServer, user: User): void {
       run(async () => {
         await createExercise(user, {
           name: args.name,
+          movementName: args.movement ?? null,
           muscleGroup: args.muscle_group ?? null,
           machineSetup: args.machine_setup ?? null,
           trackingMode: args.tracking_mode ?? "weight_reps",

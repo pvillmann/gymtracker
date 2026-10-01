@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 
 import { SubmitButton } from "@/components/SubmitButton";
 import { Card, ErrorMessage, Field, Input, Select, Textarea } from "@/components/ui";
@@ -8,16 +8,28 @@ import type { Exercise } from "@/db/schema";
 import { MUSCLE_GROUPS, TRACKING_MODES } from "@/lib/constants";
 import type { FormState } from "@/lib/result";
 
+export type MovementOption = { name: string; muscleGroup: string | null };
+
 export function ExerciseForm({
   action,
   exercise,
+  movementName,
+  movements,
   submitLabel,
 }: {
   action: (prev: FormState, formData: FormData) => Promise<FormState>;
   exercise?: Exercise;
+  /** Vorbelegung, z. B. beim Anlegen eines weiteren Geräts für eine Bewegung. */
+  movementName?: string;
+  movements: MovementOption[];
   submitLabel: string;
 }) {
   const [state, formAction] = useActionState<FormState, FormData>(action, {});
+  const [movement, setMovement] = useState(movementName ?? "");
+  const known = movements.find((m) => m.name === movement.trim());
+  const [muscleGroup, setMuscleGroup] = useState(
+    exercise?.muscleGroup ?? known?.muscleGroup ?? "",
+  );
 
   return (
     <Card>
@@ -28,12 +40,49 @@ export function ExerciseForm({
             required
             maxLength={80}
             defaultValue={exercise?.name}
-            placeholder="z. B. Beinpresse"
+            placeholder="z. B. Seitheben Kabelturm"
           />
         </Field>
 
-        <Field label="Muskelgruppe">
-          <Select name="muscleGroup" defaultValue={exercise?.muscleGroup ?? ""}>
+        <Field
+          label="Bewegung"
+          hint={
+            known && known.name !== exercise?.name
+              ? `Weiteres Gerät für „${known.name}“. Im Plan steht die Bewegung, das Gerät wählst du im Training – verglichen wird nur am selben Gerät.`
+              : "Gleicher Name wie bei einer anderen Übung macht beide zu Geräten derselben Bewegung. Leer: die Übung ist ihre eigene Bewegung."
+          }
+        >
+          <Input
+            name="movementName"
+            maxLength={80}
+            list="movement-names"
+            value={movement}
+            onChange={(event) => {
+              const next = event.target.value;
+              setMovement(next);
+              // Die Muskelgruppe gehört der Bewegung: wer eine bestehende
+              // wählt, übernimmt deren Angabe.
+              const match = movements.find((m) => m.name === next.trim());
+              if (match) setMuscleGroup(match.muscleGroup ?? "");
+            }}
+            placeholder="z. B. Seitheben"
+          />
+          <datalist id="movement-names">
+            {movements.map((m) => (
+              <option key={m.name} value={m.name} />
+            ))}
+          </datalist>
+        </Field>
+
+        <Field
+          label="Muskelgruppe"
+          hint={known ? "Gilt für alle Geräte dieser Bewegung." : undefined}
+        >
+          <Select
+            name="muscleGroup"
+            value={muscleGroup}
+            onChange={(event) => setMuscleGroup(event.target.value)}
+          >
             <option value="">– keine –</option>
             {MUSCLE_GROUPS.map((group) => (
               <option key={group} value={group}>

@@ -4,17 +4,15 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
-import { db } from "@/db";
-import { exercises } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
 import { DEFAULT_EXERCISES } from "@/lib/constants";
 import { optionalText, text } from "@/lib/formdata";
-import { newId } from "@/lib/ids";
 import { fail, type FormState } from "@/lib/result";
 import { isServiceError } from "@/lib/services/errors";
 import {
   createExercise,
   deleteExercise,
+  seedDefaultExercises,
   setExerciseArchived,
   updateExercise,
   type ExerciseInput,
@@ -22,6 +20,12 @@ import {
 
 const exerciseInput = z.object({
   name: z.string().trim().min(1, "Die Übung braucht einen Namen.").max(80),
+  movementName: z
+    .string()
+    .trim()
+    .max(80)
+    .optional()
+    .transform((v) => (v ? v : null)),
   muscleGroup: z
     .string()
     .trim()
@@ -44,6 +48,7 @@ const exerciseInput = z.object({
 function readExerciseForm(formData: FormData) {
   return exerciseInput.safeParse({
     name: text(formData, "name"),
+    movementName: optionalText(formData, "movementName"),
     muscleGroup: optionalText(formData, "muscleGroup"),
     machineSetup: optionalText(formData, "machineSetup"),
     trackingMode: text(formData, "trackingMode", "weight_reps"),
@@ -121,20 +126,16 @@ export async function deleteExerciseAction(exerciseId: string): Promise<void> {
 export async function seedDefaultExercisesAction(): Promise<void> {
   const user = await requireUser();
 
-  await db
-    .insert(exercises)
-    .values(
-      DEFAULT_EXERCISES.map((exercise) => ({
-        id: newId(),
-        userId: user.id,
-        name: exercise.name,
-        muscleGroup: exercise.muscleGroup,
-        trackingMode: exercise.trackingMode ?? ("weight_reps" as const),
-        weightStepKg: exercise.weightStepKg ?? 2.5,
-      })),
-    )
-    // Wer die Standardübungen schon hat, soll keinen Fehler sehen.
-    .onConflictDoNothing();
+  // Wer die Standardübungen schon hat, soll keinen Fehler sehen.
+  await seedDefaultExercises(
+    user,
+    DEFAULT_EXERCISES.map((exercise) => ({
+      name: exercise.name,
+      muscleGroup: exercise.muscleGroup,
+      trackingMode: exercise.trackingMode ?? "weight_reps",
+      weightStepKg: exercise.weightStepKg ?? 2.5,
+    })),
+  );
 
   revalidatePath("/exercises");
 }

@@ -161,6 +161,28 @@ export const apiTokens = sqliteTable(
   ],
 );
 
+/**
+ * Eine Bewegung, unabhängig vom Gerät: "Seitheben", "Rudern eng". Die Geräte,
+ * an denen man sie macht, sind ihre Varianten (Tabelle exercises). Ein
+ * Planeintrag meint die Bewegung – an welchem Gerät trainiert wird, entscheidet
+ * sich im Training. Verglichen wird trotzdem nur innerhalb einer Variante: an
+ * Maschine und Kabelturm sind dieselben Kilos nicht dieselbe Last.
+ */
+export const movements = sqliteTable(
+  "movements",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    /** Gilt für alle Varianten und wird dorthin gespiegelt, siehe exercises.muscleGroup. */
+    muscleGroup: text("muscle_group"),
+    createdAt: integer("created_at").notNull().default(now),
+  },
+  (t) => [uniqueIndex("movements_user_name_unique").on(t.userId, t.name)],
+);
+
 export const exercises = sqliteTable(
   "exercises",
   {
@@ -169,7 +191,16 @@ export const exercises = sqliteTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
-    /** Muskelgruppe, z.B. "Brust", "Rücken" – frei wählbar. */
+    /**
+     * Die Bewegung, deren Variante diese Übung ist. In der Datenbank nullable,
+     * weil SQLite eine Pflichtspalte nicht nachträglich anlegen kann; die
+     * Migration füllt sie für alle Bestandsübungen, neue bekommen sie immer.
+     */
+    movementId: text("movement_id").references(() => movements.id),
+    /**
+     * Muskelgruppe, z.B. "Brust", "Rücken". Führend ist die der Bewegung; hier
+     * steht eine Kopie, damit Statistik und Listen ohne Join auskommen.
+     */
     muscleGroup: text("muscle_group"),
     /** Notiz für Maschineneinstellungen: Sitzhöhe, Lehne, Griff ... */
     machineSetup: text("machine_setup"),
@@ -184,6 +215,7 @@ export const exercises = sqliteTable(
   },
   (t) => [
     index("exercises_user_idx").on(t.userId),
+    index("exercises_movement_idx").on(t.movementId),
     uniqueIndex("exercises_user_name_unique").on(t.userId, t.name),
   ],
 );
@@ -242,6 +274,27 @@ export const workouts = sqliteTable(
   (t) => [index("workouts_user_started_idx").on(t.userId, t.startedAt)],
 );
 
+/**
+ * Welches Gerät im laufenden Training für eine Bewegung gewählt ist. Ohne
+ * Eintrag gilt das zuletzt genutzte. Ist erst einmal ein Satz gespeichert,
+ * steht die Variante ohnehin fest.
+ */
+export const workoutVariants = sqliteTable(
+  "workout_variants",
+  {
+    workoutId: text("workout_id")
+      .notNull()
+      .references(() => workouts.id, { onDelete: "cascade" }),
+    movementId: text("movement_id")
+      .notNull()
+      .references(() => movements.id, { onDelete: "cascade" }),
+    exerciseId: text("exercise_id")
+      .notNull()
+      .references(() => exercises.id, { onDelete: "cascade" }),
+  },
+  (t) => [primaryKey({ columns: [t.workoutId, t.movementId] })],
+);
+
 export const workoutSets = sqliteTable(
   "workout_sets",
   {
@@ -275,6 +328,7 @@ export type User = typeof users.$inferSelect;
 export type ApiToken = typeof apiTokens.$inferSelect;
 export type Group = typeof groups.$inferSelect;
 export type GroupMember = typeof groupMembers.$inferSelect;
+export type Movement = typeof movements.$inferSelect;
 export type Exercise = typeof exercises.$inferSelect;
 export type Plan = typeof plans.$inferSelect;
 export type PlanExercise = typeof planExercises.$inferSelect;

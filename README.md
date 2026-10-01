@@ -49,6 +49,11 @@ Homescreen.
 - Mehrere Trainingspläne mit sortierter Übungsreihenfolge und Zielvorgaben
   (Sätze, Wiederholungsbereich, Pausenlänge)
 - Ein Startpaket gängiger Geräte lässt sich per Klick anlegen
+- Bewegungen mit mehreren Geräten: „Seitheben“ an der Maschine und am
+  Kabelturm sind zwei Geräte derselben Bewegung. Der Plan nennt die Bewegung,
+  das Gerät wählst du im Training (vorausgewählt ist das zuletzt genutzte).
+  Verglichen wird nur am selben Gerät – dieselben Kilos sind an Maschine und
+  Kabelzug nicht dieselbe Last.
 - Vier Messarten: Gewicht × Wiederholungen, Körpergewicht (+ Zusatzgewicht),
   Körpergewicht − Gegengewicht (assistierte Maschinen) und Zeit
 

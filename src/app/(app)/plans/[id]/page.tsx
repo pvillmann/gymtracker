@@ -18,7 +18,7 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { Card, EmptyState, PageHeader } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
 import { exerciseCount, formatDuration, formatDurationLong, sets } from "@/lib/format";
-import { getPlan, listExercises, listPlanItems } from "@/lib/queries";
+import { getPlan, listExercises, listMovements, listPlanItems } from "@/lib/queries";
 
 export const metadata: Metadata = { title: "Plan · GymTracker" };
 
@@ -32,10 +32,20 @@ export default async function PlanDetailPage({
   const plan = await getPlan(user.id, id);
   if (!plan) notFound();
 
-  const items = await listPlanItems(plan.id);
-  const exercises = await listExercises(user.id);
-  const used = new Set(items.map((item) => item.exerciseId));
-  const available = exercises.filter((exercise) => !used.has(exercise.id));
+  const [items, exercises, movements] = await Promise.all([
+    listPlanItems(plan.id),
+    listExercises(user.id),
+    listMovements(user.id),
+  ]);
+  const movementName = new Map(movements.map((m) => [m.id, m.name]));
+  const deviceCount = (movementId: string | null) =>
+    movementId ? exercises.filter((e) => e.movementId === movementId).length : 1;
+  // Ein Planeintrag steht für die Bewegung – ein zweites Gerät derselben
+  // Bewegung wäre derselbe Eintrag noch einmal.
+  const usedMovements = new Set(items.map((item) => item.movementId ?? item.exerciseId));
+  const available = exercises.filter(
+    (exercise) => !usedMovements.has(exercise.movementId ?? exercise.id),
+  );
 
   const totalSets = items.reduce((sum, item) => sum + item.targetSets, 0);
   // Grobe Schätzung: bei Zeit-Übungen die Zieldauer, sonst ~40 s Arbeitszeit
@@ -92,8 +102,16 @@ export default async function PlanDetailPage({
                     href={`/exercises/${item.exerciseId}`}
                     className="font-semibold hover:text-accent"
                   >
-                    {item.exerciseName}
+                    {deviceCount(item.movementId) > 1
+                      ? (movementName.get(item.movementId ?? "") ?? item.exerciseName)
+                      : item.exerciseName}
                   </Link>
+                  {deviceCount(item.movementId) > 1 ? (
+                    <p className="text-xs text-faint">
+                      {deviceCount(item.movementId)} Geräte · bevorzugt {item.exerciseName}
+                      {" "}– gewählt wird im Training
+                    </p>
+                  ) : null}
                   <p className="mt-0.5 text-sm text-muted tnum">
                     {item.targetSets} ×{" "}
                     {item.trackingMode === "time"
