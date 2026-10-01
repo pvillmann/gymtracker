@@ -24,7 +24,7 @@ import {
   setLabel,
   setsOfKind,
 } from "@/lib/describe";
-import { formatDuration, formatKg, parseDurationInput } from "@/lib/format";
+import { formatDuration, formatKg } from "@/lib/format";
 import type { FormState } from "@/lib/result";
 import {
   compareSets,
@@ -48,7 +48,6 @@ export type LoggerExercise = {
   id: string;
   name: string;
   trackingMode: TrackingMode;
-  weightStepKg: number;
   machineSetup: string | null;
   /** Vorschaubild des Geräts, damit man die Maschine im Studio wiederfindet. */
   imageId?: string | null;
@@ -81,91 +80,50 @@ export type LoggerPrevious = {
   sets: LoggerSet[];
 };
 
-function toNumber(value: string): number {
-  const parsed = Number(value.trim().replace(",", "."));
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
 function formatValue(value: number): string {
   return formatKg(value);
 }
 
-function Stepper({
+/**
+ * Ein Zahlenfeld ohne +/- Tasten: im Studio tippt man das Gewicht ohnehin
+ * direkt ein. Komma und Punkt gehen beide.
+ */
+function NumberField({
   label,
   value,
   onChange,
-  step,
-  min = 0,
-  max,
   name,
   suffix,
-  format = formatValue,
-  parse = toNumber,
   inputMode = "decimal",
 }: {
   label: string;
   value: string;
   onChange: (next: string) => void;
-  step: number;
-  min?: number;
-  max: number;
   name: string;
   suffix?: string;
-  /** Wie der Wert nach einem +/- Klick angezeigt wird. Default: Gewichts-Notation. */
-  format?: (value: number) => string;
-  /** Wie der angezeigte Text in eine Zahl übersetzt wird. Default: Dezimalzahl. */
-  parse?: (value: string) => number;
   /**
    * "decimal" blendet auf dem Handy die Doppelpunkt-Taste aus – für "mm:ss"
    * (Dauer) braucht es deshalb die normale Texttastatur.
    */
-  inputMode?: "decimal" | "text";
+  inputMode?: "decimal" | "numeric" | "text";
 }) {
-  const nudge = (direction: 1 | -1) => {
-    const next = Math.min(max, Math.max(min, parse(value) + direction * step));
-    onChange(format(next));
-  };
-
-  const buttonClass =
-    "flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border " +
-    "border-line bg-surface-2 text-xl font-bold text-fg active:bg-line " +
-    "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
-
   return (
-    <div>
+    <label className="block">
       <span className="mb-1.5 block text-xs font-medium text-muted">{label}</span>
-      <div className="flex items-center gap-1.5">
-        <button
-          type="button"
-          className={buttonClass}
-          onClick={() => nudge(-1)}
-          aria-label={`${label} verringern`}
-        >
-          −
-        </button>
-        <input
-          name={name}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          onFocus={(event) => event.target.select()}
-          inputMode={inputMode}
-          enterKeyHint="done"
-          aria-label={label}
-          className="h-12 w-full min-w-0 rounded-xl border border-line bg-surface-2 px-2 text-center text-lg font-semibold tnum text-fg focus:border-accent focus:outline-none"
-        />
-        <button
-          type="button"
-          className={buttonClass}
-          onClick={() => nudge(1)}
-          aria-label={`${label} erhöhen`}
-        >
-          +
-        </button>
-      </div>
+      <input
+        name={name}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onFocus={(event) => event.target.select()}
+        inputMode={inputMode}
+        enterKeyHint="done"
+        autoComplete="off"
+        className="h-12 w-full min-w-0 rounded-xl border border-line bg-surface-2 px-2 text-center text-lg font-semibold tnum text-fg focus:border-accent focus:outline-none"
+      />
       {suffix ? (
         <span className="mt-1 block text-center text-[11px] text-faint">{suffix}</span>
       ) : null}
-    </div>
+    </label>
   );
 }
 
@@ -564,29 +522,23 @@ export function ExerciseLogger({
           // Platz, als eine von zwei Spalten hergibt - in der 2-Spalten-Reihe
           // wurde der Text zuvor abgeschnitten.
           <div className="space-y-3">
-            <Stepper
+            <NumberField
               label="Dauer (Min:Sek)"
               name="durationSeconds"
               value={duration}
               onChange={edit(setDuration)}
-              step={15}
-              max={36_000}
-              format={formatDuration}
-              parse={parseDurationInput}
               inputMode="text"
             />
-            <Stepper
+            <NumberField
               label="Zusatzgewicht (kg)"
               name="weightKg"
               value={weight}
               onChange={edit(setWeight)}
-              step={exercise.weightStepKg}
-              max={1000}
             />
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-3">
-            <Stepper
+            <NumberField
               label={
                 exercise.trackingMode === "bodyweight_reps"
                   ? "Zusatzgewicht (kg)"
@@ -597,8 +549,6 @@ export function ExerciseLogger({
               name="weightKg"
               value={weight}
               onChange={edit(setWeight)}
-              step={exercise.weightStepKg}
-              max={1000}
               suffix={
                 // Bei Körpergewichts-Übungen ohne Zusatzgewicht wäre "0 kg"
                 // nur Rauschen.
@@ -607,13 +557,12 @@ export function ExerciseLogger({
                   : undefined
               }
             />
-            <Stepper
+            <NumberField
               label="Wiederholungen"
               name="reps"
+              inputMode="numeric"
               value={reps}
               onChange={edit(setReps)}
-              step={1}
-              max={500}
               suffix={
                 previousForNext
                   ? `letztes Mal ${previousForNext.reps} Wdh.`

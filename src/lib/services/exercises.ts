@@ -11,7 +11,6 @@ import {
   type User,
 } from "@/db/schema";
 import { newId } from "@/lib/ids";
-import { assertCanEditCatalog } from "@/lib/services/catalog";
 import { recomputeVolumes, requireEquipment } from "@/lib/services/equipment";
 import { ServiceError } from "@/lib/services/errors";
 import { linkMovementEquipment } from "@/lib/services/machines";
@@ -93,9 +92,7 @@ async function resolveMovement(
   }
 
   if (muscleGroup !== undefined && muscleGroup !== existing.muscleGroup) {
-    // Die Bewegung gehört allen: ihre Muskelgruppe ändert nur, wer sie
-    // angelegt hat, oder ein Admin – sonst ändert sie sich bei allen mit.
-    await assertCanEditCatalog(user, existing.ownerId, `Die Bewegung „${name}“`);
+    // Die Übung gehört allen; die Muskelgruppe ändert sich bei allen mit.
     await setMovementMuscleGroup(existing.id, muscleGroup);
     return { id: existing.id, muscleGroup, trackingMode: existing.trackingMode, created: false };
   }

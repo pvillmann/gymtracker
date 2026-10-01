@@ -241,7 +241,6 @@ export default async function WorkoutPage({
             const movementId = exercise.movementId ?? exercise.id;
             const target = targetByMovement.get(movementId);
             const last = previous.get(exerciseId);
-            const machine = exercise.equipmentId ? equipmentById.get(exercise.equipmentId) : undefined;
             // Umschalten zwischen den Maschinen der Übung – nur für Übungen,
             // die im Training stehen, nicht für alte Einträge von heute.
             const machines = slotMovements.has(movementId)
@@ -268,11 +267,6 @@ export default async function WorkoutPage({
                   id: exercise.id,
                   name: movementById.get(movementId)?.name ?? exercise.name,
                   trackingMode: exercise.trackingMode,
-                  // Was das Studio für dieses Gerät festhält, geht vor.
-                  weightStepKg:
-                    gymExercises.get(exerciseId)?.weightStepKg ??
-                    machine?.weightStepKg ??
-                    exercise.weightStepKg,
                   machineSetup:
                     gymExercises.get(exerciseId)?.machineSetup ?? exercise.machineSetup,
                   imageId: exercise.equipmentId

@@ -403,8 +403,8 @@ export const workouts = sqliteTable(
 
 /**
  * Welche Maschinen zu welcher Übung passen – der Kabelturm passt zu
- * Seitheben, Trizepsdrücken und Face Pulls. Gemeinsamer Katalog: anlegen darf
- * jeder, entfernen wer es angelegt hat oder ein Admin.
+ * Seitheben, Trizepsdrücken und Face Pulls. Gemeinsamer Katalog: anlegen und
+ * entfernen darf jeder.
  */
 export const movementEquipment = sqliteTable(
   "movement_equipment",

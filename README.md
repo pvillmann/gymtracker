@@ -7,8 +7,8 @@ mit Gewicht und Wiederholungen mitschreiben und dabei immer sehen, was beim
 letzten Mal an derselben Maschine stand — und ob es heute besser oder schlechter
 läuft.
 
-Für das Handy gebaut: große Tap-Ziele, Plus/Minus-Tasten in den Gewichtsstufen
-der jeweiligen Maschine, dunkles Design, funktioniert als Web-App auf dem
+Für das Handy gebaut: große Tap-Ziele, Gewicht und Wiederholungen direkt
+eintippen, dunkles Design, funktioniert als Web-App auf dem
 Homescreen.
 
 ## Screenshots
@@ -29,8 +29,8 @@ Homescreen.
 ## Was drin ist
 
 **Training mitschreiben**
-- Satz für Satz Gewicht und Wiederholungen erfassen, mit +/− in der
-  Gewichtsstufe der Maschine (die Beinpresse springt in 5 kg, die Kurzhantel in 2 kg)
+- Satz für Satz Gewicht und Wiederholungen erfassen – einfach eintippen,
+  vorbelegt mit den Werten vom letzten Mal
 - Über jedem Eingabefeld steht, was beim letzten Mal in genau diesem Satz stand
 - Jeder gespeicherte Satz bekommt sofort ein Vergleichs-Label: ▲ +5 kg, ▼ −1 Wdh. oder „gleich"
 - Den letzten Satz einer Übung mit einem Tipp einschätzen – „Am Limit“, „Ok“
@@ -58,17 +58,17 @@ Homescreen.
   Verglichen wird nur an derselben Maschine – dieselben Kilos sind an
   Maschine und Kabelzug nicht dieselbe Last.
 - Studios: Beim Trainingsstart fragt die App, wo du bist – mit „Nicht erneut
-  fragen“ merkt sich der Plan das Studio. Einstellungen und Gewichtsstufe
+  fragen“ merkt sich der Plan das Studio. Einstellungen an der Maschine
   lassen sich pro Studio hinterlegen
 - Maschinen mit Foto, Hersteller, Übersetzung (z. B. 2:1 am Kabelzug),
-  Eigengewicht und Gewichtsstufe. Übersetzung und Eigengewicht fließen ins bewegte Gewicht ein;
+  Eigengewicht. Übersetzung und Eigengewicht fließen ins bewegte Gewicht ein;
   Fotos werden verkleinert und ohne Metadaten (auch ohne GPS) im Daten-Volume
   gespeichert
 - Gemeinsamer Katalog: Übungen, Maschinen (samt Fotos), Studios und ihre
-  Zuordnungen gelten für
-  alle Nutzer der Instanz. Jeder darf sie benutzen und neue anlegen; ändern
-  oder löschen nur, wer sie angelegt hat, oder ein Administrator. Trainings,
-  Pläne und Einstellungen bleiben privat.
+  Zuordnungen gelten für alle Nutzer der Instanz. Jeder darf sie benutzen,
+  anlegen, bearbeiten und zuordnen – wer einen Fehler sieht, korrigiert ihn.
+  Löschen darf nur, wer den Eintrag angelegt hat, oder ein Administrator.
+  Trainings, Pläne und Einstellungen bleiben privat.
 - Neue Übungen lassen sich aus der offenen Übungsdatenbank
   [wger](https://wger.de) übernehmen (Name und Muskelgruppe). Lizenz und
   Urheber werden pro Eintrag mitgespeichert und angezeigt (CC-BY-SA);
@@ -361,7 +361,7 @@ dort nichts Brauchbares steht.
 | `list_exercises`, `list_plans`, `get_plan` | Übungen und Pläne durchsehen |
 | `last_performance`, `exercise_history` | Was lief beim letzten Mal an dieser Maschine? |
 | `recent_workouts`, `training_stats` | Verlauf und Kennzahlen |
-| `create_exercise` | Neue Übung anlegen, inkl. Messart und Gewichtsstufe |
+| `create_exercise`, `assign_machine` | Neue Übung anlegen, Maschinen Übungen und Studios zuordnen |
 | `create_plan`, `add_exercise_to_plan` | Plan aufbauen |
 | `update_plan_exercise`, `remove_exercise_from_plan` | Zielwerte ändern, Übung entfernen |
 | `start_workout`, `current_workout`, `finish_workout` | Training führen |

@@ -13,7 +13,6 @@ import {
   type User,
 } from "@/db/schema";
 import { newId } from "@/lib/ids";
-import { assertCanEditCatalog, canEditCatalog } from "@/lib/services/catalog";
 import { requireEquipment } from "@/lib/services/equipment";
 import { ServiceError } from "@/lib/services/errors";
 import { requireGym } from "@/lib/services/gyms";
@@ -49,23 +48,12 @@ export async function linkMovementEquipment(
     .onConflictDoNothing();
 }
 
-/** Entfernen nur, wer die Zuordnung angelegt hat, oder ein Admin. */
+/** Korrigieren darf jeder – auch eine falsche Zuordnung entfernen. */
 export async function unlinkMovementEquipment(
-  user: User,
+  _user: User,
   movementId: string,
   equipmentId: string,
 ): Promise<void> {
-  const [row] = await db
-    .select({ addedBy: movementEquipment.addedBy })
-    .from(movementEquipment)
-    .where(
-      and(eq(movementEquipment.movementId, movementId), eq(movementEquipment.equipmentId, equipmentId)),
-    )
-    .limit(1);
-  if (!row) return;
-  if (!(await canEditCatalog(user, row.addedBy ?? ""))) {
-    throw new ServiceError("Entfernen kann die Zuordnung nur, wer sie angelegt hat, oder ein Administrator.");
-  }
   await db
     .delete(movementEquipment)
     .where(
@@ -82,16 +70,7 @@ export async function linkGymEquipment(user: User, gymId: string, equipmentId: s
     .onConflictDoNothing();
 }
 
-export async function unlinkGymEquipment(user: User, gymId: string, equipmentId: string): Promise<void> {
-  const [row] = await db
-    .select({ addedBy: gymEquipment.addedBy })
-    .from(gymEquipment)
-    .where(and(eq(gymEquipment.gymId, gymId), eq(gymEquipment.equipmentId, equipmentId)))
-    .limit(1);
-  if (!row) return;
-  if (!(await canEditCatalog(user, row.addedBy ?? ""))) {
-    throw new ServiceError("Entfernen kann die Zuordnung nur, wer sie angelegt hat, oder ein Administrator.");
-  }
+export async function unlinkGymEquipment(_user: User, gymId: string, equipmentId: string): Promise<void> {
   await db
     .delete(gymEquipment)
     .where(and(eq(gymEquipment.gymId, gymId), eq(gymEquipment.equipmentId, equipmentId)));
@@ -236,17 +215,15 @@ export async function createMovement(
 }
 
 /**
- * Ändert eine Übung für alle – deshalb nur durch den, der sie angelegt hat,
- * oder einen Admin. Muskelgruppe und Messart wandern in die Varianten aller
- * Nutzer mit.
+ * Ändert eine Übung für alle – jeder darf korrigieren. Muskelgruppe und
+ * Messart wandern in die Varianten aller Nutzer mit.
  */
 export async function updateMovement(
-  user: User,
+  _user: User,
   movementId: string,
   input: MovementInput,
 ): Promise<void> {
-  const movement = await requireMovement(movementId);
-  await assertCanEditCatalog(user, movement.userId, `Die Übung „${movement.name}“`);
+  await requireMovement(movementId);
   try {
     await db.update(movements).set(input).where(eq(movements.id, movementId));
   } catch (error) {

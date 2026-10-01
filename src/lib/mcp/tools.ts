@@ -451,8 +451,7 @@ export function registerGymTools(server: McpServer, user: User): void {
         "Ordnet eine Maschine einer Übung zu (sie geht an ihr) und/oder trägt " +
         "sie in einem Studio ein (sie steht dort). Danach schlägt das Training " +
         "im Studio genau diese Maschine für die Übung vor. Mit remove: true " +
-        "wird die Zuordnung wieder entfernt – das darf nur, wer sie angelegt " +
-        "hat, oder ein Administrator.",
+        "wird eine falsche Zuordnung wieder entfernt.",
       inputSchema: {
         machine: z.string().describe("Name der Maschine"),
         exercise: z.string().optional().describe("Übung, die an der Maschine geht"),
@@ -929,7 +928,6 @@ export function registerGymTools(server: McpServer, user: User): void {
               [e.manufacturer, e.model].filter(Boolean).join(" "),
               e.loadFactor !== 1 ? `Übersetzung ${Math.round(1 / e.loadFactor)}:1` : null,
               e.baseLoadKg > 0 ? `Eigengewicht ${formatKg(e.baseLoadKg)} kg` : null,
-              `Stufe ${String(e.weightStepKg).replace(".", ",")} kg`,
               e.imageId ? "mit Foto" : "ohne Foto",
             ]
               .filter(Boolean)
@@ -964,12 +962,6 @@ export function registerGymTools(server: McpServer, user: User): void {
         base_load_kg: z.number().min(0).max(500).optional().describe("Eigengewicht, z. B. Schlitten"),
         notes: z.string().max(1000).optional(),
         exercise: z.string().max(80).optional().describe("Übung, die an dem Gerät geht"),
-        weight_step_kg: z
-          .number()
-          .positive()
-          .max(50)
-          .optional()
-          .describe("Kleinster Gewichtssprung, Standard 2.5"),
         gym: z.string().max(60).optional().describe("Studio, in dem das Gerät steht"),
       },
     },
@@ -982,7 +974,6 @@ export function registerGymTools(server: McpServer, user: User): void {
           kind: args.kind ?? "other",
           loadFactor: factorOf(args.ratio) ?? 1,
           baseLoadKg: args.base_load_kg ?? 0,
-          weightStepKg: args.weight_step_kg ?? 2.5,
           notes: args.notes ?? null,
         });
 
@@ -1019,7 +1010,6 @@ export function registerGymTools(server: McpServer, user: User): void {
         kind: kindSchema,
         ratio: ratioSchema,
         base_load_kg: z.number().min(0).max(500).optional(),
-        weight_step_kg: z.number().positive().max(50).optional(),
         notes: z.string().max(1000).optional(),
       },
     },
@@ -1033,7 +1023,6 @@ export function registerGymTools(server: McpServer, user: User): void {
           kind: args.kind ?? found.kind,
           loadFactor: factorOf(args.ratio) ?? found.loadFactor,
           baseLoadKg: args.base_load_kg ?? found.baseLoadKg,
-          weightStepKg: args.weight_step_kg ?? found.weightStepKg,
           notes: args.notes ?? found.notes,
         });
         return `Gerät „${args.name ?? found.name}“ gespeichert. Fotos: ${equipmentUrl(found.id)}`;

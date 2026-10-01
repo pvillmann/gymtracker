@@ -331,9 +331,6 @@ export default async function ExerciseDetailPage({
                           ? [
                               "steht hier",
                               settings.machineSetup ? "eigene Einstellung" : null,
-                              settings.weightStepKg !== null
-                                ? `Stufe ${formatKg(settings.weightStepKg)} kg`
-                                : null,
                             ]
                               .filter(Boolean)
                               .join(" · ")
@@ -345,8 +342,6 @@ export default async function ExerciseDetailPage({
                         gymId={gym.id}
                         exerciseId={exercise.id}
                         machineSetup={settings?.machineSetup ?? null}
-                        weightStepKg={settings?.weightStepKg ?? null}
-                        fallbackStepKg={device?.weightStepKg ?? exercise.weightStepKg}
                       />
                     </div>
                   </details>

@@ -14,7 +14,7 @@ import { EquipmentImageUpload } from "@/components/EquipmentImageUpload";
 import { InlineActionForm } from "@/components/InlineActionForm";
 import { Card, PageHeader, Select } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
-import { canEditCatalog } from "@/lib/services/catalog";
+import { canDeleteCatalog } from "@/lib/services/catalog";
 import { EQUIPMENT_KINDS } from "@/lib/constants";
 import {
   getEquipment,
@@ -44,37 +44,20 @@ export default async function EquipmentDetailPage({
     listMovements(),
     listMachineLinkRows(),
   ]);
-  // Wo die Maschine steht und welche Übungen an ihr gehen – beides
-  // gemeinsamer Katalog: eintragen darf jeder, austragen nur, wer den
-  // Eintrag angelegt hat, oder ein Admin.
-  const gymLink = new Map(
-    links.gymLinks.filter((l) => l.equipmentId === item.id).map((l) => [l.gymId, l]),
+  // Wo die Maschine steht und welche Übungen an ihr gehen – gemeinsamer
+  // Katalog, den jeder ergänzen und korrigieren darf.
+  const inGym = new Set(
+    links.gymLinks.filter((l) => l.equipmentId === item.id).map((l) => l.gymId),
   );
-  const gymRows = await Promise.all(
-    gyms.map(async (gym) => {
-      const link = gymLink.get(gym.id);
-      return {
-        gym,
-        present: Boolean(link),
-        removable: link ? await canEditCatalog(user, link.addedBy ?? "") : true,
-      };
-    }),
+  const gymRows = gyms.map((gym) => ({ gym, present: inGym.has(gym.id) }));
+  const movementLink = new Set(
+    links.movementLinks.filter((l) => l.equipmentId === item.id).map((l) => l.movementId),
   );
-  const movementLink = new Map(
-    links.movementLinks.filter((l) => l.equipmentId === item.id).map((l) => [l.movementId, l]),
-  );
-  const fits = await Promise.all(
-    movements
-      .filter((m) => movementLink.has(m.id))
-      .map(async (movement) => ({
-        movement,
-        removable: await canEditCatalog(user, movementLink.get(movement.id)!.addedBy ?? ""),
-      })),
-  );
+  const fits = movements.filter((m) => movementLink.has(m.id)).map((movement) => ({ movement }));
   const addableMovements = movements.filter((m) => !movementLink.has(m.id));
   // Der Katalog gehört allen; die eigenen Übungen bleiben privat.
   const linked = exercises.filter((e) => e.equipmentId === item.id);
-  const editable = await canEditCatalog(user, item.userId);
+  const deletable = await canDeleteCatalog(user, item.userId);
   const kind = EQUIPMENT_KINDS.find((k) => k.value === item.kind)?.label;
 
   return (
@@ -111,7 +94,7 @@ export default async function EquipmentDetailPage({
                       className="aspect-square w-full rounded-lg object-cover"
                     />
                   </a>
-                  {editable || image.uploadedBy === user.id ? (
+                  {deletable || image.uploadedBy === user.id ? (
                     <form
                       action={deleteEquipmentImageAction.bind(null, image.id)}
                       className="absolute top-1 right-1"
@@ -151,21 +134,19 @@ export default async function EquipmentDetailPage({
         <Card className="p-1">
           {gymRows.length > 0 ? (
             <ul className="divide-y divide-line-soft">
-              {gymRows.map(({ gym, present, removable }) => (
+              {gymRows.map(({ gym, present }) => (
                 <li key={gym.id} className="flex items-center gap-3 px-3 py-2">
                   <span className={present ? "flex-1 font-semibold" : "flex-1 text-muted"}>
                     {present ? "✓ " : ""}
                     {gym.name}
                   </span>
                   {present ? (
-                    removable ? (
-                      <InlineActionForm
-                        action={setMachineInGymAction}
-                        fields={{ equipmentId: item.id, gymId: gym.id, present: "0" }}
-                        label="Austragen"
-                        variant="ghost"
-                      />
-                    ) : null
+                    <InlineActionForm
+                      action={setMachineInGymAction}
+                      fields={{ equipmentId: item.id, gymId: gym.id, present: "0" }}
+                      label="Austragen"
+                      variant="ghost"
+                    />
                   ) : (
                     <InlineActionForm
                       action={setMachineInGymAction}
@@ -198,19 +179,17 @@ export default async function EquipmentDetailPage({
         <Card className="p-1">
           {fits.length > 0 ? (
             <ul className="divide-y divide-line-soft">
-              {fits.map(({ movement, removable }) => (
+              {fits.map(({ movement }) => (
                 <li key={movement.id} className="flex items-center gap-3 px-3 py-2">
                   <Link href={`/movements/${movement.id}`} className="flex-1 font-semibold hover:underline">
                     {movement.name}
                   </Link>
-                  {removable ? (
-                    <InlineActionForm
-                      action={unlinkMovementMachineAction}
-                      fields={{ movementId: movement.id, equipmentId: item.id }}
-                      label="Entfernen"
-                      variant="ghost"
-                    />
-                  ) : null}
+                  <InlineActionForm
+                    action={unlinkMovementMachineAction}
+                    fields={{ movementId: movement.id, equipmentId: item.id }}
+                    label="Entfernen"
+                    variant="ghost"
+                  />
                 </li>
               ))}
             </ul>
@@ -270,33 +249,32 @@ export default async function EquipmentDetailPage({
         </Card>
       </section>
 
-      {editable ? (
-        <>
-          <section className="mb-6">
-            <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
-              Bearbeiten
-            </h2>
-            <EquipmentForm
-              action={updateEquipmentAction.bind(null, item.id)}
-              equipment={item}
-              submitLabel="Änderungen speichern"
-            />
-          </section>
+      <section className="mb-6">
+        <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+          Bearbeiten
+        </h2>
+        <EquipmentForm
+          action={updateEquipmentAction.bind(null, item.id)}
+          equipment={item}
+          submitLabel="Änderungen speichern"
+        />
+        <p className="mt-2 px-1 text-xs text-faint">
+          Die Maschine gehört zum gemeinsamen Katalog – Änderungen gelten für alle.
+        </p>
+      </section>
 
-          <form action={deleteEquipmentAction.bind(null, item.id)}>
-            <ConfirmSubmitButton
-              size="sm"
-              message={`Gerät „${item.name}“ für alle löschen? Die Übungen und ihr Verlauf bleiben, verlieren aber die Zuordnung und die Fotos.`}
-            >
-              Gerät löschen
-            </ConfirmSubmitButton>
-          </form>
-        </>
+      {deletable ? (
+        <form action={deleteEquipmentAction.bind(null, item.id)}>
+          <ConfirmSubmitButton
+            size="sm"
+            message={`Maschine „${item.name}“ für alle löschen? Die Übungen und ihr Verlauf bleiben, verlieren aber die Zuordnung und die Fotos.`}
+          >
+            Maschine löschen
+          </ConfirmSubmitButton>
+        </form>
       ) : (
         <p className="px-1 text-sm text-muted">
-          Das Gerät gehört zum gemeinsamen Katalog. Ändern kann es{" "}
-          {item.ownerName ?? "der Ersteller"} oder ein Administrator; Fotos
-          beisteuern kann jeder.
+          Löschen kann die Maschine {item.ownerName ?? "der Ersteller"} oder ein Administrator.
         </p>
       )}
     </>

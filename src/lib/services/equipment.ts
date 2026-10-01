@@ -13,7 +13,7 @@ import {
 } from "@/db/schema";
 import { newId } from "@/lib/ids";
 import { removeImage, storeImage } from "@/lib/images";
-import { assertCanEditCatalog } from "@/lib/services/catalog";
+import { assertCanDeleteCatalog } from "@/lib/services/catalog";
 import { ServiceError } from "@/lib/services/errors";
 
 /** Mehr Fotos braucht niemand, um eine Maschine wiederzuerkennen. */
@@ -58,8 +58,7 @@ export async function updateEquipment(
   equipmentId: string,
   input: EquipmentInput,
 ): Promise<void> {
-  const current = await requireEquipment(equipmentId);
-  await assertCanEditCatalog(user, current.userId, `Das Gerät „${current.name}“`);
+  await requireEquipment(equipmentId);
   try {
     await db.update(equipment).set(input).where(eq(equipment.id, equipmentId));
   } catch (error) {
@@ -72,7 +71,7 @@ export async function updateEquipment(
 
 export async function deleteEquipment(user: User, equipmentId: string): Promise<void> {
   const current = await requireEquipment(equipmentId);
-  await assertCanEditCatalog(user, current.userId, `Das Gerät „${current.name}“`);
+  await assertCanDeleteCatalog(user, current.userId, `Das Gerät „${current.name}“`);
   const images = await db
     .select({ id: equipmentImages.id })
     .from(equipmentImages)
@@ -124,7 +123,7 @@ export async function deleteEquipmentImage(user: User, imageId: string): Promise
     .limit(1);
   if (!row) throw new ServiceError("Dieses Foto gibt es nicht.");
   if (row.uploadedBy !== user.id) {
-    await assertCanEditCatalog(user, row.ownerId, "Dieses Foto");
+    await assertCanDeleteCatalog(user, row.ownerId, "Dieses Foto");
   }
 
   await db.delete(equipmentImages).where(eq(equipmentImages.id, imageId));

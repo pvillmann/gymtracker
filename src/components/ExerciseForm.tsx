@@ -207,21 +207,6 @@ export function ExerciseForm({
         </Field>
 
         <Field
-          label="Gewichtsstufe (kg)"
-          hint="Kleinster Sprung an der Maschine – steuert die +/− Tasten beim Training."
-        >
-          <Input
-            type="number"
-            name="weightStepKg"
-            inputMode="decimal"
-            step="0.25"
-            min="0.25"
-            max="50"
-            defaultValue={exercise?.weightStepKg ?? 2.5}
-          />
-        </Field>
-
-        <Field
           label="Einstellungen an der Maschine"
           hint="Sitzhöhe, Lehne, Griffposition – damit du es beim nächsten Mal sofort weißt."
         >

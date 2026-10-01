@@ -23,7 +23,6 @@ import {
   listGyms,
   listMachineLinkRows,
 } from "@/lib/queries";
-import { canEditCatalog } from "@/lib/services/catalog";
 
 export const metadata: Metadata = { title: "Übung · GymTracker" };
 
@@ -56,7 +55,6 @@ export default async function MovementPage({ params }: { params: Promise<{ id: s
     equipment
       .filter((e) => linkedIds.has(e.id))
       .map(async (machine) => {
-        const link = linked.find((l) => l.equipmentId === machine.id)!;
         const variant = own.find((v) => v.equipmentId === machine.id);
         return {
           machine,
@@ -67,13 +65,11 @@ export default async function MovementPage({ params }: { params: Promise<{ id: s
             .map((g) => gymName.get(g.gymId))
             .filter((n): n is string => Boolean(n))
             .sort(),
-          removable: await canEditCatalog(user, link.addedBy ?? ""),
         };
       }),
   );
   const bare = own.find((v) => v.equipmentId === null);
   const addable = equipment.filter((e) => !linkedIds.has(e.id));
-  const editable = await canEditCatalog(user, movement.userId);
   const mode = TRACKING_MODES.find((m) => m.value === movement.trackingMode)?.label;
 
   return (
@@ -108,7 +104,7 @@ export default async function MovementPage({ params }: { params: Promise<{ id: s
             </p>
           ) : (
             <ul className="divide-y divide-line-soft">
-              {machines.map(({ machine, variant, last, gyms: where, removable }) => (
+              {machines.map(({ machine, variant, last, gyms: where }) => (
                 <li key={machine.id} className="flex items-start gap-3 px-3 py-3">
                   {machine.imageId ? (
                     <img
@@ -136,14 +132,12 @@ export default async function MovementPage({ params }: { params: Promise<{ id: s
                       </p>
                     ) : null}
                   </div>
-                  {removable ? (
-                    <InlineActionForm
-                      action={unlinkMovementMachineAction}
-                      fields={{ movementId: movement.id, equipmentId: machine.id }}
-                      label="Entfernen"
-                      variant="ghost"
-                    />
-                  ) : null}
+                  <InlineActionForm
+                    action={unlinkMovementMachineAction}
+                    fields={{ movementId: movement.id, equipmentId: machine.id }}
+                    label="Entfernen"
+                    variant="ghost"
+                  />
                 </li>
               ))}
               {bare ? (
@@ -193,30 +187,24 @@ export default async function MovementPage({ params }: { params: Promise<{ id: s
             <Link href="/equipment/new" className="font-medium text-accent">
               Neue Maschine anlegen
             </Link>{" "}
-            – danach hier zuordnen. Zuordnungen gelten für alle; entfernen kann sie,
-            wer sie angelegt hat, oder ein Administrator.
+            – danach hier zuordnen. Zuordnungen gelten für alle.
           </p>
         </Card>
       </section>
 
-      {editable ? (
-        <section className="mb-6">
-          <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
-            Bearbeiten
-          </h2>
-          <MovementForm
-            action={updateMovementAction.bind(null, movement.id)}
-            movement={movement}
-            submitLabel="Änderungen speichern"
-          />
-        </section>
-      ) : (
-        <p className="px-1 text-sm text-muted">
-          Die Übung gehört zum gemeinsamen Katalog. Ändern kann sie{" "}
-          {movement.ownerName ?? "der Ersteller"} oder ein Administrator; Maschinen
-          zuordnen kann jeder.
+      <section className="mb-6">
+        <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+          Bearbeiten
+        </h2>
+        <MovementForm
+          action={updateMovementAction.bind(null, movement.id)}
+          movement={movement}
+          submitLabel="Änderungen speichern"
+        />
+        <p className="mt-2 px-1 text-xs text-faint">
+          Die Übung gehört zum gemeinsamen Katalog – Änderungen gelten für alle.
         </p>
-      )}
+      </section>
     </>
   );
 }
