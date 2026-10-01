@@ -9,6 +9,7 @@ import {
 } from "@/actions/exercises";
 import { LineChart, type LinePoint } from "@/components/charts";
 import { ExerciseForm } from "@/components/ExerciseForm";
+import { GymExerciseSettingsForm } from "@/components/GymExerciseSettingsForm";
 import { SubmitButton } from "@/components/SubmitButton";
 import { TrendBadge } from "@/components/TrendBadge";
 import { Card, EmptyState, PageHeader } from "@/components/ui";
@@ -26,6 +27,8 @@ import {
   getExerciseSessions,
   getPreviousPerformances,
   listExercises,
+  getExerciseGymSettings,
+  listGyms,
   listMovements,
 } from "@/lib/queries";
 import { effectiveLoad, estimateOneRepMax, trendOf } from "@/lib/training";
@@ -47,10 +50,12 @@ export default async function ExerciseDetailPage({
   const exercise = await getExercise(user.id, id);
   if (!exercise) notFound();
 
-  const [sessions, movements, allExercises] = await Promise.all([
+  const [sessions, movements, allExercises, gyms, gymSettings] = await Promise.all([
     getExerciseSessions(user.id, exercise.id),
     listMovements(user.id),
     listExercises(user.id),
+    listGyms(user.id),
+    getExerciseGymSettings(exercise.id),
   ]);
   const movement = movements.find((m) => m.id === exercise.movementId) ?? null;
   // Die anderen Geräte derselben Bewegung – mit eigenem Verlauf, denn die
@@ -278,6 +283,50 @@ export default async function ExerciseDetailPage({
               </li>
             </ul>
           </Card>
+        </section>
+      ) : null}
+
+      {gyms.length > 0 ? (
+        <section className="mb-6">
+          <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+            Pro Studio
+          </h2>
+          <div className="space-y-2">
+            {gyms.map((gym) => {
+              const settings = gymSettings.get(gym.id);
+              return (
+                <Card key={gym.id} className="p-0">
+                  <details>
+                    <summary className="cursor-pointer px-4 py-3">
+                      <span className="font-semibold">{gym.name}</span>
+                      <span className="ml-2 text-sm text-muted">
+                        {settings
+                          ? [
+                              "steht hier",
+                              settings.machineSetup ? "eigene Einstellung" : null,
+                              settings.weightStepKg !== null
+                                ? `Stufe ${formatKg(settings.weightStepKg)} kg`
+                                : null,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")
+                          : "noch nicht hier trainiert"}
+                      </span>
+                    </summary>
+                    <div className="border-t border-line-soft px-4 py-3">
+                      <GymExerciseSettingsForm
+                        gymId={gym.id}
+                        exerciseId={exercise.id}
+                        machineSetup={settings?.machineSetup ?? null}
+                        weightStepKg={settings?.weightStepKg ?? null}
+                        fallbackStepKg={exercise.weightStepKg}
+                      />
+                    </div>
+                  </details>
+                </Card>
+              );
+            })}
+          </div>
         </section>
       ) : null}
 

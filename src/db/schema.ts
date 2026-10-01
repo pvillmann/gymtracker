@@ -220,6 +220,24 @@ export const exercises = sqliteTable(
   ],
 );
 
+/**
+ * Ein Studio. Welche Geräte dort stehen und wie sie eingestellt sind, steht
+ * in gymExercises; welches Gerät für eine Bewegung vorausgewählt wird, ergibt
+ * sich aus den Trainings, die dort stattgefunden haben.
+ */
+export const gyms = sqliteTable(
+  "gyms",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    createdAt: integer("created_at").notNull().default(now),
+  },
+  (t) => [uniqueIndex("gyms_user_name_unique").on(t.userId, t.name)],
+);
+
 export const plans = sqliteTable(
   "plans",
   {
@@ -229,6 +247,14 @@ export const plans = sqliteTable(
       .references(() => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     notes: text("notes"),
+    /**
+     * "Nicht erneut fragen" beim Trainingsstart. Gesetzt gilt defaultGymId
+     * ohne Rückfrage – auch wenn es leer ist, dann eben ohne Studio.
+     */
+    rememberGym: integer("remember_gym", { mode: "boolean" }).notNull().default(false),
+    defaultGymId: text("default_gym_id").references(() => gyms.id, {
+      onDelete: "set null",
+    }),
     archivedAt: integer("archived_at"),
     createdAt: integer("created_at").notNull().default(now),
   },
@@ -267,11 +293,36 @@ export const workouts = sqliteTable(
     planId: text("plan_id").references(() => plans.id, { onDelete: "set null" }),
     /** Snapshot des Plannamens, bleibt auch wenn der Plan gelöscht wird. */
     name: text("name").notNull(),
+    gymId: text("gym_id").references(() => gyms.id, { onDelete: "set null" }),
     startedAt: integer("started_at").notNull().default(now),
     finishedAt: integer("finished_at"),
     notes: text("notes"),
   },
   (t) => [index("workouts_user_started_idx").on(t.userId, t.startedAt)],
+);
+
+/**
+ * Ein Gerät in einem bestimmten Studio. Die Zeile entsteht mit dem ersten
+ * Satz dort und trägt, was sich von Studio zu Studio unterscheidet: die
+ * Einstellungen (Sitzhöhe …) und die tatsächliche Gewichtsstufe. Leer gilt
+ * jeweils der Wert der Übung.
+ */
+export const gymExercises = sqliteTable(
+  "gym_exercises",
+  {
+    gymId: text("gym_id")
+      .notNull()
+      .references(() => gyms.id, { onDelete: "cascade" }),
+    exerciseId: text("exercise_id")
+      .notNull()
+      .references(() => exercises.id, { onDelete: "cascade" }),
+    machineSetup: text("machine_setup"),
+    weightStepKg: real("weight_step_kg"),
+  },
+  (t) => [
+    primaryKey({ columns: [t.gymId, t.exerciseId] }),
+    index("gym_exercises_exercise_idx").on(t.exerciseId),
+  ],
 );
 
 /**
@@ -328,6 +379,8 @@ export type User = typeof users.$inferSelect;
 export type ApiToken = typeof apiTokens.$inferSelect;
 export type Group = typeof groups.$inferSelect;
 export type GroupMember = typeof groupMembers.$inferSelect;
+export type Gym = typeof gyms.$inferSelect;
+export type GymExercise = typeof gymExercises.$inferSelect;
 export type Movement = typeof movements.$inferSelect;
 export type Exercise = typeof exercises.$inferSelect;
 export type Plan = typeof plans.$inferSelect;

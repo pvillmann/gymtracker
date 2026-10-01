@@ -11,14 +11,20 @@ import {
   updatePlanAction,
   updatePlanExerciseAction,
 } from "@/actions/plans";
-import { startWorkoutAction } from "@/actions/workouts";
+import { setPlanGymAction, startWorkoutAction } from "@/actions/workouts";
 import { AddPlanItemForm, EditPlanItemForm } from "@/components/PlanItemForm";
 import { PlanForm } from "@/components/PlanForm";
 import { SubmitButton } from "@/components/SubmitButton";
-import { Card, EmptyState, PageHeader } from "@/components/ui";
+import { Card, EmptyState, PageHeader, Select } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
 import { exerciseCount, formatDuration, formatDurationLong, sets } from "@/lib/format";
-import { getPlan, listExercises, listMovements, listPlanItems } from "@/lib/queries";
+import {
+  getPlan,
+  listExercises,
+  listGyms,
+  listMovements,
+  listPlanItems,
+} from "@/lib/queries";
 
 export const metadata: Metadata = { title: "Plan · GymTracker" };
 
@@ -32,11 +38,15 @@ export default async function PlanDetailPage({
   const plan = await getPlan(user.id, id);
   if (!plan) notFound();
 
-  const [items, exercises, movements] = await Promise.all([
+  const [items, exercises, movements, gyms] = await Promise.all([
     listPlanItems(plan.id),
     listExercises(user.id),
     listMovements(user.id),
+    listGyms(user.id),
   ]);
+  const rememberedGym = plan.rememberGym
+    ? (gyms.find((g) => g.id === plan.defaultGymId)?.name ?? "ohne Studio")
+    : null;
   const movementName = new Map(movements.map((m) => [m.id, m.name]));
   const deviceCount = (movementId: string | null) =>
     movementId ? exercises.filter((e) => e.movementId === movementId).length : 1;
@@ -81,6 +91,9 @@ export default async function PlanDetailPage({
           <SubmitButton size="lg" className="w-full" pendingLabel="Training startet …">
             Training starten
           </SubmitButton>
+          {rememberedGym ? (
+            <p className="mt-1.5 text-center text-xs text-faint">Studio: {rememberedGym}</p>
+          ) : null}
         </form>
       ) : null}
 
@@ -207,6 +220,41 @@ export default async function PlanDetailPage({
               }))}
             />
           )}
+        </Card>
+      </section>
+
+      <section className="mt-6">
+        <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+          Studio beim Start
+        </h2>
+        <Card>
+          <form action={setPlanGymAction.bind(null, plan.id)} className="space-y-3">
+            <label className="flex cursor-pointer items-start gap-3 text-sm">
+              <input
+                type="checkbox"
+                name="remember"
+                defaultChecked={plan.rememberGym}
+                className="mt-0.5 h-4 w-4 rounded border-line accent-[var(--color-accent)]"
+              />
+              <span>
+                <span className="font-medium">Nicht erneut fragen</span>
+                <span className="block text-muted">
+                  Ohne Haken fragt der Start jedes Mal, in welchem Studio du bist.
+                </span>
+              </span>
+            </label>
+            <Select name="gym" defaultValue={plan.defaultGymId ?? "none"}>
+              <option value="none">Ohne Studio</option>
+              {gyms.map((gym) => (
+                <option key={gym.id} value={gym.id}>
+                  {gym.name}
+                </option>
+              ))}
+            </Select>
+            <SubmitButton variant="secondary" size="sm" className="w-full">
+              Speichern
+            </SubmitButton>
+          </form>
         </Card>
       </section>
 

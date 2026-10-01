@@ -24,6 +24,9 @@ import {
   listExercises,
   listPlanItems,
   listWorkoutSets,
+  getGymExercises,
+  getLastUsedInGym,
+  listGyms,
   listMovements,
   listWorkoutVariants,
 } from "@/lib/queries";
@@ -45,13 +48,17 @@ export default async function WorkoutPage({
   if (!workout) notFound();
   if (workout.finishedAt !== null) redirect(`/history/${workout.id}`);
 
-  const [planItems, loggedSets, allExercises, chosen, movements] = await Promise.all([
+  const [planItems, loggedSets, allExercises, chosen, movements, gyms, gymExercises] =
+    await Promise.all([
     workout.planId ? listPlanItems(workout.planId) : Promise.resolve([]),
     listWorkoutSets(workout.id),
     listExercises(user.id, { includeArchived: true }),
     listWorkoutVariants(workout.id),
     listMovements(user.id),
+    listGyms(user.id),
+    workout.gymId ? getGymExercises(workout.gymId) : Promise.resolve(new Map()),
   ]);
+  const gym = gyms.find((g) => g.id === workout.gymId) ?? null;
   const movementName = new Map(movements.map((m) => [m.id, m.name]));
   /** "Seitheben Kabelturm" unter "Seitheben" heißt in der Auswahl nur "Kabelturm". */
   const deviceLabel = (name: string, movementId: string) => {
@@ -84,14 +91,18 @@ export default async function WorkoutPage({
     ...loggedSets.map((set) => set.exerciseId),
     ...extras,
   ]);
-  const previous = await getPreviousPerformances(user.id, [...candidateIds], {
-    excludeWorkoutId: workout.id,
-  });
+  const [previous, usedInGym] = await Promise.all([
+    getPreviousPerformances(user.id, [...candidateIds], { excludeWorkoutId: workout.id }),
+    gym
+      ? getLastUsedInGym(user.id, gym.id, [...candidateIds], workout.id)
+      : Promise.resolve(new Map<string, number>()),
+  ]);
 
   /**
    * Welches Gerät für einen Planeintrag gezeigt wird: die Wahl in diesem
    * Training, sonst das, an dem heute schon Sätze stehen, sonst das zuletzt
-   * genutzte, sonst das im Plan hinterlegte.
+   * in diesem Studio genutzte, sonst das zuletzt überhaupt genutzte, sonst
+   * das im Plan hinterlegte.
    */
   const chooseFor = (exerciseId: string) => {
     const movementId = movementOf(exerciseId);
@@ -102,6 +113,10 @@ export default async function WorkoutPage({
       .reverse()
       .find((set) => variants.some((v) => v.id === set.exerciseId));
     if (loggedToday) return loggedToday.exerciseId;
+    const lastInGym = variants
+      .map((v) => ({ id: v.id, at: usedInGym.get(v.id) ?? -1 }))
+      .sort((a, b) => b.at - a.at)[0];
+    if (lastInGym && lastInGym.at >= 0) return lastInGym.id;
     const lastUsed = variants
       .map((v) => ({ id: v.id, at: previous.get(v.id)?.performedAt ?? -1 }))
       .sort((a, b) => b.at - a.at)[0];
@@ -160,6 +175,7 @@ export default async function WorkoutPage({
             <p className="mt-0.5 text-sm text-muted tnum">
               <WorkoutClock startedAt={workout.startedAt} /> · {sets(workingSets)} ·{" "}
               {formatVolume(totalVolume)}
+              {gym ? ` · ${gym.name}` : ""}
             </p>
           </div>
           <form action={finishWorkoutAction.bind(null, workout.id, undefined)}>
@@ -208,8 +224,11 @@ export default async function WorkoutPage({
                   id: exercise.id,
                   name: exercise.name,
                   trackingMode: exercise.trackingMode,
-                  weightStepKg: exercise.weightStepKg,
-                  machineSetup: exercise.machineSetup,
+                  // Was das Studio für dieses Gerät festhält, geht vor.
+                  weightStepKg:
+                    gymExercises.get(exerciseId)?.weightStepKg ?? exercise.weightStepKg,
+                  machineSetup:
+                    gymExercises.get(exerciseId)?.machineSetup ?? exercise.machineSetup,
                 }}
                 target={
                   target

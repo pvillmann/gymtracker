@@ -9,6 +9,7 @@ import { DEFAULT_EXERCISES } from "@/lib/constants";
 import { optionalText, text } from "@/lib/formdata";
 import { fail, type FormState } from "@/lib/result";
 import { isServiceError } from "@/lib/services/errors";
+import { setGymExerciseSettings } from "@/lib/services/gyms";
 import {
   createExercise,
   deleteExercise,
@@ -96,6 +97,36 @@ export async function updateExerciseAction(
   }
 
   revalidatePath("/exercises");
+  revalidatePath(`/exercises/${exerciseId}`);
+  return { ok: true };
+}
+
+/** Einstellungen und Gewichtsstufe eines Geräts in einem Studio. */
+export async function setGymExerciseSettingsAction(
+  gymId: string,
+  exerciseId: string,
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const user = await requireUser();
+  const setup = optionalText(formData, "machineSetup")?.trim() ?? "";
+  const stepRaw = (optionalText(formData, "weightStepKg") ?? "").trim().replace(",", ".");
+  const step = stepRaw === "" ? null : Number(stepRaw);
+  if (setup.length > 500) return fail("Die Einstellung ist zu lang.");
+  if (step !== null && (!Number.isFinite(step) || step <= 0 || step > 50)) {
+    return fail("Die Gewichtsstufe muss zwischen 0 und 50 kg liegen.");
+  }
+
+  try {
+    await setGymExerciseSettings(user, gymId, exerciseId, {
+      machineSetup: setup || null,
+      weightStepKg: step,
+    });
+  } catch (error) {
+    if (isServiceError(error)) return fail(error.message);
+    throw error;
+  }
+
   revalidatePath(`/exercises/${exerciseId}`);
   return { ok: true };
 }
