@@ -25,6 +25,8 @@ const ENGLISH = 2;
 const translationSchema = z.object({
   name: z.string(),
   language: z.number(),
+  /** Nur die ID – aufgelöst über /api/v2/license/. */
+  license: z.number().nullish(),
   /** Achtung: der Originaltitel des Werks, nicht der Name der Lizenz. */
   license_title: z.string().nullish(),
   license_object_url: z.string().nullish(),
@@ -43,6 +45,27 @@ const exerciseSchema = z.object({
 });
 
 const listSchema = z.object({ results: z.array(exerciseSchema) });
+
+const licenseListSchema = z.object({
+  results: z.array(
+    z.object({ id: z.number(), short_name: z.string(), url: z.string().nullish() }),
+  ),
+});
+
+type License = { name: string; url: string | null };
+
+/**
+ * Die Lizenzen von wger (eine Handvoll). Eine Übersetzung kann unter einer
+ * anderen Lizenz stehen als die Übung – bei rund jeder vierzehnten deutschen
+ * ist das so –, deshalb gilt die der Übersetzung, aus der der Name stammt.
+ */
+async function loadLicenses(): Promise<Map<number, License>> {
+  const parsed = licenseListSchema.safeParse(await getJson("/api/v2/license/?limit=100"));
+  if (!parsed.success) return new Map();
+  return new Map(
+    parsed.data.results.map((l) => [l.id, { name: l.short_name, url: l.url ?? null }]),
+  );
+}
 
 export type WgerExercise = {
   id: number;
@@ -80,23 +103,30 @@ function muscleGroupOf(exercise: z.infer<typeof exerciseSchema>): string | null 
   return exercise.category ? (CATEGORY_TO_GROUP[exercise.category.name] ?? null) : null;
 }
 
-function toResult(exercise: z.infer<typeof exerciseSchema>): WgerExercise | null {
+function toResult(
+  exercise: z.infer<typeof exerciseSchema>,
+  licenses: Map<number, License>,
+): WgerExercise | null {
   // Name und Lizenz kommen aus derselben Übersetzung – zu ihr gehören sie.
   const translation =
     exercise.translations.find((t) => t.language === GERMAN) ??
     exercise.translations.find((t) => t.language === ENGLISH);
   if (!translation) return null;
 
-  // Die Übersetzung trägt nur die ID ihrer Lizenz; Name und Link der Lizenz
-  // liefert das verschachtelte Lizenzobjekt der Übung. Urheber und Quelle
-  // sind die der Übersetzung, denn aus ihr stammt der Name.
+  // Lizenz, Urheber und Quelle sind die der Übersetzung, denn aus ihr stammt
+  // der Name. Nur wenn ihre Lizenz unbekannt ist, gilt die der Übung.
+  const license =
+    (translation.license ? licenses.get(translation.license) : undefined) ??
+    (exercise.license?.short_name
+      ? { name: exercise.license.short_name, url: exercise.license.url ?? null }
+      : null);
   return {
     id: exercise.id,
     name: translation.name.trim(),
     muscleGroup: muscleGroupOf(exercise),
     sourceUrl: translation.license_object_url || `${BASE_URL}/exercise/${exercise.id}/view-base`,
-    licenseName: exercise.license?.short_name ?? null,
-    licenseUrl: exercise.license?.url ?? null,
+    licenseName: license?.name ?? null,
+    licenseUrl: license?.url ?? null,
     licenseAuthor: translation.license_author || exercise.license_author || null,
   };
 }
@@ -128,9 +158,15 @@ export async function searchWger(term: string): Promise<WgerExercise[]> {
     language__code: "de",
     limit: "10",
   });
-  const parsed = listSchema.safeParse(await getJson(`/api/v2/exerciseinfo/?${params}`));
+  const [data, licenses] = await Promise.all([
+    getJson(`/api/v2/exerciseinfo/?${params}`),
+    loadLicenses(),
+  ]);
+  const parsed = listSchema.safeParse(data);
   if (!parsed.success) throw new ServiceError("wger hat unerwartet geantwortet.");
-  return parsed.data.results.map(toResult).filter((r): r is WgerExercise => r !== null);
+  return parsed.data.results
+    .map((e) => toResult(e, licenses))
+    .filter((r): r is WgerExercise => r !== null);
 }
 
 /**
@@ -138,8 +174,12 @@ export async function searchWger(term: string): Promise<WgerExercise[]> {
  * der Browser schickt – Lizenzangaben dürfen nicht vom Client kommen.
  */
 export async function getWgerExercise(id: number): Promise<WgerExercise> {
-  const parsed = exerciseSchema.safeParse(await getJson(`/api/v2/exerciseinfo/${id}/`));
-  const result = parsed.success ? toResult(parsed.data) : null;
+  const [data, licenses] = await Promise.all([
+    getJson(`/api/v2/exerciseinfo/${id}/`),
+    loadLicenses(),
+  ]);
+  const parsed = exerciseSchema.safeParse(data);
+  const result = parsed.success ? toResult(parsed.data, licenses) : null;
   if (!result) throw new ServiceError("Diesen wger-Eintrag gibt es nicht.");
   return result;
 }
