@@ -16,6 +16,7 @@ import {
 } from "@/lib/auth";
 import { text } from "@/lib/formdata";
 import { fail, type FormState } from "@/lib/result";
+import { handOverCatalog } from "@/lib/services/catalog";
 
 const profileInput = z.object({
   name: z.string().trim().min(1, "Bitte einen Namen angeben.").max(60),
@@ -100,6 +101,9 @@ export async function deleteAccountAction(
     return fail("Das Passwort stimmt nicht.");
   }
 
+  // Bewegungen, Geräte und Studios gehören allen – sie bleiben, nur ihr
+  // "angelegt von" wechselt.
+  await handOverCatalog(user.id);
   await db.delete(users).where(eq(users.id, user.id));
   await destroySession();
 

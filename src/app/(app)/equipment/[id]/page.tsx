@@ -12,6 +12,7 @@ import { EquipmentForm } from "@/components/EquipmentForm";
 import { EquipmentImageUpload } from "@/components/EquipmentImageUpload";
 import { Card, PageHeader } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
+import { canEditCatalog } from "@/lib/services/catalog";
 import { EQUIPMENT_KINDS } from "@/lib/constants";
 import { getEquipment, listEquipmentImages, listExercises } from "@/lib/queries";
 
@@ -24,21 +25,27 @@ export default async function EquipmentDetailPage({
 }) {
   const { id } = await params;
   const user = await requireUser();
-  const item = await getEquipment(user.id, id);
+  const item = await getEquipment(id);
   if (!item) notFound();
 
   const [images, exercises] = await Promise.all([
     listEquipmentImages(item.id),
     listExercises(user.id, { includeArchived: true }),
   ]);
+  // Der Katalog gehört allen; die eigenen Übungen bleiben privat.
   const linked = exercises.filter((e) => e.equipmentId === item.id);
+  const editable = await canEditCatalog(user, item.userId);
   const kind = EQUIPMENT_KINDS.find((k) => k.value === item.kind)?.label;
 
   return (
     <>
       <PageHeader
         title={item.name}
-        subtitle={[[item.manufacturer, item.model].filter(Boolean).join(" "), kind]
+        subtitle={[
+          [item.manufacturer, item.model].filter(Boolean).join(" "),
+          kind,
+          item.ownerName ? `angelegt von ${item.ownerName}` : null,
+        ]
           .filter(Boolean)
           .join(" · ")}
         action={
@@ -64,18 +71,20 @@ export default async function EquipmentDetailPage({
                       className="aspect-square w-full rounded-lg object-cover"
                     />
                   </a>
-                  <form
-                    action={deleteEquipmentImageAction.bind(null, image.id)}
-                    className="absolute top-1 right-1"
-                  >
-                    <ConfirmSubmitButton
-                      size="sm"
-                      message="Foto löschen?"
-                      className="h-7 rounded-full px-2 text-xs"
+                  {editable || image.uploadedBy === user.id ? (
+                    <form
+                      action={deleteEquipmentImageAction.bind(null, image.id)}
+                      className="absolute top-1 right-1"
                     >
-                      ×
-                    </ConfirmSubmitButton>
-                  </form>
+                      <ConfirmSubmitButton
+                        size="sm"
+                        message="Foto löschen?"
+                        className="h-7 rounded-full px-2 text-xs"
+                      >
+                        ×
+                      </ConfirmSubmitButton>
+                    </form>
+                  ) : null}
                 </li>
               ))}
             </ul>
@@ -88,15 +97,16 @@ export default async function EquipmentDetailPage({
           <EquipmentImageUpload equipmentId={item.id} />
           <p className="text-xs text-faint">
             Fotos werden verkleinert gespeichert; Standort und andere
-            Metadaten werden dabei entfernt. Bitte nur eigene Fotos, keine
-            Herstellerbilder.
+            Metadaten werden dabei entfernt. Sie gehören zum gemeinsamen
+            Katalog und sind für alle Nutzer dieser Instanz sichtbar. Bitte
+            nur eigene Fotos, keine Herstellerbilder.
           </p>
         </Card>
       </section>
 
       <section className="mb-6">
         <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
-          Übungen an diesem Gerät
+          Deine Übungen an diesem Gerät
         </h2>
         <Card className="p-1">
           {linked.length > 0 ? (
@@ -120,25 +130,35 @@ export default async function EquipmentDetailPage({
         </Card>
       </section>
 
-      <section className="mb-6">
-        <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
-          Bearbeiten
-        </h2>
-        <EquipmentForm
-          action={updateEquipmentAction.bind(null, item.id)}
-          equipment={item}
-          submitLabel="Änderungen speichern"
-        />
-      </section>
+      {editable ? (
+        <>
+          <section className="mb-6">
+            <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+              Bearbeiten
+            </h2>
+            <EquipmentForm
+              action={updateEquipmentAction.bind(null, item.id)}
+              equipment={item}
+              submitLabel="Änderungen speichern"
+            />
+          </section>
 
-      <form action={deleteEquipmentAction.bind(null, item.id)}>
-        <ConfirmSubmitButton
-          size="sm"
-          message={`Gerät „${item.name}“ löschen? Die Übungen und ihr Verlauf bleiben, verlieren aber die Zuordnung und die Fotos.`}
-        >
-          Gerät löschen
-        </ConfirmSubmitButton>
-      </form>
+          <form action={deleteEquipmentAction.bind(null, item.id)}>
+            <ConfirmSubmitButton
+              size="sm"
+              message={`Gerät „${item.name}“ für alle löschen? Die Übungen und ihr Verlauf bleiben, verlieren aber die Zuordnung und die Fotos.`}
+            >
+              Gerät löschen
+            </ConfirmSubmitButton>
+          </form>
+        </>
+      ) : (
+        <p className="px-1 text-sm text-muted">
+          Das Gerät gehört zum gemeinsamen Katalog. Ändern kann es{" "}
+          {item.ownerName ?? "der Ersteller"} oder ein Administrator; Fotos
+          beisteuern kann jeder.
+        </p>
+      )}
     </>
   );
 }

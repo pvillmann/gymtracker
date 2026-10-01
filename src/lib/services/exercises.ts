@@ -11,8 +11,10 @@ import {
   type User,
 } from "@/db/schema";
 import { newId } from "@/lib/ids";
-import { recomputeVolumes, requireOwnEquipment } from "@/lib/services/equipment";
+import { assertCanEditCatalog } from "@/lib/services/catalog";
+import { recomputeVolumes, requireEquipment } from "@/lib/services/equipment";
 import { ServiceError } from "@/lib/services/errors";
+import { getWgerExercise } from "@/lib/wger";
 
 export type ExerciseInput = {
   name: string;
@@ -25,6 +27,11 @@ export type ExerciseInput = {
   muscleGroup?: string | null;
   /** Gerätetyp; undefined lässt ihn beim Bearbeiten unverändert. */
   equipmentId?: string | null;
+  /**
+   * wger-Eintrag, aus dem eine neu angelegte Bewegung stammt. Lizenz und
+   * Urheber holt der Server selbst bei wger – nie aus dem Formular.
+   */
+  wgerId?: number | null;
   machineSetup?: string | null;
   trackingMode: TrackingMode;
   weightStepKg: number;
@@ -41,29 +48,54 @@ function isDuplicateName(error: unknown): boolean {
  * einer weiteren Variante soll ein leeres Feld sie nicht löschen.
  */
 async function resolveMovement(
-  userId: string,
+  user: User,
   name: string,
   muscleGroup: string | null | undefined,
+  wgerId?: number | null,
 ): Promise<{ id: string; muscleGroup: string | null }> {
+  const userId = user.id;
   const [existing] = await db
-    .select({ id: movements.id, muscleGroup: movements.muscleGroup })
+    .select({
+      id: movements.id,
+      muscleGroup: movements.muscleGroup,
+      ownerId: movements.userId,
+    })
     .from(movements)
-    .where(and(eq(movements.userId, userId), eq(movements.name, name)))
+    .where(eq(movements.name, name))
     .limit(1);
 
   if (!existing) {
     const id = newId();
-    await db
-      .insert(movements)
-      .values({ id, userId, name, muscleGroup: muscleGroup ?? null });
-    return { id, muscleGroup: muscleGroup ?? null };
+    // Aus wger übernommen: Quelle und Lizenz gehören zur Bewegung. Der
+    // gewählte Name darf abweichen – dann zeigt die App "bearbeitet".
+    const source = wgerId ? await getWgerExercise(wgerId) : null;
+    const group = muscleGroup ?? source?.muscleGroup ?? null;
+    await db.insert(movements).values({
+      id,
+      userId,
+      name,
+      muscleGroup: group,
+      ...(source
+        ? {
+            sourceName: source.name,
+            sourceUrl: source.sourceUrl,
+            licenseName: source.licenseName,
+            licenseUrl: source.licenseUrl,
+            licenseAuthor: source.licenseAuthor,
+          }
+        : {}),
+    });
+    return { id, muscleGroup: group };
   }
 
   if (muscleGroup !== undefined && muscleGroup !== existing.muscleGroup) {
+    // Die Bewegung gehört allen: ihre Muskelgruppe ändert nur, wer sie
+    // angelegt hat, oder ein Admin – sonst ändert sie sich bei allen mit.
+    await assertCanEditCatalog(user, existing.ownerId, `Die Bewegung „${name}“`);
     await setMovementMuscleGroup(existing.id, muscleGroup);
     return { id: existing.id, muscleGroup };
   }
-  return existing;
+  return { id: existing.id, muscleGroup: existing.muscleGroup };
 }
 
 /** Die Muskelgruppe gehört der Bewegung; die Varianten tragen eine Kopie. */
@@ -75,19 +107,19 @@ async function setMovementMuscleGroup(
   await db.update(exercises).set({ muscleGroup }).where(eq(exercises.movementId, movementId));
 }
 
-/** Bewegungen ohne ein einziges Gerät haben keinen Zweck mehr. */
-async function deleteEmptyMovements(userId: string): Promise<void> {
+/**
+ * Bewegungen, die bei niemandem mehr ein Gerät haben, haben keinen Zweck
+ * mehr. Gilt instanzweit: solange irgendwer sie benutzt, bleibt sie.
+ */
+async function deleteEmptyMovements(): Promise<void> {
   await db
     .delete(movements)
     .where(
-      and(
-        eq(movements.userId, userId),
-        notExists(
-          db
-            .select({ id: exercises.id })
-            .from(exercises)
-            .where(eq(exercises.movementId, movements.id)),
-        ),
+      notExists(
+        db
+          .select({ id: exercises.id })
+          .from(exercises)
+          .where(eq(exercises.movementId, movements.id)),
       ),
     );
 }
@@ -97,12 +129,13 @@ export async function createExercise(
   input: ExerciseInput,
 ): Promise<string> {
   const id = newId();
-  if (input.equipmentId) await requireOwnEquipment(user.id, input.equipmentId);
+  if (input.equipmentId) await requireEquipment(input.equipmentId);
   const movement = await resolveMovement(
-    user.id,
+    user,
     input.movementName?.trim() || input.name,
     // Leer heißt beim Anlegen "keine Angabe", nicht "löschen".
     input.muscleGroup ?? undefined,
+    input.wgerId,
   );
   try {
     await db.insert(exercises).values({
@@ -117,7 +150,7 @@ export async function createExercise(
       weightStepKg: input.weightStepKg,
     });
   } catch (error) {
-    await deleteEmptyMovements(user.id);
+    await deleteEmptyMovements();
     if (isDuplicateName(error)) {
       throw new ServiceError("Eine Übung mit diesem Namen gibt es schon.");
     }
@@ -137,14 +170,15 @@ export async function updateExercise(
     .where(and(eq(exercises.id, exerciseId), eq(exercises.userId, user.id)))
     .limit(1);
   if (!current) throw new ServiceError("Diese Übung gibt es nicht.");
-  if (input.equipmentId) await requireOwnEquipment(user.id, input.equipmentId);
+  if (input.equipmentId) await requireEquipment(input.equipmentId);
 
   // Beim Bearbeiten steht die Muskelgruppe im Formular – auch ein leeres Feld
   // ist dann eine Angabe.
   const movement = await resolveMovement(
-    user.id,
+    user,
     input.movementName?.trim() || input.name,
     input.muscleGroup ?? null,
+    input.wgerId,
   );
 
   try {
@@ -161,7 +195,7 @@ export async function updateExercise(
       })
       .where(and(eq(exercises.id, exerciseId), eq(exercises.userId, user.id)));
   } catch (error) {
-    await deleteEmptyMovements(user.id);
+    await deleteEmptyMovements();
     if (isDuplicateName(error)) {
       throw new ServiceError("Eine Übung mit diesem Namen gibt es schon.");
     }
@@ -169,10 +203,10 @@ export async function updateExercise(
   }
 
   // Wer eine Übung einer anderen Bewegung zuordnet, lässt die alte leer zurück.
-  if (current.movementId !== movement.id) await deleteEmptyMovements(user.id);
+  if (current.movementId !== movement.id) await deleteEmptyMovements();
   // Anderes Gerät heißt andere Übersetzung: das bewegte Gewicht neu rechnen.
   if (input.equipmentId !== undefined && input.equipmentId !== current.equipmentId) {
-    await recomputeVolumes(user.id, { exerciseIds: [exerciseId] });
+    await recomputeVolumes({ exerciseIds: [exerciseId] });
   }
 }
 
@@ -228,6 +262,6 @@ export async function deleteExercise(
   await db
     .delete(exercises)
     .where(and(eq(exercises.id, exerciseId), eq(exercises.userId, user.id)));
-  await deleteEmptyMovements(user.id);
+  await deleteEmptyMovements();
   return { archivedInstead: false };
 }

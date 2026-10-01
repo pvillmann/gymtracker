@@ -61,7 +61,16 @@ Homescreen.
 - Geräte mit Foto, Hersteller, Übersetzung (z. B. 2:1 am Kabelzug) und
   Eigengewicht. Übersetzung und Eigengewicht fließen ins bewegte Gewicht ein;
   Fotos werden verkleinert und ohne Metadaten (auch ohne GPS) im Daten-Volume
-  gespeichert und nur dem eigenen Konto ausgeliefert
+  gespeichert
+- Gemeinsamer Katalog: Bewegungen, Geräte (samt Fotos) und Studios gelten für
+  alle Nutzer der Instanz. Jeder darf sie benutzen und neue anlegen; ändern
+  oder löschen nur, wer sie angelegt hat, oder ein Administrator. Trainings,
+  Pläne und Einstellungen bleiben privat.
+- Neue Bewegungen lassen sich aus der offenen Übungsdatenbank
+  [wger](https://wger.de) übernehmen (Name und Muskelgruppe). Lizenz und
+  Urheber werden pro Eintrag mitgespeichert und angezeigt (CC-BY-SA);
+  braucht Internetzugang der Instanz, `WGER_URL` stellt eine eigene
+  wger-Instanz ein
 - Vier Messarten: Gewicht × Wiederholungen, Körpergewicht (+ Zusatzgewicht),
   Körpergewicht − Gegengewicht (assistierte Maschinen) und Zeit
 

@@ -5,6 +5,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { gymExercises, gyms, plans, type User } from "@/db/schema";
 import { newId } from "@/lib/ids";
+import { assertCanEditCatalog } from "@/lib/services/catalog";
 import { ServiceError } from "@/lib/services/errors";
 import { requireOwnExercise } from "@/lib/services/workouts";
 
@@ -12,12 +13,9 @@ function isDuplicateName(error: unknown): boolean {
   return error instanceof Error && error.message.includes("UNIQUE constraint failed");
 }
 
-export async function requireOwnGym(userId: string, gymId: string) {
-  const [gym] = await db
-    .select()
-    .from(gyms)
-    .where(and(eq(gyms.id, gymId), eq(gyms.userId, userId)))
-    .limit(1);
+/** Studios gehören der ganzen Instanz – jeder darf jedes benutzen. */
+export async function requireGym(gymId: string) {
+  const [gym] = await db.select().from(gyms).where(eq(gyms.id, gymId)).limit(1);
   if (!gym) throw new ServiceError("Dieses Studio gibt es nicht.");
   return gym;
 }
@@ -35,7 +33,7 @@ export async function findOrCreateGym(user: User, rawName: string): Promise<stri
   const [existing] = await db
     .select({ id: gyms.id })
     .from(gyms)
-    .where(and(eq(gyms.userId, user.id), eq(gyms.name, name)))
+    .where(eq(gyms.name, name))
     .limit(1);
   if (existing) return existing.id;
 
@@ -47,7 +45,8 @@ export async function findOrCreateGym(user: User, rawName: string): Promise<stri
 export async function renameGym(user: User, gymId: string, rawName: string): Promise<void> {
   const name = rawName.trim();
   if (!name) throw new ServiceError("Das Studio braucht einen Namen.");
-  await requireOwnGym(user.id, gymId);
+  const gym = await requireGym(gymId);
+  await assertCanEditCatalog(user, gym.userId, `Das Studio „${gym.name}“`);
   try {
     await db.update(gyms).set({ name }).where(eq(gyms.id, gymId));
   } catch (error) {
@@ -60,10 +59,12 @@ export async function renameGym(user: User, gymId: string, rawName: string): Pro
 
 /**
  * Trainings und Pläne behalten ihre Daten, verlieren nur den Bezug zum
- * Studio; die Einstellungen der Geräte dort verschwinden mit.
+ * Studio; die Einstellungen der Geräte dort verschwinden mit – bei allen
+ * Nutzern, deshalb nur durch den, der es angelegt hat, oder einen Admin.
  */
 export async function deleteGym(user: User, gymId: string): Promise<void> {
-  await requireOwnGym(user.id, gymId);
+  const gym = await requireGym(gymId);
+  await assertCanEditCatalog(user, gym.userId, `Das Studio „${gym.name}“`);
   await db.delete(gyms).where(eq(gyms.id, gymId));
 }
 
@@ -77,7 +78,7 @@ export async function setPlanGym(
   remember: boolean,
   gymId: string | null,
 ): Promise<void> {
-  if (gymId) await requireOwnGym(user.id, gymId);
+  if (gymId) await requireGym(gymId);
   await db
     .update(plans)
     .set({ rememberGym: remember, defaultGymId: remember ? gymId : null })
@@ -96,7 +97,8 @@ export async function setGymExerciseSettings(
   exerciseId: string,
   values: { machineSetup: string | null; weightStepKg: number | null },
 ): Promise<void> {
-  await requireOwnGym(user.id, gymId);
+  await requireGym(gymId);
+  // Die Übung (und damit ihre Einstellungen im Studio) bleibt privat.
   await requireOwnExercise(user.id, exerciseId);
   await db
     .insert(gymExercises)

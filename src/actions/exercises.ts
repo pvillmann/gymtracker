@@ -39,6 +39,7 @@ const exerciseInput = z.object({
     .max(500)
     .optional()
     .transform((v) => (v ? v : null)),
+  wgerId: z.coerce.number().int().positive().optional().catch(undefined),
   // Nicht übermittelt = unverändert lassen; leer gewählt = kein Gerät.
   equipmentId: z
     .string()
@@ -57,6 +58,7 @@ function readExerciseForm(formData: FormData) {
     name: text(formData, "name"),
     movementName: optionalText(formData, "movementName"),
     equipmentId: optionalText(formData, "equipmentId"),
+    wgerId: optionalText(formData, "wgerId") || undefined,
     muscleGroup: optionalText(formData, "muscleGroup"),
     machineSetup: optionalText(formData, "machineSetup"),
     trackingMode: text(formData, "trackingMode", "weight_reps"),

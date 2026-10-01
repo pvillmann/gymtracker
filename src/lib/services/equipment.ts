@@ -13,6 +13,7 @@ import {
 } from "@/db/schema";
 import { newId } from "@/lib/ids";
 import { removeImage, storeImage } from "@/lib/images";
+import { assertCanEditCatalog } from "@/lib/services/catalog";
 import { ServiceError } from "@/lib/services/errors";
 
 /** Mehr Fotos braucht niemand, um eine Maschine wiederzuerkennen. */
@@ -32,12 +33,9 @@ function isDuplicateName(error: unknown): boolean {
   return error instanceof Error && error.message.includes("UNIQUE constraint failed");
 }
 
-export async function requireOwnEquipment(userId: string, equipmentId: string) {
-  const [row] = await db
-    .select()
-    .from(equipment)
-    .where(and(eq(equipment.id, equipmentId), eq(equipment.userId, userId)))
-    .limit(1);
+/** Geräte gehören der ganzen Instanz – jeder darf jedes einer Übung zuordnen. */
+export async function requireEquipment(equipmentId: string) {
+  const [row] = await db.select().from(equipment).where(eq(equipment.id, equipmentId)).limit(1);
   if (!row) throw new ServiceError("Dieses Gerät gibt es nicht.");
   return row;
 }
@@ -58,18 +56,21 @@ export async function updateEquipment(
   equipmentId: string,
   input: EquipmentInput,
 ): Promise<void> {
-  await requireOwnEquipment(user.id, equipmentId);
+  const current = await requireEquipment(equipmentId);
+  await assertCanEditCatalog(user, current.userId, `Das Gerät „${current.name}“`);
   try {
     await db.update(equipment).set(input).where(eq(equipment.id, equipmentId));
   } catch (error) {
     if (isDuplicateName(error)) throw new ServiceError("Ein Gerät mit diesem Namen gibt es schon.");
     throw error;
   }
-  await recomputeVolumes(user.id, { equipmentId });
+  // Übersetzung und Eigengewicht gelten für alle, die das Gerät benutzen.
+  await recomputeVolumes({ equipmentId });
 }
 
 export async function deleteEquipment(user: User, equipmentId: string): Promise<void> {
-  await requireOwnEquipment(user.id, equipmentId);
+  const current = await requireEquipment(equipmentId);
+  await assertCanEditCatalog(user, current.userId, `Das Gerät „${current.name}“`);
   const images = await db
     .select({ id: equipmentImages.id })
     .from(equipmentImages)
@@ -82,7 +83,7 @@ export async function deleteEquipment(user: User, equipmentId: string): Promise<
   await db.delete(equipment).where(eq(equipment.id, equipmentId));
   for (const image of images) await removeImage(image.id);
   // Ohne Gerät gilt wieder das eingestellte Gewicht als Last.
-  await recomputeVolumes(user.id, { exerciseIds: affected.map((e) => e.id) });
+  await recomputeVolumes({ exerciseIds: affected.map((e) => e.id) });
 }
 
 export async function addEquipmentImage(
@@ -90,7 +91,8 @@ export async function addEquipmentImage(
   equipmentId: string,
   input: Buffer,
 ): Promise<string> {
-  await requireOwnEquipment(user.id, equipmentId);
+  // Fotos darf jeder beisteuern – sie helfen allen, das Gerät wiederzuerkennen.
+  await requireEquipment(equipmentId);
   const [existing] = await db
     .select({ count: sql<number>`count(*)` })
     .from(equipmentImages)
@@ -101,31 +103,42 @@ export async function addEquipmentImage(
 
   const id = newId();
   const stored = await storeImage(id, input);
-  await db.insert(equipmentImages).values({ id, equipmentId, ...stored });
+  await db.insert(equipmentImages).values({ id, equipmentId, uploadedBy: user.id, ...stored });
   return id;
 }
 
+/** Löschen darf, wer das Foto hochgeladen hat – oder wer das Gerät pflegen darf. */
 export async function deleteEquipmentImage(user: User, imageId: string): Promise<string> {
   const [row] = await db
-    .select({ id: equipmentImages.id, equipmentId: equipmentImages.equipmentId })
+    .select({
+      id: equipmentImages.id,
+      equipmentId: equipmentImages.equipmentId,
+      uploadedBy: equipmentImages.uploadedBy,
+      ownerId: equipment.userId,
+    })
     .from(equipmentImages)
     .innerJoin(equipment, eq(equipment.id, equipmentImages.equipmentId))
-    .where(and(eq(equipmentImages.id, imageId), eq(equipment.userId, user.id)))
+    .where(eq(equipmentImages.id, imageId))
     .limit(1);
   if (!row) throw new ServiceError("Dieses Foto gibt es nicht.");
+  if (row.uploadedBy !== user.id) {
+    await assertCanEditCatalog(user, row.ownerId, "Dieses Foto");
+  }
 
   await db.delete(equipmentImages).where(eq(equipmentImages.id, imageId));
   await removeImage(imageId);
   return row.equipmentId;
 }
 
-/** Ein Foto nur für seinen Besitzer – die Bilder liegen nicht öffentlich. */
-export async function canSeeImage(userId: string, imageId: string): Promise<boolean> {
+/**
+ * Fotos gehören zum gemeinsamen Katalog: sichtbar für jeden angemeldeten
+ * Nutzer der Instanz, nicht öffentlich.
+ */
+export async function imageExists(imageId: string): Promise<boolean> {
   const [row] = await db
     .select({ id: equipmentImages.id })
     .from(equipmentImages)
-    .innerJoin(equipment, eq(equipment.id, equipmentImages.equipmentId))
-    .where(and(eq(equipmentImages.id, imageId), eq(equipment.userId, userId)))
+    .where(eq(equipmentImages.id, imageId))
     .limit(1);
   return row !== undefined;
 }
@@ -136,7 +149,6 @@ export async function canSeeImage(userId: string, imageId: string): Promise<bool
  * Messarten spielt das Gerät für die Last keine Rolle.
  */
 export async function recomputeVolumes(
-  userId: string,
   scope: { equipmentId: string } | { exerciseIds: string[] },
 ): Promise<void> {
   const targets = await db
@@ -149,7 +161,6 @@ export async function recomputeVolumes(
     .leftJoin(equipment, eq(equipment.id, exercises.equipmentId))
     .where(
       and(
-        eq(exercises.userId, userId),
         eq(exercises.trackingMode, "weight_reps"),
         "equipmentId" in scope
           ? eq(exercises.equipmentId, scope.equipmentId)

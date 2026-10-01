@@ -11,6 +11,15 @@ import type { FormState } from "@/lib/result";
 export type MovementOption = { name: string; muscleGroup: string | null };
 export type EquipmentOption = { id: string; name: string };
 
+/** Ein Vorschlag aus wger, wie ihn /api/wger/search liefert. */
+type WgerSuggestion = {
+  id: number;
+  name: string;
+  muscleGroup: string | null;
+  licenseName: string | null;
+  licenseAuthor: string | null;
+};
+
 export function ExerciseForm({
   action,
   exercise,
@@ -33,6 +42,24 @@ export function ExerciseForm({
   const [muscleGroup, setMuscleGroup] = useState(
     exercise?.muscleGroup ?? known?.muscleGroup ?? "",
   );
+  // Vorschläge aus wger – nur für Bewegungen, die es hier noch nicht gibt.
+  const [wger, setWger] = useState<{
+    loading: boolean;
+    error?: string;
+    results?: WgerSuggestion[];
+  }>({ loading: false });
+  const [wgerPick, setWgerPick] = useState<WgerSuggestion | null>(null);
+
+  const searchWger = async () => {
+    setWger({ loading: true });
+    try {
+      const response = await fetch(`/api/wger/search?q=${encodeURIComponent(movement.trim())}`);
+      const body = (await response.json()) as { results?: WgerSuggestion[]; error?: string };
+      setWger({ loading: false, results: body.results, error: body.error });
+    } catch {
+      setWger({ loading: false, error: "wger ist gerade nicht erreichbar." });
+    }
+  };
 
   return (
     <Card>
@@ -70,6 +97,7 @@ export function ExerciseForm({
             }}
             placeholder="z. B. Seitheben"
           />
+          <input type="hidden" name="wgerId" value={wgerPick && !known ? wgerPick.id : ""} />
           <datalist id="movement-names">
             {movements.map((m) => (
               <option key={m.name} value={m.name} />
@@ -77,9 +105,65 @@ export function ExerciseForm({
           </datalist>
         </Field>
 
+        {!known && movement.trim().length >= 2 ? (
+          <div className="-mt-2 space-y-2">
+            {wgerPick ? (
+              <p className="text-xs text-faint">
+                Aus wger übernommen: „{wgerPick.name}“
+                {wgerPick.licenseAuthor ? ` · ${wgerPick.licenseAuthor}` : ""}
+                {wgerPick.licenseName ? ` · ${wgerPick.licenseName}` : ""}
+                {movement.trim() !== wgerPick.name ? " · bearbeitet" : ""}
+              </p>
+            ) : (
+              <button
+                type="button"
+                onClick={searchWger}
+                disabled={wger.loading}
+                className="text-sm font-medium text-accent disabled:opacity-60"
+              >
+                {wger.loading ? "Suche in wger …" : `„${movement.trim()}“ in wger suchen`}
+              </button>
+            )}
+            {wger.error ? <p className="text-xs text-down">{wger.error}</p> : null}
+            {!wgerPick && wger.results ? (
+              wger.results.length === 0 ? (
+                <p className="text-xs text-faint">Nichts gefunden.</p>
+              ) : (
+                <ul className="divide-y divide-line-soft rounded-xl border border-line">
+                  {wger.results.map((result) => (
+                    <li key={result.id}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setWgerPick(result);
+                          setMovement(result.name);
+                          if (result.muscleGroup) setMuscleGroup(result.muscleGroup);
+                        }}
+                        className="block w-full px-3 py-2 text-left text-sm hover:bg-surface-2"
+                      >
+                        <span className="font-medium">{result.name}</span>
+                        {result.muscleGroup ? (
+                          <span className="text-muted"> · {result.muscleGroup}</span>
+                        ) : null}
+                        <span className="block text-xs text-faint">
+                          {[result.licenseAuthor, result.licenseName].filter(Boolean).join(" · ")}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )
+            ) : null}
+          </div>
+        ) : null}
+
         <Field
           label="Muskelgruppe"
-          hint={known ? "Gilt für alle Geräte dieser Bewegung." : undefined}
+          hint={
+            known
+              ? "Gehört zur Bewegung und gilt für alle ihre Geräte – bei allen Nutzern dieser Instanz."
+              : undefined
+          }
         >
           <Select
             name="muscleGroup"

@@ -59,12 +59,9 @@ export type EquipmentSummary = Equipment & {
   exerciseCount: number;
 };
 
-export async function listEquipment(userId: string): Promise<EquipmentSummary[]> {
-  const rows = await db
-    .select()
-    .from(equipment)
-    .where(eq(equipment.userId, userId))
-    .orderBy(asc(equipment.name));
+/** Der gemeinsame Gerätekatalog der Instanz. */
+export async function listEquipment(): Promise<EquipmentSummary[]> {
+  const rows = await db.select().from(equipment).orderBy(asc(equipment.name));
   if (rows.length === 0) return [];
 
   const ids = rows.map((r) => r.id);
@@ -93,13 +90,14 @@ export async function listEquipment(userId: string): Promise<EquipmentSummary[]>
   }));
 }
 
-export async function getEquipment(userId: string, equipmentId: string) {
+export async function getEquipment(equipmentId: string) {
   const [row] = await db
-    .select()
+    .select({ equipment, ownerName: users.name })
     .from(equipment)
-    .where(and(eq(equipment.id, equipmentId), eq(equipment.userId, userId)))
+    .leftJoin(users, eq(users.id, equipment.userId))
+    .where(eq(equipment.id, equipmentId))
     .limit(1);
-  return row ?? null;
+  return row ? { ...row.equipment, ownerName: row.ownerName } : null;
 }
 
 export async function listEquipmentImages(equipmentId: string): Promise<EquipmentImage[]> {
@@ -110,8 +108,9 @@ export async function listEquipmentImages(equipmentId: string): Promise<Equipmen
     .orderBy(asc(equipmentImages.createdAt));
 }
 
-export async function listGyms(userId: string): Promise<Gym[]> {
-  return db.select().from(gyms).where(eq(gyms.userId, userId)).orderBy(asc(gyms.name));
+/** Die Studios der Instanz – gemeinsam für alle Nutzer. */
+export async function listGyms(): Promise<Gym[]> {
+  return db.select().from(gyms).orderBy(asc(gyms.name));
 }
 
 /** Was ein Studio für die Geräte dort abweichend festhält: Übung → Werte. */
@@ -158,12 +157,9 @@ export async function getLastUsedInGym(
   return new Map(rows.map((row) => [row.exerciseId, row.lastAt]));
 }
 
-export async function listMovements(userId: string): Promise<Movement[]> {
-  return db
-    .select()
-    .from(movements)
-    .where(eq(movements.userId, userId))
-    .orderBy(asc(movements.muscleGroup), asc(movements.name));
+/** Die Bewegungen der Instanz – gemeinsam für alle Nutzer. */
+export async function listMovements(): Promise<Movement[]> {
+  return db.select().from(movements).orderBy(asc(movements.muscleGroup), asc(movements.name));
 }
 
 export async function getExercise(

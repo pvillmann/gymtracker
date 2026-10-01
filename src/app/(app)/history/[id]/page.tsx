@@ -55,7 +55,7 @@ export default async function WorkoutDetailPage({
 
   const workout = await getWorkout(user.id, id);
   const gym = workout?.gymId
-    ? ((await listGyms(user.id)).find((g) => g.id === workout.gymId) ?? null)
+    ? ((await listGyms()).find((g) => g.id === workout.gymId) ?? null)
     : null;
   if (!workout) notFound();
   if (workout.finishedAt === null) redirect(`/workout/${workout.id}`);

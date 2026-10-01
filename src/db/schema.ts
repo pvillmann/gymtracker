@@ -180,6 +180,11 @@ export const equipment = sqliteTable(
   "equipment",
   {
     id: text("id").primaryKey(),
+    /**
+     * Angelegt von – der Katalog gilt für alle Nutzer der Instanz. Wird das
+     * Konto gelöscht, gehen die Einträge vorher an jemand anderen über
+     * (handOverCatalog), sonst nähme die Kaskade sie allen weg.
+     */
     userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
@@ -197,7 +202,7 @@ export const equipment = sqliteTable(
     notes: text("notes"),
     createdAt: integer("created_at").notNull().default(now),
   },
-  (t) => [uniqueIndex("equipment_user_name_unique").on(t.userId, t.name)],
+  (t) => [uniqueIndex("equipment_name_unique").on(t.name)],
 );
 
 /**
@@ -212,6 +217,8 @@ export const equipmentImages = sqliteTable(
     equipmentId: text("equipment_id")
       .notNull()
       .references(() => equipment.id, { onDelete: "cascade" }),
+    /** Wer das Foto hochgeladen hat – darf es auch wieder löschen. */
+    uploadedBy: text("uploaded_by").references(() => users.id, { onDelete: "set null" }),
     width: integer("width").notNull(),
     height: integer("height").notNull(),
     bytes: integer("bytes").notNull(),
@@ -231,15 +238,30 @@ export const movements = sqliteTable(
   "movements",
   {
     id: text("id").primaryKey(),
+    /**
+     * Angelegt von – der Katalog gilt für alle Nutzer der Instanz. Wird das
+     * Konto gelöscht, gehen die Einträge vorher an jemand anderen über
+     * (handOverCatalog), sonst nähme die Kaskade sie allen weg.
+     */
     userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     /** Gilt für alle Varianten und wird dorthin gespiegelt, siehe exercises.muscleGroup. */
     muscleGroup: text("muscle_group"),
+    /**
+     * Aus wger übernommen: die Angaben, die CC-BY-SA verlangt – Quelle,
+     * Urheber, Lizenz – sowie der Name zum Zeitpunkt der Übernahme, damit
+     * eine Änderung als "bearbeitet" gekennzeichnet werden kann.
+     */
+    sourceName: text("source_name"),
+    sourceUrl: text("source_url"),
+    licenseName: text("license_name"),
+    licenseUrl: text("license_url"),
+    licenseAuthor: text("license_author"),
     createdAt: integer("created_at").notNull().default(now),
   },
-  (t) => [uniqueIndex("movements_user_name_unique").on(t.userId, t.name)],
+  (t) => [uniqueIndex("movements_name_unique").on(t.name)],
 );
 
 export const exercises = sqliteTable(
@@ -292,13 +314,18 @@ export const gyms = sqliteTable(
   "gyms",
   {
     id: text("id").primaryKey(),
+    /**
+     * Angelegt von – der Katalog gilt für alle Nutzer der Instanz. Wird das
+     * Konto gelöscht, gehen die Einträge vorher an jemand anderen über
+     * (handOverCatalog), sonst nähme die Kaskade sie allen weg.
+     */
     userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     createdAt: integer("created_at").notNull().default(now),
   },
-  (t) => [uniqueIndex("gyms_user_name_unique").on(t.userId, t.name)],
+  (t) => [uniqueIndex("gyms_name_unique").on(t.name)],
 );
 
 export const plans = sqliteTable(

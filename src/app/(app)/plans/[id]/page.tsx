@@ -41,8 +41,8 @@ export default async function PlanDetailPage({
   const [items, exercises, movements, gyms] = await Promise.all([
     listPlanItems(plan.id),
     listExercises(user.id),
-    listMovements(user.id),
-    listGyms(user.id),
+    listMovements(),
+    listGyms(),
   ]);
   const rememberedGym = plan.rememberGym
     ? (gyms.find((g) => g.id === plan.defaultGymId)?.name ?? "ohne Studio")

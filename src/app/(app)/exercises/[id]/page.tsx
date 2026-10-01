@@ -53,11 +53,11 @@ export default async function ExerciseDetailPage({
 
   const [sessions, movements, allExercises, gyms, gymSettings, equipment] = await Promise.all([
     getExerciseSessions(user.id, exercise.id),
-    listMovements(user.id),
+    listMovements(),
     listExercises(user.id),
-    listGyms(user.id),
+    listGyms(),
     getExerciseGymSettings(exercise.id),
-    listEquipment(user.id),
+    listEquipment(),
   ]);
   const device = equipment.find((e) => e.id === exercise.equipmentId) ?? null;
   const movement = movements.find((m) => m.id === exercise.movementId) ?? null;
@@ -275,6 +275,32 @@ export default async function ExerciseDetailPage({
           <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
             Andere Geräte für {movement.name}
           </h2>
+          {movement.sourceUrl ? (
+            // CC-BY-SA verlangt Quelle, Urheber, Lizenz und den Hinweis auf
+            // Änderungen – hier, wo die Bewegung zu sehen ist.
+            <p className="mb-2 px-1 text-xs text-faint">
+              Bewegung aus{" "}
+              <a href={movement.sourceUrl} className="underline" target="_blank" rel="noreferrer">
+                wger
+              </a>
+              {movement.licenseAuthor ? ` · ${movement.licenseAuthor}` : ""}
+              {movement.licenseName ? (
+                <>
+                  {" · "}
+                  {movement.licenseUrl ? (
+                    <a href={movement.licenseUrl} className="underline" target="_blank" rel="noreferrer">
+                      {movement.licenseName}
+                    </a>
+                  ) : (
+                    movement.licenseName
+                  )}
+                </>
+              ) : null}
+              {movement.sourceName && movement.sourceName !== movement.name
+                ? ` · bearbeitet (Original: „${movement.sourceName}“)`
+                : ""}
+            </p>
+          ) : null}
           <Card className="p-1">
             <ul className="divide-y divide-line-soft">
               {siblings.map((sibling) => {

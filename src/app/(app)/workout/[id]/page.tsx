@@ -55,10 +55,10 @@ export default async function WorkoutPage({
     listWorkoutSets(workout.id),
     listExercises(user.id, { includeArchived: true }),
     listWorkoutVariants(workout.id),
-    listMovements(user.id),
-    listGyms(user.id),
+    listMovements(),
+    listGyms(),
     workout.gymId ? getGymExercises(workout.gymId) : Promise.resolve(new Map()),
-    listEquipment(user.id),
+    listEquipment(),
   ]);
   const equipmentById = new Map(equipment.map((e) => [e.id, e]));
   const gym = gyms.find((g) => g.id === workout.gymId) ?? null;

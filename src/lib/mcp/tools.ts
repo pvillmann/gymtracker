@@ -38,6 +38,7 @@ import { ServiceError, isServiceError } from "@/lib/services/errors";
 import { createExercise } from "@/lib/services/exercises";
 import { createEquipment, updateEquipment } from "@/lib/services/equipment";
 import { findOrCreateGym, markExerciseInGym } from "@/lib/services/gyms";
+import { searchWger } from "@/lib/wger";
 import {
   addPlanItem,
   createPlan,
@@ -166,7 +167,7 @@ export function registerGymTools(server: McpServer, user: User): void {
       run(async () => {
         const [all, movements] = await Promise.all([
           listExercises(user.id),
-          listMovements(user.id),
+          listMovements(),
         ]);
         const filtered = muscle_group
           ? all.filter(
@@ -381,6 +382,15 @@ export function registerGymTools(server: McpServer, user: User): void {
           .max(40)
           .optional()
           .describe("z. B. Rücken, Beine – gilt für die ganze Bewegung"),
+        wger_id: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe(
+            "ID aus search_wger, wenn eine neue Bewegung aus wger übernommen wird; " +
+              "Lizenz und Urheber werden dann mitgespeichert",
+          ),
         tracking_mode: z
           .enum(["weight_reps", "bodyweight_reps", "assisted_reps", "time"])
           .optional()
@@ -404,6 +414,7 @@ export function registerGymTools(server: McpServer, user: User): void {
           name: args.name,
           movementName: args.movement ?? null,
           muscleGroup: args.muscle_group ?? null,
+          wgerId: args.wger_id ?? null,
           machineSetup: args.machine_setup ?? null,
           trackingMode: args.tracking_mode ?? "weight_reps",
           weightStepKg: args.weight_step_kg ?? 2.5,
@@ -760,6 +771,31 @@ export function registerGymTools(server: McpServer, user: User): void {
       }),
   );
 
+  server.registerTool(
+    "search_wger",
+    {
+      title: "Bewegung in wger suchen",
+      description:
+        "Sucht in der offenen Übungsdatenbank wger nach einer Bewegung (deutsche " +
+        "Namen bevorzugt) und liefert Name, abgeleitete Muskelgruppe und Lizenz. " +
+        "Für eine neue Bewegung die ID als wger_id an create_exercise geben. " +
+        "Braucht Internetzugang der Instanz.",
+      inputSchema: { query: z.string().min(2).max(80).describe("Suchbegriff, z. B. Seitheben") },
+    },
+    async ({ query }) =>
+      run(async () => {
+        const results = await searchWger(query);
+        if (results.length === 0) return `Nichts in wger zu „${query}“.`;
+        return results
+          .map(
+            (r) =>
+              `- ${r.name} (wger_id ${r.id}${r.muscleGroup ? `, ${r.muscleGroup}` : ""}; ` +
+              `${[r.licenseAuthor, r.licenseName].filter(Boolean).join(", ") || "Lizenz unbekannt"})`,
+          )
+          .join("\n");
+      }),
+  );
+
   // ---------------------------------------------------------------- Geräte
 
   /** Fotos lassen sich nicht per MCP übertragen – hochgeladen wird im Browser. */
@@ -795,7 +831,7 @@ export function registerGymTools(server: McpServer, user: User): void {
     async ({ query }) =>
       run(async () => {
         const [all, exercises] = await Promise.all([
-          listEquipment(user.id),
+          listEquipment(),
           listExercises(user.id),
         ]);
         const needle = (query ?? "").toLowerCase().trim();

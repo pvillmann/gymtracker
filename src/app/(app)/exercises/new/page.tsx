@@ -17,8 +17,8 @@ export default async function NewExercisePage({
   const { movement } = await searchParams;
   const user = await requireUser();
   const [movements, equipment] = await Promise.all([
-    listMovements(user.id),
-    listEquipment(user.id),
+    listMovements(),
+    listEquipment(),
   ]);
 
   return (

@@ -1,10 +1,11 @@
 import { getCurrentUser } from "@/lib/auth";
 import { readImage } from "@/lib/images";
-import { canSeeImage } from "@/lib/services/equipment";
+import { imageExists } from "@/lib/services/equipment";
 
 /**
- * Gerätefotos liegen nicht öffentlich, sondern im Daten-Verzeichnis – und
- * gehen nur an den, dem das Gerät gehört. `?thumb` liefert das Vorschaubild.
+ * Gerätefotos liegen nicht öffentlich, sondern im Daten-Verzeichnis. Sie
+ * gehören zum gemeinsamen Katalog: jeder angemeldete Nutzer der Instanz
+ * sieht sie, sonst niemand. `?thumb` liefert das Vorschaubild.
  */
 export async function GET(
   request: Request,
@@ -12,7 +13,7 @@ export async function GET(
 ): Promise<Response> {
   const { id } = await params;
   const user = await getCurrentUser();
-  if (!user || !/^[a-z0-9]+$/.test(id) || !(await canSeeImage(user.id, id))) {
+  if (!user || !/^[a-z0-9]+$/.test(id) || !(await imageExists(id))) {
     return new Response("Nicht gefunden", { status: 404 });
   }
 
