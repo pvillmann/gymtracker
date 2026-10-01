@@ -25,7 +25,9 @@ export function WorkoutTimesForm({
 
   return (
     <form action={formAction} className="space-y-3">
-      <div className="grid grid-cols-2 gap-3">
+      {/* Untereinander: "30.09.2026, 21:49" braucht auf dem Handy mehr Platz,
+          als eine halbe Kartenbreite hergibt. */}
+      <div className="space-y-3">
         <Field label="Beginn">
           <Input
             type="datetime-local"
