@@ -993,7 +993,7 @@ export function registerGymTools(server: McpServer, user: User): void {
         }
         const link = await createPhotoUploadLink(user, equipmentId);
         lines.push(
-          `Foto hochladen (Einmal-Link, ${UPLOAD_LINK_MINUTES} Minuten gültig, ein Foto): ${link.url}`,
+          `Foto hochladen (Einmal-Link, ${UPLOAD_LINK_MINUTES} Minuten gültig, ein Foto; abgelaufen lässt er sich auf der Seite erneuern): ${link.url}`,
         );
         return lines.join("\n");
       }),
@@ -1042,7 +1042,9 @@ export function registerGymTools(server: McpServer, user: User): void {
       description:
         "Gibt einen Einmal-Link aus, über den der Nutzer ein Foto für eine " +
         "bestehende Maschine hochlädt – ohne Anmeldung, 30 Minuten gültig, " +
-        "für genau ein Foto. Nutze das, wenn der Nutzer ein Foto nachreichen " +
+        "für genau ein Foto; ein abgelaufener Link lässt sich auf der Seite " +
+        "selbst erneuern. Gib den Link unverändert weiter (nicht kürzen, nicht " +
+        "formatieren). Nutze das, wenn der Nutzer ein Foto nachreichen " +
         "will; Fotos selbst kann MCP nicht übertragen.",
       inputSchema: { equipment: z.string().describe("Name der Maschine") },
     },
@@ -1050,7 +1052,7 @@ export function registerGymTools(server: McpServer, user: User): void {
       run(async () => {
         const found = await resolveEquipment(user, equipment);
         const link = await createPhotoUploadLink(user, found.id);
-        return `Foto für „${found.name}“ hochladen (${UPLOAD_LINK_MINUTES} Minuten gültig, ein Foto): ${link.url}`;
+        return `Foto für „${found.name}“ hochladen (${UPLOAD_LINK_MINUTES} Minuten gültig, ein Foto; abgelaufen lässt er sich auf der Seite erneuern): ${link.url}`;
       }),
   );
 }
