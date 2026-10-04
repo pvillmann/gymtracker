@@ -48,6 +48,11 @@ function pick<T extends Named>(query: string, candidates: T[], label: Label): T 
     throw new ServiceError(`Bitte ${label.feminine ? "eine" : "einen"} ${noun} angeben.`);
   }
 
+  // Wörtlich gleich schlägt alles: „Rudern Schmal“ meint nicht „Rudern schmal“,
+  // auch wenn beide im Katalog stehen.
+  const literal = candidates.filter((c) => c.name.trim() === query.trim());
+  if (literal.length === 1) return literal[0];
+
   const exact = candidates.filter((c) => normalize(c.name) === needle);
   if (exact.length === 1) return exact[0];
 
@@ -138,9 +143,17 @@ export async function resolveVariant(
 
   // Ohne Maschinenangabe zählt ein exakt genannter Variantenname, z. B.
   // „Seitheben · Kabelturm“ oder ein alter, frei vergebener Name.
+  // Reihenfolge: erst wörtlich gleiche Namen (Variante, dann Übung), danach
+  // ohne Groß-/Kleinschreibung. Sonst landet „Rudern Schmal“ beim Verlauf von
+  // „Rudern schmal“, nur weil dort schon trainiert wurde.
   if (!options.machine) {
-    const exact = visible.filter((v) => normalize(v.name) === normalize(query));
-    if (exact.length === 1) return exact[0];
+    const literal = visible.filter((v) => v.name.trim() === query.trim());
+    if (literal.length === 1) return literal[0];
+    const literalMovement = (await listMovements()).some((m) => m.name.trim() === query.trim());
+    if (!literalMovement) {
+      const exact = visible.filter((v) => normalize(v.name) === normalize(query));
+      if (exact.length === 1) return exact[0];
+    }
   }
 
   let movement: Awaited<ReturnType<typeof resolveMovement>>;
