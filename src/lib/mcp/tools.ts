@@ -37,12 +37,20 @@ import {
   listWorkoutSummaries,
 } from "@/lib/queries";
 import { ServiceError, isServiceError } from "@/lib/services/errors";
-import { createEquipment, updateEquipment } from "@/lib/services/equipment";
+import {
+  createEquipment,
+  deleteEquipment,
+  setEquipmentArchived,
+  updateEquipment,
+} from "@/lib/services/equipment";
 import { findOrCreateGym } from "@/lib/services/gyms";
 import { UPLOAD_LINK_MINUTES, createPhotoUploadLink } from "@/lib/services/photo-upload";
 import {
   createMovement,
+  deleteMovement,
   linkGymEquipment,
+  setMovementArchived,
+  updateMovement,
   linkMovementEquipment,
   unlinkGymEquipment,
   unlinkMovementEquipment,
@@ -52,6 +60,8 @@ import {
   addPlanItem,
   createPlan,
   removePlanItem,
+  reorderPlan,
+  replacePlanItem,
   updatePlanItem,
 } from "@/lib/services/plans";
 import {
@@ -186,16 +196,20 @@ export function registerGymTools(server: McpServer, user: User): void {
         "Maschine nur, wenn sie nicht klar ist. Nutze das, um genaue Namen zu finden.",
       inputSchema: {
         muscle_group: z.string().optional().describe("Nur diese Muskelgruppe"),
+        include_archived: z.boolean().optional().describe("Archivierte Übungen mit auflisten"),
       },
     },
-    async ({ muscle_group }) =>
+    async ({ muscle_group, include_archived }) =>
       run(async () => {
-        const [movements, equipment, links, gyms] = await Promise.all([
+        const [allMovements, equipment, links, gyms] = await Promise.all([
           listMovements(),
           listEquipment(),
           listMachineLinkRows(),
           listGyms(),
         ]);
+        const movements = include_archived
+          ? allMovements
+          : allMovements.filter((m) => m.archivedAt === null);
         const filtered = muscle_group
           ? movements.filter(
               (m) => m.muscleGroup?.toLowerCase() === muscle_group.toLowerCase(),
@@ -217,7 +231,7 @@ export function registerGymTools(server: McpServer, user: User): void {
             const machines = links.movementLinks
               .filter((l) => l.movementId === m.id)
               .map((l) => machineLine(l.equipmentId));
-            return `- ${m.name} (${m.muscleGroup ?? "ohne Muskelgruppe"}, ${trackingModeLabel(
+            return `- ${m.name}${m.archivedAt !== null ? " [archiviert]" : ""} (${m.muscleGroup ?? "ohne Muskelgruppe"}, ${trackingModeLabel(
               m.trackingMode,
             )}): ${machines.length ? machines.join("; ") : "keine Maschine zugeordnet"}`;
           })
@@ -890,53 +904,122 @@ export function registerGymTools(server: McpServer, user: User): void {
         "bodyweight = Station für Körpergewicht, other = sonstiges",
     );
 
+  /**
+   * Maschinen als Text – gemeinsam für search_equipment und list_equipment:
+   * Daten, Foto-Status, Übungen, Studios und ein Hinweis auf mögliche
+   * Dubletten (gleicher Hersteller und gleiches Modell).
+   */
+  async function describeEquipment(filter: {
+    query?: string;
+    gym?: string;
+    exercise?: string;
+    includeArchived?: boolean;
+  }): Promise<string> {
+    const [everything, movements, links, gyms] = await Promise.all([
+      listEquipment(),
+      listMovements(),
+      listMachineLinkRows(),
+      listGyms(),
+    ]);
+    const movementName = new Map(movements.map((m) => [m.id, m.name]));
+    const gymName = new Map(gyms.map((g) => [g.id, g.name]));
+    let hits = filter.includeArchived ? everything : everything.filter((e) => e.archivedAt === null);
+
+    const needle = (filter.query ?? "").toLowerCase().trim();
+    if (needle) {
+      // Auch die Notiz, damit „Nr. 24“ oder „hinten links“ gefunden wird.
+      hits = hits.filter((e) =>
+        [e.name, e.manufacturer, e.model, e.notes]
+          .filter(Boolean)
+          .some((v) => v!.toLowerCase().includes(needle)),
+      );
+    }
+    if (filter.gym) {
+      const gym = gyms.find((g) => g.name.toLowerCase() === filter.gym!.toLowerCase().trim());
+      if (!gym) throw new ServiceError(`Kein Studio namens „${filter.gym}“. Vorhanden: ${gyms.map((g) => g.name).join(", ")}.`);
+      const here = new Set(links.gymLinks.filter((l) => l.gymId === gym.id).map((l) => l.equipmentId));
+      hits = hits.filter((e) => here.has(e.id));
+    }
+    if (filter.exercise) {
+      const movement = await resolveMovement(filter.exercise);
+      const fits = new Set(
+        links.movementLinks.filter((l) => l.movementId === movement.id).map((l) => l.equipmentId),
+      );
+      hits = hits.filter((e) => fits.has(e.id));
+    }
+    if (hits.length === 0) return "Keine passenden Geräte.";
+
+    const modelKey = (e: (typeof everything)[number]) =>
+      e.manufacturer && e.model ? `${e.manufacturer}|${e.model}`.toLowerCase() : null;
+    const withoutPhoto = hits.filter((e) => !e.imageId).length;
+    const lines = hits.map((e) => {
+      const used = links.movementLinks
+        .filter((l) => l.equipmentId === e.id)
+        .map((l) => movementName.get(l.movementId))
+        .filter(Boolean);
+      const where = links.gymLinks
+        .filter((l) => l.equipmentId === e.id)
+        .map((l) => gymName.get(l.gymId))
+        .filter(Boolean);
+      const twins = everything.filter(
+        (o) => o.id !== e.id && modelKey(e) !== null && modelKey(o) === modelKey(e),
+      );
+      const meta = [
+        [e.manufacturer, e.model].filter(Boolean).join(" "),
+        e.loadFactor !== 1 ? `Übersetzung ${Math.round(1 / e.loadFactor)}:1` : null,
+        e.baseLoadKg > 0 ? `Eigengewicht ${formatKg(e.baseLoadKg)} kg` : null,
+        e.imageId ? "mit Foto" : "OHNE Foto",
+        e.archivedAt !== null ? "archiviert" : null,
+      ]
+        .filter(Boolean)
+        .join(", ");
+      return [
+        `- ${e.name} (${meta})`,
+        used.length ? ` – Übungen: ${used.join(", ")}` : " – keiner Übung zugeordnet",
+        where.length ? ` – Studios: ${where.join(", ")}` : "",
+        e.notes ? ` – Notiz: ${e.notes}` : "",
+        twins.length ? ` – mögliche Dublette von: ${twins.map((t) => t.name).join(", ")}` : "",
+      ].join("");
+    });
+    return [
+      `${hits.length} Geräte${withoutPhoto ? `, ${withoutPhoto} ohne Foto` : ""}:`,
+      ...lines,
+    ].join("\n");
+  }
+
   server.registerTool(
     "search_equipment",
     {
       title: "Geräte suchen",
       description:
-        "Durchsucht die angelegten Geräte (Maschinen) nach Name, Hersteller " +
-        "und Modell. Vor create_equipment aufrufen, damit nichts doppelt " +
-        "angelegt wird – etwa nachdem du ein Gerät auf einem Foto erkannt hast.",
+        "Durchsucht die Geräte (Maschinen) nach Name, Hersteller, Modell und " +
+        "Notiz (z. B. „Nr. 24“). Vor create_equipment aufrufen, damit nichts " +
+        "doppelt angelegt wird – etwa nachdem du ein Gerät auf einem Foto erkannt hast.",
       inputSchema: {
         query: z.string().optional().describe("Suchbegriff; leer listet alle"),
+        include_archived: z.boolean().optional(),
       },
     },
-    async ({ query }) =>
-      run(async () => {
-        const [all, movements, links] = await Promise.all([
-          listEquipment(),
-          listMovements(),
-          listMachineLinkRows(),
-        ]);
-        const movementName = new Map(movements.map((m) => [m.id, m.name]));
-        const needle = (query ?? "").toLowerCase().trim();
-        const hits = all.filter((e) =>
-          [e.name, e.manufacturer, e.model]
-            .filter(Boolean)
-            .some((v) => v!.toLowerCase().includes(needle)),
-        );
-        if (hits.length === 0) {
-          return needle ? `Kein Gerät passt zu „${query}“.` : "Noch keine Geräte angelegt.";
-        }
-        return hits
-          .map((e) => {
-            const used = links.movementLinks
-              .filter((l) => l.equipmentId === e.id)
-              .map((l) => movementName.get(l.movementId))
-              .filter(Boolean);
-            const meta = [
-              [e.manufacturer, e.model].filter(Boolean).join(" "),
-              e.loadFactor !== 1 ? `Übersetzung ${Math.round(1 / e.loadFactor)}:1` : null,
-              e.baseLoadKg > 0 ? `Eigengewicht ${formatKg(e.baseLoadKg)} kg` : null,
-              e.imageId ? "mit Foto" : "ohne Foto",
-            ]
-              .filter(Boolean)
-              .join(", ");
-            return `- ${e.name} (${meta})${used.length ? ` – Übungen: ${used.join(", ")}` : ""}`;
-          })
-          .join("\n");
-      }),
+    async ({ query, include_archived }) =>
+      run(() => describeEquipment({ query, includeArchived: include_archived })),
+  );
+
+  server.registerTool(
+    "list_equipment",
+    {
+      title: "Geräte auflisten",
+      description:
+        "Listet Geräte mit Zuordnungen (Übungen, Studios), Foto-Status und " +
+        "Hinweis auf mögliche Dubletten – optional nur die eines Studios oder " +
+        "einer Übung. Gut, um Lücken zu finden: Geräte ohne Foto oder ohne Übung.",
+      inputSchema: {
+        gym: z.string().optional().describe("Nur Geräte, die in diesem Studio stehen"),
+        exercise: z.string().optional().describe("Nur Geräte, die zu dieser Übung passen"),
+        include_archived: z.boolean().optional(),
+      },
+    },
+    async ({ gym, exercise, include_archived }) =>
+      run(() => describeEquipment({ gym, exercise, includeArchived: include_archived })),
   );
 
   server.registerTool(
@@ -1053,6 +1136,215 @@ export function registerGymTools(server: McpServer, user: User): void {
         const found = await resolveEquipment(user, equipment);
         const link = await createPhotoUploadLink(user, found.id);
         return `Foto für „${found.name}“ hochladen (${UPLOAD_LINK_MINUTES} Minuten gültig, ein Foto; abgelaufen lässt er sich auf der Seite erneuern): ${link.url}`;
+      }),
+  );
+
+  // ------------------------------------------------------- Katalog pflegen
+
+  const trackingModeSchema = z
+    .enum(["weight_reps", "bodyweight_reps", "assisted_reps", "time"])
+    .optional();
+
+  server.registerTool(
+    "update_exercise",
+    {
+      title: "Übung bearbeiten",
+      description:
+        "Ändert Name, Muskelgruppe oder Messart einer Übung – für alle Nutzer. " +
+        "Hängen schon Sätze daran, geht als Messart-Wechsel nur Gewicht × " +
+        "Wiederholungen ↔ Körpergewicht + Zusatz (z. B. Hackenschmidt mit " +
+        "Scheiben); das bewegte Gewicht bisheriger Sätze wird dann neu " +
+        "berechnet. Nicht genannte Felder bleiben unverändert.",
+      inputSchema: {
+        exercise: z.string().describe("Name der Übung"),
+        name: z.string().min(1).max(80).optional(),
+        muscle_group: z.string().max(40).optional(),
+        tracking_mode: trackingModeSchema,
+      },
+    },
+    async (args) =>
+      run(async () => {
+        const movement = await resolveMovement(args.exercise);
+        await updateMovement(user, movement.id, {
+          name: args.name ?? movement.name,
+          muscleGroup: args.muscle_group ?? movement.muscleGroup,
+          trackingMode: args.tracking_mode ?? movement.trackingMode,
+        });
+        const changes = [
+          args.name && args.name !== movement.name ? `Name „${args.name}“` : null,
+          args.muscle_group ? `Muskelgruppe ${args.muscle_group}` : null,
+          args.tracking_mode && args.tracking_mode !== movement.trackingMode
+            ? `Messart ${trackingModeLabel(args.tracking_mode)} (bisherige Sätze neu berechnet)`
+            : null,
+        ].filter(Boolean);
+        return `„${movement.name}“ gespeichert${changes.length ? `: ${changes.join(", ")}` : ""}.`;
+      }),
+  );
+
+  server.registerTool(
+    "archive_exercise",
+    {
+      title: "Übung archivieren",
+      description:
+        "Blendet eine Übung aus Auswahllisten aus (z. B. eine Dublette mit " +
+        "Verlauf). Verlauf und Planeinträge bleiben. restore: true holt sie zurück.",
+      inputSchema: {
+        exercise: z.string().describe("Name der Übung"),
+        restore: z.boolean().optional(),
+      },
+    },
+    async ({ exercise, restore }) =>
+      run(async () => {
+        const movement = await resolveMovement(exercise);
+        await setMovementArchived(movement.id, !restore);
+        return restore ? `„${movement.name}“ ist wieder aktiv.` : `„${movement.name}“ archiviert.`;
+      }),
+  );
+
+  server.registerTool(
+    "delete_exercise",
+    {
+      title: "Übung löschen",
+      description:
+        "Löscht eine Übung endgültig – nur, wenn bei niemandem Sätze daran " +
+        "hängen, und nur durch den, der sie angelegt hat, oder einen Admin. " +
+        "Sie verschwindet auch aus den Plänen aller Nutzer. Mit Verlauf: " +
+        "archive_exercise verwenden.",
+      inputSchema: { exercise: z.string().describe("Name der Übung") },
+    },
+    async ({ exercise }) =>
+      run(async () => {
+        const movement = await resolveMovement(exercise);
+        const { removedFromPlans } = await deleteMovement(user, movement.id);
+        return `„${movement.name}“ gelöscht${
+          removedFromPlans ? ` – aus ${removedFromPlans} Plan-Einträgen entfernt` : ""
+        }.`;
+      }),
+  );
+
+  server.registerTool(
+    "archive_equipment",
+    {
+      title: "Gerät archivieren",
+      description:
+        "Blendet ein Gerät aus Auswahllisten und Vorschlägen im Training aus " +
+        "(z. B. eine Dublette oder ein abgebautes Gerät). Verlauf, Fotos und " +
+        "Zuordnungen bleiben. restore: true holt es zurück.",
+      inputSchema: {
+        equipment: z.string().describe("Name des Geräts"),
+        restore: z.boolean().optional(),
+      },
+    },
+    async ({ equipment, restore }) =>
+      run(async () => {
+        const found = await resolveEquipment(user, equipment);
+        await setEquipmentArchived(found.id, !restore);
+        return restore ? `„${found.name}“ ist wieder aktiv.` : `„${found.name}“ archiviert.`;
+      }),
+  );
+
+  server.registerTool(
+    "delete_equipment",
+    {
+      title: "Gerät löschen",
+      description:
+        "Löscht ein Gerät samt Fotos und Zuordnungen – nur, wenn noch niemand " +
+        "daran trainiert hat, und nur durch den, der es angelegt hat, oder " +
+        "einen Admin. Mit Verlauf: archive_equipment verwenden.",
+      inputSchema: { equipment: z.string().describe("Name des Geräts") },
+    },
+    async ({ equipment }) =>
+      run(async () => {
+        const found = await resolveEquipment(user, equipment);
+        await deleteEquipment(user, found.id);
+        return `Gerät „${found.name}“ gelöscht.`;
+      }),
+  );
+
+  // ------------------------------------------------------- Pläne umbauen
+
+  /** Ein Plan per Name, oder mit "*" alle aktiven Pläne. */
+  async function plansFor(plan: string) {
+    if (plan.trim() === "*") {
+      const all = (await listPlans(user.id)).filter((p) => p.archivedAt === null);
+      if (all.length === 0) throw new ServiceError("Es gibt keine aktiven Pläne.");
+      return all;
+    }
+    return [await resolvePlan(user, plan)];
+  }
+
+  server.registerTool(
+    "reorder_plan",
+    {
+      title: "Plan umsortieren",
+      description:
+        "Stellt die genannten Übungen in dieser Reihenfolge an den Anfang des " +
+        "Plans; alle übrigen folgen in ihrer bisherigen Reihenfolge. Zielwerte " +
+        "und Notizen bleiben. Beispiel: exercises [\"Crosstrainer\"] setzt den " +
+        "Crosstrainer an Position 1. plan \"*\" wendet das auf alle aktiven " +
+        "Pläne an (Pläne ohne die Übung werden übersprungen).",
+      inputSchema: {
+        plan: z.string().describe("Name des Plans oder * für alle"),
+        exercises: z.array(z.string()).min(1).max(50).describe("Übungen in der gewünschten Reihenfolge"),
+      },
+    },
+    async ({ plan, exercises }) =>
+      run(async () => {
+        const lines: string[] = [];
+        for (const target of await plansFor(plan)) {
+          const items = await listPlanItems(target.id);
+          const picked: typeof items = [];
+          const missing: string[] = [];
+          for (const name of exercises) {
+            try {
+              picked.push(resolvePlanItem(name, items));
+            } catch {
+              missing.push(name);
+            }
+          }
+          if (plan.trim() !== "*" && missing.length) {
+            throw new ServiceError(`Nicht im Plan „${target.name}“: ${missing.join(", ")}.`);
+          }
+          if (picked.length === 0) continue;
+          await reorderPlan(user, target.id, picked.map((i) => i.id));
+          const order = (await listPlanItems(target.id)).map((i) => i.exerciseName);
+          lines.push(`${target.name}: ${order.join(" → ")}`);
+        }
+        return lines.length ? lines.join("\n") : "In keinem Plan gefunden – nichts geändert.";
+      }),
+  );
+
+  server.registerTool(
+    "replace_plan_exercise",
+    {
+      title: "Übung im Plan ersetzen",
+      description:
+        "Tauscht eine Übung im Plan gegen eine andere – an derselben Stelle, " +
+        "mit denselben Sätzen, Wiederholungen, Pause und Notiz. plan \"*\" " +
+        "tauscht in allen aktiven Plänen, in denen die alte Übung steht.",
+      inputSchema: {
+        plan: z.string().describe("Name des Plans oder * für alle"),
+        old: z.string().describe("Übung, die ersetzt wird"),
+        new: z.string().describe("Übung, die an ihre Stelle tritt"),
+      },
+    },
+    async (args) =>
+      run(async () => {
+        const replacement = await resolveMovement(args.new);
+        const lines: string[] = [];
+        for (const target of await plansFor(args.plan)) {
+          const items = await listPlanItems(target.id);
+          let item: (typeof items)[number];
+          try {
+            item = resolvePlanItem(args.old, items);
+          } catch (error) {
+            if (args.plan.trim() === "*") continue;
+            throw error;
+          }
+          await replacePlanItem(user, item.id, replacement.id);
+          lines.push(`${target.name}: „${item.exerciseName}“ → „${replacement.name}“ (Position ${item.position + 1})`);
+        }
+        return lines.length ? lines.join("\n") : "In keinem Plan gefunden – nichts geändert.";
       }),
   );
 }

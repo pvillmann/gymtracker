@@ -7,6 +7,7 @@ import {
   equipment,
   equipmentImages,
   exercises,
+  users,
   workoutSets,
   type EquipmentKind,
   type User,
@@ -69,9 +70,30 @@ export async function updateEquipment(
   await recomputeVolumes({ equipmentId });
 }
 
+/** Hängen an einer Maschine Sätze – bei irgendeinem Nutzer? */
+export async function equipmentHasHistory(equipmentId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: workoutSets.id })
+    .from(workoutSets)
+    .innerJoin(exercises, eq(exercises.id, workoutSets.exerciseId))
+    .where(eq(exercises.equipmentId, equipmentId))
+    .limit(1);
+  return Boolean(row);
+}
+
+/**
+ * Löscht eine Maschine samt Fotos und Zuordnungen – nur, solange niemand an
+ * ihr trainiert hat. Mit Verlauf würden die Varianten aller Nutzer
+ * stillschweigend zu „ohne Gerät“; dann ist Archivieren der Weg.
+ */
 export async function deleteEquipment(user: User, equipmentId: string): Promise<void> {
   const current = await requireEquipment(equipmentId);
   await assertCanDeleteCatalog(user, current.userId, `Das Gerät „${current.name}“`);
+  if (await equipmentHasHistory(equipmentId)) {
+    throw new ServiceError(
+      `An „${current.name}“ wurde schon trainiert – Löschen würde den Verlauf vom Gerät trennen. Archiviere die Maschine stattdessen.`,
+    );
+  }
   const images = await db
     .select({ id: equipmentImages.id })
     .from(equipmentImages)
@@ -85,6 +107,19 @@ export async function deleteEquipment(user: User, equipmentId: string): Promise<
   for (const image of images) await removeImage(image.id);
   // Ohne Gerät gilt wieder das eingestellte Gewicht als Last.
   await recomputeVolumes({ exerciseIds: affected.map((e) => e.id) });
+}
+
+/**
+ * Archivieren blendet eine Maschine aus Auswahllisten und Vorschlägen aus;
+ * Verlauf, Fotos und Zuordnungen bleiben. Rückgängig jederzeit. Gemeinsamer
+ * Katalog: darf jeder, wie Bearbeiten.
+ */
+export async function setEquipmentArchived(equipmentId: string, archived: boolean): Promise<void> {
+  await requireEquipment(equipmentId);
+  await db
+    .update(equipment)
+    .set({ archivedAt: archived ? Math.floor(Date.now() / 1000) : null })
+    .where(eq(equipment.id, equipmentId));
 }
 
 export async function addEquipmentImage(
@@ -149,20 +184,33 @@ export async function imageExists(imageId: string): Promise<boolean> {
  * des Geräts anpassen. Betrifft nur Gewicht × Wiederholungen – bei den anderen
  * Messarten spielt das Gerät für die Last keine Rolle.
  */
+/**
+ * Rechnet das bewegte Gewicht bestehender Sätze neu. Normalerweise nur für
+ * Gewicht × Wiederholungen (Übersetzung, Eigengewicht). `allModes` nimmt die
+ * übrigen Messarten dazu – nur beim Wechsel der Messart, denn bei
+ * Körpergewichts-Übungen gilt dann das heutige Körpergewicht auch für alte
+ * Sätze.
+ */
 export async function recomputeVolumes(
   scope: { equipmentId: string } | { exerciseIds: string[] },
+  { allModes = false }: { allModes?: boolean } = {},
 ): Promise<void> {
   const targets = await db
     .select({
       id: exercises.id,
+      trackingMode: exercises.trackingMode,
       loadFactor: equipment.loadFactor,
       baseLoadKg: equipment.baseLoadKg,
+      // Das Körpergewicht wird nicht pro Satz gespeichert – es gilt das
+      // aktuelle aus dem Profil, wie beim Erfassen.
+      bodyweightKg: users.bodyweightKg,
     })
     .from(exercises)
+    .innerJoin(users, eq(users.id, exercises.userId))
     .leftJoin(equipment, eq(equipment.id, exercises.equipmentId))
     .where(
       and(
-        eq(exercises.trackingMode, "weight_reps"),
+        allModes ? undefined : eq(exercises.trackingMode, "weight_reps"),
         "equipmentId" in scope
           ? eq(exercises.equipmentId, scope.equipmentId)
           : scope.exerciseIds.length > 0
@@ -171,14 +219,22 @@ export async function recomputeVolumes(
       ),
     );
 
+  // Dieselbe Rechnung wie setVolume in lib/training.ts, nur in SQL.
   for (const target of targets) {
     const factor = target.loadFactor ?? 1;
     const base = target.baseLoadKg ?? 0;
+    const bodyweight = target.bodyweightKg;
+    const volume =
+      target.trackingMode === "time"
+        ? sql`0`
+        : target.trackingMode === "bodyweight_reps"
+          ? sql`max(0, (${bodyweight} + ${workoutSets.weightKg}) * ${workoutSets.reps})`
+          : target.trackingMode === "assisted_reps"
+            ? sql`max(0, ${bodyweight} - ${workoutSets.weightKg}) * ${workoutSets.reps}`
+            : sql`max(0, (${base} + ${workoutSets.weightKg} * ${factor}) * ${workoutSets.reps})`;
     await db
       .update(workoutSets)
-      .set({
-        volumeKg: sql`max(0, (${base} + ${workoutSets.weightKg} * ${factor}) * ${workoutSets.reps})`,
-      })
+      .set({ volumeKg: volume })
       .where(eq(workoutSets.exerciseId, target.id));
   }
 }

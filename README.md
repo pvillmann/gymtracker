@@ -65,6 +65,9 @@ Homescreen.
   Eigengewicht. Übersetzung und Eigengewicht fließen ins bewegte Gewicht ein;
   Fotos werden verkleinert und ohne Metadaten (auch ohne GPS) im Daten-Volume
   gespeichert
+- Archivieren statt Löschen: Übungen und Maschinen mit Verlauf lassen sich
+  archivieren – sie verschwinden aus Auswahllisten und Vorschlägen, Verlauf und
+  Pläne bleiben. Löschen geht nur, solange niemand daran trainiert hat
 - Gemeinsamer Katalog: Übungen, Maschinen (samt Fotos), Studios und ihre
   Zuordnungen gelten für alle Nutzer der Instanz. Jeder darf sie benutzen,
   anlegen, bearbeiten und zuordnen – wer einen Fehler sieht, korrigiert ihn.
@@ -374,7 +377,12 @@ dort nichts Brauchbares steht.
 | `start_workout`, `current_workout`, `finish_workout` | Training führen |
 | `edit_workout`, `delete_workout` | Zeiten eines Trainings korrigieren oder es löschen |
 | `log_set`, `undo_last_set` | Sätze protokollieren und korrigieren |
-| `search_equipment`, `create_equipment`, `update_equipment` | Maschinen suchen, anlegen, ändern |
+| `search_equipment`, `list_equipment` | Maschinen finden (auch über die Notiz, z. B. „Nr. 24“), nach Studio oder Übung filtern; zeigt Foto-Status und mögliche Dubletten |
+| `create_equipment`, `update_equipment` | Maschinen anlegen und ändern |
+| `update_exercise` | Name, Muskelgruppe, Messart einer Übung ändern (Messart nur umrechenbar: Gewicht ↔ Körpergewicht + Zusatz) |
+| `archive_exercise`, `archive_equipment` | Aus Auswahllisten ausblenden, Verlauf bleibt; `restore` holt zurück |
+| `delete_exercise`, `delete_equipment` | Endgültig löschen – nur ohne Verlauf, nur Anleger oder Admin |
+| `reorder_plan`, `replace_plan_exercise` | Übungen im Plan nach vorn stellen bzw. austauschen, Zielwerte und Notiz bleiben; `plan: "*"` für alle Pläne |
 | `photo_upload_link` | Einmal-Link für ein Maschinenfoto |
 
 Übungen und Pläne werden über ihren **Namen** angesprochen, nicht über IDs:

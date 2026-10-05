@@ -244,3 +244,71 @@ export async function movePlanItem(
 
   return { planId: item.planId };
 }
+
+/**
+ * Stellt die genannten Einträge in dieser Reihenfolge an den Anfang; alle
+ * übrigen folgen in ihrer bisherigen Reihenfolge. Zielwerte und Notizen
+ * bleiben – anders als beim Entfernen und neu Anhängen.
+ */
+export async function reorderPlan(
+  user: User,
+  planId: string,
+  firstItemIds: string[],
+): Promise<void> {
+  await requireOwnPlan(user.id, planId);
+  const items = await db
+    .select({ id: planExercises.id, position: planExercises.position })
+    .from(planExercises)
+    .where(eq(planExercises.planId, planId))
+    .orderBy(asc(planExercises.position));
+  const known = new Set(items.map((i) => i.id));
+  const front = [...new Set(firstItemIds)];
+  if (front.some((id) => !known.has(id))) throw new ServiceError("Ein Eintrag gehört nicht zu diesem Plan.");
+  const order = [...front, ...items.map((i) => i.id).filter((id) => !front.includes(id))];
+  for (const [position, id] of order.entries()) {
+    await db.update(planExercises).set({ position }).where(eq(planExercises.id, id));
+  }
+}
+
+/**
+ * Tauscht die Übung eines Eintrags aus – an derselben Stelle, mit denselben
+ * Zielwerten, derselben Pause und Notiz. Die bevorzugte Variante gehört zur
+ * alten Übung und entfällt.
+ */
+export async function replacePlanItem(
+  user: User,
+  itemId: string,
+  movementId: string,
+): Promise<void> {
+  const item = await getOwnedPlanItem(user.id, itemId);
+  const [movement] = await db
+    .select({ id: movements.id, trackingMode: movements.trackingMode })
+    .from(movements)
+    .where(eq(movements.id, movementId))
+    .limit(1);
+  if (!movement) throw new ServiceError("Diese Übung gibt es nicht.");
+  const [already] = await db
+    .select({ id: planExercises.id })
+    .from(planExercises)
+    .where(and(eq(planExercises.planId, item.planId), eq(planExercises.movementId, movementId)))
+    .limit(1);
+  if (already) throw new ServiceError("Diese Übung steht schon im Plan.");
+  // Zeit- und Wiederholungsziele passen nicht ineinander – dann die Standards.
+  const [current] = await db.select().from(planExercises).where(eq(planExercises.id, itemId)).limit(1);
+  const targets =
+    (movement.trackingMode === "time") === (item.trackingMode === "time")
+      ? {}
+      : resolveTargets(movement.trackingMode, {
+          targetSets: current.targetSets,
+          targetRepsMin: 8,
+          targetRepsMax: 12,
+          // Wechsel auf eine Zeit-Übung: zehn Minuten als Startwert.
+          targetDurationSeconds: current.targetDurationSeconds ?? 600,
+          restSeconds: current.restSeconds,
+          notes: current.notes,
+        });
+  await db
+    .update(planExercises)
+    .set({ movementId, exerciseId: null, ...targets })
+    .where(eq(planExercises.id, itemId));
+}

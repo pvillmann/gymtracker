@@ -43,7 +43,7 @@ export default async function GymPage({ params }: { params: Promise<{ id: string
       .filter((n): n is string => Boolean(n))
       .sort();
   const machines = equipment.filter((e) => here.has(e.id));
-  const addable = equipment.filter((e) => !here.has(e.id));
+  const addable = equipment.filter((e) => !here.has(e.id) && e.archivedAt === null);
   const mine = stats.get(gym.id);
   const deletable = await canDeleteCatalog(user, gym.userId);
 

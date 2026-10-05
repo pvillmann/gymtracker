@@ -10,7 +10,9 @@ import { fail, type FormState } from "@/lib/result";
 import { isServiceError } from "@/lib/services/errors";
 import {
   createMovement,
+  deleteMovement,
   linkGymEquipment,
+  setMovementArchived,
   linkMovementEquipment,
   unlinkGymEquipment,
   unlinkMovementEquipment,
@@ -127,4 +129,20 @@ export async function setMachineInGymAction(
   revalidatePath(`/equipment/${equipmentId}`);
   revalidatePath(`/gyms/${gymId}`);
   return failed ?? { ok: true };
+}
+
+/** Archivieren bzw. wiederherstellen – gemeinsamer Katalog, darf jeder. */
+export async function setMovementArchivedAction(movementId: string, archived: boolean): Promise<void> {
+  await requireUser();
+  await setMovementArchived(movementId, archived);
+  revalidatePath("/exercises");
+  revalidatePath(`/movements/${movementId}`);
+}
+
+/** Löschen nur ohne Verlauf; der Service prüft Rechte und Sätze. */
+export async function deleteMovementAction(movementId: string): Promise<void> {
+  const user = await requireUser();
+  await deleteMovement(user, movementId);
+  revalidatePath("/exercises");
+  redirect("/exercises");
 }

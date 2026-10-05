@@ -12,6 +12,7 @@ import {
   createEquipment,
   deleteEquipment,
   deleteEquipmentImage,
+  setEquipmentArchived,
   updateEquipment,
   type EquipmentInput,
 } from "@/lib/services/equipment";
@@ -129,4 +130,12 @@ export async function deleteEquipmentImageAction(imageId: string): Promise<void>
   const equipmentId = await deleteEquipmentImage(user, imageId);
   revalidatePath(`/equipment/${equipmentId}`);
   revalidatePath("/equipment");
+}
+
+/** Archivieren bzw. wiederherstellen – gemeinsamer Katalog, darf jeder. */
+export async function setEquipmentArchivedAction(equipmentId: string, archived: boolean): Promise<void> {
+  await requireUser();
+  await setEquipmentArchived(equipmentId, archived);
+  revalidatePath("/equipment");
+  revalidatePath(`/equipment/${equipmentId}`);
 }

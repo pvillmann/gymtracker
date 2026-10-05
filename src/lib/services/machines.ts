@@ -9,11 +9,14 @@ import {
   gymEquipment,
   movementEquipment,
   movements,
+  planExercises,
+  workoutSets,
   type TrackingMode,
   type User,
 } from "@/db/schema";
 import { newId } from "@/lib/ids";
-import { requireEquipment } from "@/lib/services/equipment";
+import { assertCanDeleteCatalog } from "@/lib/services/catalog";
+import { recomputeVolumes, requireEquipment } from "@/lib/services/equipment";
 import { ServiceError } from "@/lib/services/errors";
 import { requireGym } from "@/lib/services/gyms";
 import { getWgerExercise } from "@/lib/wger";
@@ -218,20 +221,99 @@ export async function createMovement(
  * Ändert eine Übung für alle – jeder darf korrigieren. Muskelgruppe und
  * Messart wandern in die Varianten aller Nutzer mit.
  */
+/**
+ * Welche Messarten sich ineinander überführen lassen, wenn schon Sätze
+ * dranhängen: Gewicht × Wdh. und Körpergewicht + Zusatz messen beide ein
+ * aufgelegtes Gewicht (die Hackenschmidt-Kniebeuge mit Scheiben). Gegengewicht
+ * bedeutet das Gegenteil, und Zeit hat keine Wiederholungen.
+ */
+const CONVERTIBLE: ReadonlyArray<[TrackingMode, TrackingMode]> = [
+  ["weight_reps", "bodyweight_reps"],
+  ["bodyweight_reps", "weight_reps"],
+];
+
+/** Hängen an einer Übung Sätze – bei irgendeinem Nutzer? */
+export async function movementHasHistory(movementId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: workoutSets.id })
+    .from(workoutSets)
+    .innerJoin(exercises, eq(exercises.id, workoutSets.exerciseId))
+    .where(eq(exercises.movementId, movementId))
+    .limit(1);
+  return Boolean(row);
+}
+
+/**
+ * Ändert eine Übung für alle – jeder darf korrigieren. Muskelgruppe und
+ * Messart wandern in die Varianten aller Nutzer mit; bei einem Wechsel der
+ * Messart wird das bewegte Gewicht bisheriger Sätze neu berechnet.
+ */
 export async function updateMovement(
   _user: User,
   movementId: string,
   input: MovementInput,
 ): Promise<void> {
-  await requireMovement(movementId);
+  const current = await requireMovement(movementId);
+  const modeChanged = current.trackingMode !== input.trackingMode;
+  if (
+    modeChanged &&
+    !CONVERTIBLE.some(([from, to]) => from === current.trackingMode && to === input.trackingMode) &&
+    (await movementHasHistory(movementId))
+  ) {
+    throw new ServiceError(
+      `Die Messart von „${current.name}“ lässt sich nicht mehr ändern: bisherige Sätze ließen sich nicht umrechnen. Möglich ist nur der Wechsel zwischen Gewicht × Wiederholungen und Körpergewicht + Zusatz.`,
+    );
+  }
   try {
     await db.update(movements).set(input).where(eq(movements.id, movementId));
   } catch (error) {
     if (isDuplicateName(error)) throw new ServiceError("Eine Übung mit diesem Namen gibt es schon.");
     throw error;
   }
-  await db
+  const variants = await db
     .update(exercises)
     .set({ muscleGroup: input.muscleGroup, trackingMode: input.trackingMode })
-    .where(eq(exercises.movementId, movementId));
+    .where(eq(exercises.movementId, movementId))
+    .returning({ id: exercises.id });
+  if (modeChanged) {
+    await recomputeVolumes({ exerciseIds: variants.map((v) => v.id) }, { allModes: true });
+  }
+}
+
+/**
+ * Archivieren blendet eine Übung aus Auswahllisten aus; Verlauf und
+ * Planeinträge bleiben. Gemeinsamer Katalog: darf jeder, wie Bearbeiten.
+ */
+export async function setMovementArchived(movementId: string, archived: boolean): Promise<void> {
+  await requireMovement(movementId);
+  await db
+    .update(movements)
+    .set({ archivedAt: archived ? Math.floor(Date.now() / 1000) : null })
+    .where(eq(movements.id, movementId));
+}
+
+/**
+ * Löscht eine Übung – nur ohne Verlauf (bei allen Nutzern) und nur durch den,
+ * der sie angelegt hat, oder einen Admin. Planeinträge aller Nutzer gehen
+ * mit; die Zahl wird zurückgegeben, damit man sie nennen kann.
+ */
+export async function deleteMovement(
+  user: User,
+  movementId: string,
+): Promise<{ removedFromPlans: number }> {
+  const movement = await requireMovement(movementId);
+  await assertCanDeleteCatalog(user, movement.userId, `Die Übung „${movement.name}“`);
+  if (await movementHasHistory(movementId)) {
+    throw new ServiceError(
+      `An „${movement.name}“ hängt schon Verlauf – Löschen würde ihn vernichten. Archiviere die Übung stattdessen.`,
+    );
+  }
+  const inPlans = await db
+    .select({ id: planExercises.id })
+    .from(planExercises)
+    .where(eq(planExercises.movementId, movementId));
+  // Varianten ohne Sätze verweisen noch auf die Übung (ohne Kaskade) – erst sie.
+  await db.delete(exercises).where(eq(exercises.movementId, movementId));
+  await db.delete(movements).where(eq(movements.id, movementId));
+  return { removedFromPlans: inPlans.length };
 }

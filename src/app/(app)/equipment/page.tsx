@@ -9,8 +9,11 @@ import { listEquipment } from "@/lib/queries";
 export const metadata: Metadata = { title: "Geräte · GymTracker" };
 
 export default async function EquipmentPage() {
-  const user = await requireUser();
-  const all = await listEquipment();
+  await requireUser();
+  const everything = await listEquipment();
+  // Archivierte stehen unten eingeklappt – Verlauf und Fotos behalten sie.
+  const all = everything.filter((e) => e.archivedAt === null);
+  const archived = everything.filter((e) => e.archivedAt !== null);
   const kindLabel = new Map(EQUIPMENT_KINDS.map((k) => [k.value, k.label]));
 
   return (
@@ -76,6 +79,28 @@ export default async function EquipmentPage() {
           </ul>
         </Card>
       )}
+
+      {archived.length > 0 ? (
+        <details className="mt-6">
+          <summary className="cursor-pointer px-1 text-xs font-bold tracking-wider text-faint uppercase">
+            Archiviert ({archived.length})
+          </summary>
+          <Card className="mt-2 p-1">
+            <ul className="divide-y divide-line-soft">
+              {archived.map((item) => (
+                <li key={item.id}>
+                  <Link
+                    href={`/equipment/${item.id}`}
+                    className="block rounded-xl px-3 py-3 text-muted hover:bg-surface-2"
+                  >
+                    {item.name}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        </details>
+      ) : null}
     </>
   );
 }
