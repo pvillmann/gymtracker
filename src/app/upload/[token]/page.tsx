@@ -1,7 +1,11 @@
 import type { Metadata } from "next";
 
-import { PhotoLinkUpload } from "@/components/PhotoLinkUpload";
-import { inspectPhotoUploadLink } from "@/lib/services/photo-upload";
+import { PhotoLinkUpload, RenewLinkButton } from "@/components/PhotoLinkUpload";
+import {
+  UPLOAD_LINK_MINUTES,
+  UPLOAD_LINK_RENEW_HOURS,
+  inspectPhotoUploadLink,
+} from "@/lib/services/photo-upload";
 
 export const metadata: Metadata = {
   title: "Foto hochladen · GymTracker",
@@ -43,8 +47,7 @@ export default async function PhotoUploadPage({ params }: { params: Promise<{ to
       {link.status === "ok" ? (
         <PhotoLinkUpload token={token} equipmentName={link.equipmentName} />
       ) : link.status === "used" ? (
-        // Nach dem Upload rendert die Seite neu und landet hier – deshalb als
-        // Erfolg formuliert, nicht als Fehler.
+        // Wer den Link nach dem Upload noch einmal öffnet, landet hier.
         <div className="rounded-card border border-up/40 bg-up/10 px-5 py-6 text-center">
           <p className="font-semibold text-up">Foto gespeichert.</p>
           <p className="mt-1 text-sm text-muted">
@@ -52,11 +55,22 @@ export default async function PhotoUploadPage({ params }: { params: Promise<{ to
             weiteres Foto gibt dir der Chat einen neuen.
           </p>
         </div>
+      ) : link.status === "expired" ? (
+        <div className="space-y-4 rounded-card border border-line px-5 py-6 text-center text-sm text-muted">
+          <p>Dieser Link ist abgelaufen – er gilt {UPLOAD_LINK_MINUTES} Minuten ab dem Ausstellen.</p>
+          {link.renewable ? (
+            <RenewLinkButton token={token} />
+          ) : (
+            <p>
+              Erneuern geht nur innerhalb von {UPLOAD_LINK_RENEW_HOURS} Stunden. Lass dir im Chat
+              einen neuen geben.
+            </p>
+          )}
+        </div>
       ) : (
         <p className="rounded-card border border-line px-5 py-6 text-center text-sm text-muted">
-          {link.status === "expired"
-              ? "Dieser Link ist abgelaufen. Lass dir im Chat einen neuen geben."
-              : "Diesen Link gibt es nicht."}
+          Diesen Link gibt es nicht. Vielleicht wurde er schon erneuert – oder er ist beim
+          Kopieren unvollständig geworden. Lass dir im Chat einen neuen geben.
         </p>
       )}
     </main>

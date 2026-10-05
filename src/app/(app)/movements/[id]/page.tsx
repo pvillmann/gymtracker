@@ -3,15 +3,21 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import {
+  deleteMovementAction,
+  setMovementArchivedAction,
   linkMovementMachineAction,
   unlinkMovementMachineAction,
   updateMovementAction,
 } from "@/actions/movements";
+import { ConfirmSubmitButton } from "@/components/ConfirmSubmitButton";
 import { InlineActionForm } from "@/components/InlineActionForm";
+import { SubmitButton } from "@/components/SubmitButton";
 import { MovementForm } from "@/components/MovementForm";
 import { WgerAttribution } from "@/components/WgerAttribution";
 import { Card, PageHeader, Select } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
+import { canDeleteCatalog } from "@/lib/services/catalog";
+import { movementHasHistory } from "@/lib/services/machines";
 import { TRACKING_MODES } from "@/lib/constants";
 import { describeSets } from "@/lib/describe";
 import { formatRelativeDay } from "@/lib/format";
@@ -69,7 +75,11 @@ export default async function MovementPage({ params }: { params: Promise<{ id: s
       }),
   );
   const bare = own.find((v) => v.equipmentId === null);
-  const addable = equipment.filter((e) => !linkedIds.has(e.id));
+  const [deletable, hasHistory] = await Promise.all([
+    canDeleteCatalog(user, movement.userId),
+    movementHasHistory(movement.id),
+  ]);
+  const addable = equipment.filter((e) => !linkedIds.has(e.id) && e.archivedAt === null);
   const mode = TRACKING_MODES.find((m) => m.value === movement.trackingMode)?.label;
 
   return (
@@ -80,6 +90,7 @@ export default async function MovementPage({ params }: { params: Promise<{ id: s
           movement.muscleGroup,
           mode,
           movement.ownerName ? `angelegt von ${movement.ownerName}` : null,
+          movement.archivedAt !== null ? "archiviert" : null,
         ]
           .filter(Boolean)
           .join(" · ")}
@@ -205,6 +216,35 @@ export default async function MovementPage({ params }: { params: Promise<{ id: s
           Die Übung gehört zum gemeinsamen Katalog – Änderungen gelten für alle.
         </p>
       </section>
+
+      <div className="space-y-3 px-1">
+        <form action={setMovementArchivedAction.bind(null, movement.id, movement.archivedAt === null)}>
+          <SubmitButton size="sm" variant="secondary" pendingLabel="…">
+            {movement.archivedAt === null ? "Übung archivieren" : "Wiederherstellen"}
+          </SubmitButton>
+        </form>
+        <p className="text-xs text-faint">
+          {movement.archivedAt === null
+            ? "Archiviert verschwindet sie aus den Auswahllisten; Verlauf und Planeinträge bleiben."
+            : "Archiviert – taucht in keiner Auswahl mehr auf. Verlauf und Planeinträge sind erhalten."}
+        </p>
+        {deletable && !hasHistory ? (
+          <form action={deleteMovementAction.bind(null, movement.id)}>
+            <ConfirmSubmitButton
+              size="sm"
+              message={`Übung „${movement.name}“ für alle löschen? Sie verschwindet auch aus den Plänen aller Nutzer.`}
+            >
+              Übung löschen
+            </ConfirmSubmitButton>
+          </form>
+        ) : (
+          <p className="text-xs text-faint">
+            {hasHistory
+              ? "Löschen geht nicht mehr, weil schon Verlauf daran hängt – archivieren behält ihn."
+              : `Löschen kann die Übung ${movement.ownerName ?? "der Ersteller"} oder ein Administrator.`}
+          </p>
+        )}
+      </div>
     </>
   );
 }

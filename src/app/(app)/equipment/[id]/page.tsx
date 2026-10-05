@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import {
   deleteEquipmentAction,
   deleteEquipmentImageAction,
+  setEquipmentArchivedAction,
   updateEquipmentAction,
 } from "@/actions/equipment";
 import { linkMovementMachineAction, setMachineInGymAction, unlinkMovementMachineAction } from "@/actions/movements";
@@ -15,6 +16,8 @@ import { InlineActionForm } from "@/components/InlineActionForm";
 import { Card, PageHeader, Select } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
 import { canDeleteCatalog } from "@/lib/services/catalog";
+import { equipmentHasHistory } from "@/lib/services/equipment";
+import { SubmitButton } from "@/components/SubmitButton";
 import { EQUIPMENT_KINDS } from "@/lib/constants";
 import {
   getEquipment,
@@ -54,10 +57,13 @@ export default async function EquipmentDetailPage({
     links.movementLinks.filter((l) => l.equipmentId === item.id).map((l) => l.movementId),
   );
   const fits = movements.filter((m) => movementLink.has(m.id)).map((movement) => ({ movement }));
-  const addableMovements = movements.filter((m) => !movementLink.has(m.id));
+  const addableMovements = movements.filter((m) => !movementLink.has(m.id) && m.archivedAt === null);
   // Der Katalog gehört allen; die eigenen Übungen bleiben privat.
   const linked = exercises.filter((e) => e.equipmentId === item.id);
-  const deletable = await canDeleteCatalog(user, item.userId);
+  const [deletable, hasHistory] = await Promise.all([
+    canDeleteCatalog(user, item.userId),
+    equipmentHasHistory(item.id),
+  ]);
   const kind = EQUIPMENT_KINDS.find((k) => k.value === item.kind)?.label;
 
   return (
@@ -68,6 +74,7 @@ export default async function EquipmentDetailPage({
           [item.manufacturer, item.model].filter(Boolean).join(" "),
           kind,
           item.ownerName ? `angelegt von ${item.ownerName}` : null,
+          item.archivedAt !== null ? "archiviert" : null,
         ]
           .filter(Boolean)
           .join(" · ")}
@@ -266,20 +273,34 @@ export default async function EquipmentDetailPage({
         </p>
       </section>
 
-      {deletable ? (
-        <form action={deleteEquipmentAction.bind(null, item.id)}>
-          <ConfirmSubmitButton
-            size="sm"
-            message={`Maschine „${item.name}“ für alle löschen? Die Übungen und ihr Verlauf bleiben, verlieren aber die Zuordnung und die Fotos.`}
-          >
-            Maschine löschen
-          </ConfirmSubmitButton>
+      <div className="space-y-3 px-1">
+        <form action={setEquipmentArchivedAction.bind(null, item.id, item.archivedAt === null)}>
+          <SubmitButton size="sm" variant="secondary" pendingLabel="…">
+            {item.archivedAt === null ? "Maschine archivieren" : "Wiederherstellen"}
+          </SubmitButton>
         </form>
-      ) : (
-        <p className="px-1 text-sm text-muted">
-          Löschen kann die Maschine {item.ownerName ?? "der Ersteller"} oder ein Administrator.
+        <p className="text-xs text-faint">
+          {item.archivedAt === null
+            ? "Archiviert wird sie nicht mehr vorgeschlagen und verschwindet aus den Auswahllisten; Verlauf, Fotos und Zuordnungen bleiben."
+            : "Archiviert – wird nicht mehr vorgeschlagen. Verlauf, Fotos und Zuordnungen sind erhalten."}
         </p>
-      )}
+        {deletable && !hasHistory ? (
+          <form action={deleteEquipmentAction.bind(null, item.id)}>
+            <ConfirmSubmitButton
+              size="sm"
+              message={`Maschine „${item.name}“ für alle löschen? Fotos und Zuordnungen gehen verloren.`}
+            >
+              Maschine löschen
+            </ConfirmSubmitButton>
+          </form>
+        ) : (
+          <p className="text-xs text-faint">
+            {hasHistory
+              ? "Löschen geht nicht mehr, weil schon an ihr trainiert wurde – archivieren behält den Verlauf."
+              : `Löschen kann die Maschine ${item.ownerName ?? "der Ersteller"} oder ein Administrator.`}
+          </p>
+        )}
+      </div>
     </>
   );
 }

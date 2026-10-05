@@ -51,7 +51,7 @@ export default async function PlanDetailPage({
   // Im Plan stehen Übungen; die Maschine wählt das Training nach Studio.
   const machineCount = (movementId: string) => links.get(movementId)?.length ?? 0;
   const usedMovements = new Set(items.map((item) => item.movementId));
-  const available = movements.filter((m) => !usedMovements.has(m.id));
+  const available = movements.filter((m) => !usedMovements.has(m.id) && m.archivedAt === null);
 
   const totalSets = items.reduce((sum, item) => sum + item.targetSets, 0);
   // Grobe Schätzung: bei Zeit-Übungen die Zieldauer, sonst ~40 s Arbeitszeit

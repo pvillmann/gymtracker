@@ -93,7 +93,11 @@ export default async function WorkoutPage({
   const variantsOf = (movementId: string) =>
     allExercises.filter((e) => e.movementId === movementId);
   const offeredMachines = (movementId: string) => {
-    const linked = links.get(movementId) ?? [];
+    // Archivierte Maschinen werden nicht mehr vorgeschlagen; ist eine davon
+    // gerade gewählt, bleibt sie über currentEquipmentId in der Auswahl.
+    const linked = (links.get(movementId) ?? []).filter(
+      (id) => equipmentById.get(id)?.archivedAt == null,
+    );
     const here = linked.filter((id) => gymMachines.has(id));
     return { linked, here, offered: here.length > 0 ? here : linked };
   };
@@ -202,7 +206,7 @@ export default async function WorkoutPage({
   const totalVolume = loggedSets.reduce((sum, set) => sum + set.volumeKg, 0);
   const workingSets = loggedSets.filter((set) => !set.isWarmup).length;
   // Ergänzen lassen sich Übungen, die noch nicht im Training stehen.
-  const available = movements.filter((m) => !slotMovements.has(m.id));
+  const available = movements.filter((m) => !slotMovements.has(m.id) && m.archivedAt === null);
 
   // Wer das Beenden vergisst, hat ein Training mit absurder Dauer im Verlauf –
   // und die verzerrt hinterher jede Auswertung über die Trainingszeit. Der

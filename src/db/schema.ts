@@ -202,6 +202,8 @@ export const equipment = sqliteTable(
     /** Kleinster Gewichtssprung – steuert die +/- Tasten; pro Studio überschreibbar. */
     weightStepKg: real("weight_step_kg").notNull().default(2.5),
     notes: text("notes"),
+    /** Archiviert: nicht mehr vorgeschlagen, Verlauf bleibt. Siehe movements.archivedAt. */
+    archivedAt: integer("archived_at"),
     createdAt: integer("created_at").notNull().default(now),
   },
   (t) => [uniqueIndex("equipment_name_unique").on(t.name)],
@@ -291,6 +293,11 @@ export const movements = sqliteTable(
     licenseName: text("license_name"),
     licenseUrl: text("license_url"),
     licenseAuthor: text("license_author"),
+    /**
+     * Archiviert: taucht in Auswahllisten und Vorschlägen nicht mehr auf,
+     * Verlauf und Planeinträge bleiben. Statt Löschen, sobald Sätze dranhängen.
+     */
+    archivedAt: integer("archived_at"),
     createdAt: integer("created_at").notNull().default(now),
   },
   (t) => [uniqueIndex("movements_name_unique").on(t.name)],

@@ -65,6 +65,9 @@ Homescreen.
   Eigengewicht. Übersetzung und Eigengewicht fließen ins bewegte Gewicht ein;
   Fotos werden verkleinert und ohne Metadaten (auch ohne GPS) im Daten-Volume
   gespeichert
+- Archivieren statt Löschen: Übungen und Maschinen mit Verlauf lassen sich
+  archivieren – sie verschwinden aus Auswahllisten und Vorschlägen, Verlauf und
+  Pläne bleiben. Löschen geht nur, solange niemand daran trainiert hat
 - Gemeinsamer Katalog: Übungen, Maschinen (samt Fotos), Studios und ihre
   Zuordnungen gelten für alle Nutzer der Instanz. Jeder darf sie benutzen,
   anlegen, bearbeiten und zuordnen – wer einen Fehler sieht, korrigiert ihn.
@@ -193,6 +196,11 @@ gym.example.com {
 
 Und in der `docker-compose.yml` den Port auf `127.0.0.1:3000:3000` einschränken,
 damit der Container nicht direkt aus dem Netz erreichbar ist.
+
+**Upload-Größe:** Handyfotos sind schnell 5–10 MB; GymTracker nimmt bis 15 MB
+an. Caddy und Traefik begrenzen standardmäßig nicht, **nginx schon (1 MB)** –
+dort `client_max_body_size 16m;` setzen, sonst scheitert der Foto-Upload mit
+„zu groß“ (HTTP 413).
 
 ## E-Mail-Versand
 
@@ -369,7 +377,12 @@ dort nichts Brauchbares steht.
 | `start_workout`, `current_workout`, `finish_workout` | Training führen |
 | `edit_workout`, `delete_workout` | Zeiten eines Trainings korrigieren oder es löschen |
 | `log_set`, `undo_last_set` | Sätze protokollieren und korrigieren |
-| `search_equipment`, `create_equipment`, `update_equipment` | Maschinen suchen, anlegen, ändern |
+| `search_equipment`, `list_equipment` | Maschinen finden (auch über die Notiz, z. B. „Nr. 24“), nach Studio oder Übung filtern; zeigt Foto-Status und mögliche Dubletten |
+| `create_equipment`, `update_equipment` | Maschinen anlegen und ändern |
+| `update_exercise` | Name, Muskelgruppe, Messart einer Übung ändern (Messart nur umrechenbar: Gewicht ↔ Körpergewicht + Zusatz) |
+| `archive_exercise`, `archive_equipment` | Aus Auswahllisten ausblenden, Verlauf bleibt; `restore` holt zurück |
+| `delete_exercise`, `delete_equipment` | Endgültig löschen – nur ohne Verlauf, nur Anleger oder Admin |
+| `reorder_plan`, `replace_plan_exercise` | Übungen im Plan nach vorn stellen bzw. austauschen, Zielwerte und Notiz bleiben; `plan: "*"` für alle Pläne |
 | `photo_upload_link` | Einmal-Link für ein Maschinenfoto |
 
 Übungen und Pläne werden über ihren **Namen** angesprochen, nicht über IDs:
@@ -381,9 +394,15 @@ kein Training offen, startet `log_set` selbst ein freies Training — mitten in 
 **Fotos per Chat:** Ein Sprachmodell sieht ein Foto im Chat, kann die Datei
 aber nicht an einen MCP-Server weiterreichen – dafür gibt es in MCP noch keinen
 Standard. Deshalb liefern `create_equipment` und `photo_upload_link` einen
-Einmal-Link (`/upload/…`): 30 Minuten gültig, genau ein Foto, nur für diese
-Maschine, ohne Anmeldung. Gespeichert wird nur der Hash des Schlüssels. Der
-Link baut auf `APP_URL` auf – die Adresse muss vom Handy aus erreichbar sein.
+Einmal-Link (`/upload/…`): 30 Minuten ab dem Ausstellen gültig, genau ein
+Foto, nur für diese Maschine, ohne Anmeldung. Gespeichert wird nur der Hash des
+Schlüssels. Ist der Link abgelaufen, aber noch unbenutzt, lässt er sich auf der
+Seite selbst erneuern – bis 24 Stunden nach dem ersten Ausstellen. Der Link
+baut auf `APP_URL` auf – die Adresse muss vom Handy aus erreichbar sein.
+
+Hochgeladen wird über eine feste Route (`POST /api/upload/…`), nicht über eine
+Server-Action: deren ID ändert sich mit jedem Build, und eine Upload-Seite, die
+vor einem Deploy geöffnet wurde, bekam beim Absenden sonst „Page not found“.
 
 Trainings werden über ihr **Datum** angesprochen (`2026-09-08`); ohne Angabe
 ist das zuletzt beendete gemeint. Zeiten dürfen als `2026-09-08T20:12` oder

@@ -98,15 +98,38 @@ export async function resolvePlan(user: User, query: string) {
   });
 }
 
-export async function resolveEquipment(user: User, query: string) {
+/**
+ * Aktive Einträge zuerst; archivierte nur, wenn sonst nichts passt – so
+ * lässt sich ein archivierter per Name wiederherstellen, ohne dass er neue
+ * Treffer mehrdeutig macht.
+ */
+function pickActive<T extends Named & { archivedAt: number | null }>(
+  query: string,
+  candidates: T[],
+  label: Label,
+): T {
+  // Wörtlich gleich gewinnt auch gegen aktive Einträge: „Rudern schmal“
+  // (archiviert) ist nicht „Rudern Schmal“ (aktiv).
+  const literal = candidates.filter((c) => c.name.trim() === query.trim());
+  if (literal.length === 1) return literal[0];
+  const active = candidates.filter((c) => c.archivedAt === null);
+  try {
+    return pick(query, active, label);
+  } catch (error) {
+    if (active.length === candidates.length) throw error;
+    return pick(query, candidates, label);
+  }
+}
+
+export async function resolveEquipment(_user: User, query: string) {
   const candidates = await listEquipment();
-  return pick(query, candidates, { noun: "Gerät", feminine: false });
+  return pickActive(query, candidates, { noun: "Gerät", feminine: false });
 }
 
 /** Eine Übung (Bewegung) im gemeinsamen Katalog. */
 export async function resolveMovement(query: string) {
   const candidates = await listMovements();
-  return pick(query, candidates, { noun: "Übung", feminine: true });
+  return pickActive(query, candidates, { noun: "Übung", feminine: true });
 }
 
 /** Ein Eintrag in einem Plan, über den Namen seiner Übung. */

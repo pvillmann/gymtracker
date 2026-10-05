@@ -99,6 +99,13 @@
       "when": 1790877732913,
       "tag": "0013_photo_upload_tokens",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1791181622578,
+      "tag": "0014_catalog_archive",
+      "breakpoints": true
     }
   ]
 }

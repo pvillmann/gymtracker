@@ -44,8 +44,10 @@ export default async function ExercisesPage() {
       .filter((e) => e.performance !== undefined)
       .sort((a, b) => b.performance!.performedAt - a.performance!.performedAt)[0];
 
+  // Archivierte stehen unten eingeklappt – Verlauf und Plan behalten sie.
+  const archived = movements.filter((m) => m.archivedAt !== null);
   const byGroup = new Map<string, Movement[]>();
-  for (const movement of movements) {
+  for (const movement of movements.filter((m) => m.archivedAt === null)) {
     const group = movement.muscleGroup ?? "Ohne Muskelgruppe";
     byGroup.set(group, [...(byGroup.get(group) ?? []), movement]);
   }
@@ -54,7 +56,7 @@ export default async function ExercisesPage() {
     <>
       <PageHeader
         title="Übungen"
-        subtitle={`${movements.length} im gemeinsamen Katalog`}
+        subtitle={`${movements.length - archived.length} im gemeinsamen Katalog`}
         action={
           <ButtonLink href="/movements/new" size="sm">
             + Neu
@@ -126,6 +128,28 @@ export default async function ExercisesPage() {
           ))}
         </div>
       )}
+
+      {archived.length > 0 ? (
+        <details className="mt-6">
+          <summary className="cursor-pointer px-1 text-xs font-bold tracking-wider text-faint uppercase">
+            Archiviert ({archived.length})
+          </summary>
+          <Card className="mt-2 p-1">
+            <ul className="divide-y divide-line-soft">
+              {archived.map((movement) => (
+                <li key={movement.id}>
+                  <Link
+                    href={`/movements/${movement.id}`}
+                    className="block rounded-xl px-3 py-3 text-muted hover:bg-surface-2"
+                  >
+                    {movement.name}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        </details>
+      ) : null}
     </>
   );
 }
