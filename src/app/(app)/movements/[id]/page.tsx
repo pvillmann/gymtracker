@@ -11,6 +11,7 @@ import {
 } from "@/actions/movements";
 import { ConfirmSubmitButton } from "@/components/ConfirmSubmitButton";
 import { InlineActionForm } from "@/components/InlineActionForm";
+import { MergeMovementForm } from "@/components/MergeMovementForm";
 import { SubmitButton } from "@/components/SubmitButton";
 import { MovementForm } from "@/components/MovementForm";
 import { WgerAttribution } from "@/components/WgerAttribution";
@@ -23,6 +24,7 @@ import { describeSets } from "@/lib/describe";
 import { formatRelativeDay } from "@/lib/format";
 import {
   getMovement,
+  listMovements,
   getPreviousPerformances,
   listEquipment,
   listExercises,
@@ -42,11 +44,12 @@ export default async function MovementPage({ params }: { params: Promise<{ id: s
   const movement = await getMovement(id);
   if (!movement) notFound();
 
-  const [equipment, gyms, links, variants] = await Promise.all([
+  const [equipment, gyms, links, variants, allMovements] = await Promise.all([
     listEquipment(),
     listGyms(),
     listMachineLinkRows(),
     listExercises(user.id, { includeArchived: true }),
+    listMovements(),
   ]);
   const own = variants.filter((v) => v.movementId === movement.id);
   const previous = await getPreviousPerformances(
@@ -228,6 +231,22 @@ export default async function MovementPage({ params }: { params: Promise<{ id: s
             ? "Archiviert verschwindet sie aus den Auswahllisten; Verlauf und Planeinträge bleiben."
             : "Archiviert – taucht in keiner Auswahl mehr auf. Verlauf und Planeinträge sind erhalten."}
         </p>
+        {deletable ? (
+          <div className="space-y-1 pt-2">
+            <p className="text-xs text-faint">
+              Dublette? In eine andere Übung zusammenführen – Verlauf, Pläne und Maschinen
+              wandern mit, diese Übung verschwindet.
+            </p>
+            <MergeMovementForm
+              sourceId={movement.id}
+              sourceName={movement.name}
+              targets={allMovements
+                .filter((m) => m.id !== movement.id && m.archivedAt === null)
+                .map((m) => ({ id: m.id, name: m.name }))
+                .sort((a, b) => a.name.localeCompare(b.name, "de"))}
+            />
+          </div>
+        ) : null}
         {deletable && !hasHistory ? (
           <form action={deleteMovementAction.bind(null, movement.id)}>
             <ConfirmSubmitButton

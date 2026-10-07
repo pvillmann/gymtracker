@@ -5,7 +5,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { gymExercises, gyms, plans, type User } from "@/db/schema";
 import { newId } from "@/lib/ids";
-import { assertCanDeleteCatalog } from "@/lib/services/catalog";
+import { assertCanDeleteCatalog, assertNameFree, nameKey } from "@/lib/services/catalog";
 import { ServiceError } from "@/lib/services/errors";
 import { requireOwnExercise } from "@/lib/services/workouts";
 
@@ -30,11 +30,10 @@ export async function findOrCreateGym(user: User, rawName: string): Promise<stri
   if (!name) throw new ServiceError("Das Studio braucht einen Namen.");
   if (name.length > 60) throw new ServiceError("Der Name ist zu lang.");
 
-  const [existing] = await db
-    .select({ id: gyms.id })
-    .from(gyms)
-    .where(eq(gyms.name, name))
-    .limit(1);
+  // „fitx innenstadt“ meint das vorhandene „FitX Innenstadt“.
+  const existing = (await db.select({ id: gyms.id, name: gyms.name }).from(gyms)).find(
+    (g) => nameKey(g.name) === nameKey(name),
+  );
   if (existing) return existing.id;
 
   const id = newId();
@@ -45,7 +44,10 @@ export async function findOrCreateGym(user: User, rawName: string): Promise<stri
 export async function renameGym(user: User, gymId: string, rawName: string): Promise<void> {
   const name = rawName.trim();
   if (!name) throw new ServiceError("Das Studio braucht einen Namen.");
-  await requireGym(gymId);
+  const gym = await requireGym(gymId);
+  if (nameKey(name) !== nameKey(gym.name)) {
+    assertNameFree(await db.select({ id: gyms.id, name: gyms.name }).from(gyms), name, "Ein Studio", gymId);
+  }
   try {
     await db.update(gyms).set({ name }).where(eq(gyms.id, gymId));
   } catch (error) {

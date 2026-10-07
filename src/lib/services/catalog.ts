@@ -55,3 +55,25 @@ export async function handOverCatalog(userId: string): Promise<void> {
   }
 }
 
+
+/** Für Namensvergleiche: Groß-/Kleinschreibung und Leerzeichen egal, auch bei Umlauten. */
+export function nameKey(name: string): string {
+  return name.trim().replace(/\s+/g, " ").toLocaleLowerCase("de");
+}
+
+/**
+ * Verhindert Dubletten, die sich nur in Groß-/Kleinschreibung unterscheiden
+ * („Rudern schmal“ / „Rudern Schmal“). Der Unique-Index der Datenbank
+ * vergleicht binär und lässt sie durch; ein NOCASE-Index ginge erst, wenn
+ * bestehende Dubletten zusammengeführt sind – und SQLite faltet Umlaute
+ * ohnehin nicht. Deshalb hier, in JavaScript.
+ */
+export function assertNameFree(
+  existing: Array<{ id: string; name: string }>,
+  name: string,
+  what: string,
+  exceptId?: string,
+): void {
+  const clash = existing.find((e) => e.id !== exceptId && nameKey(e.name) === nameKey(name));
+  if (clash) throw new ServiceError(`${what} „${clash.name}“ gibt es schon.`);
+}

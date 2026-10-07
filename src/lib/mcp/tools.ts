@@ -44,6 +44,7 @@ import {
   updateEquipment,
 } from "@/lib/services/equipment";
 import { findOrCreateGym } from "@/lib/services/gyms";
+import { mergeMovements } from "@/lib/services/merge";
 import { UPLOAD_LINK_MINUTES, createPhotoUploadLink } from "@/lib/services/photo-upload";
 import {
   createMovement,
@@ -1219,6 +1220,38 @@ export function registerGymTools(server: McpServer, user: User): void {
         return `„${movement.name}“ gelöscht${
           removedFromPlans ? ` – aus ${removedFromPlans} Plan-Einträgen entfernt` : ""
         }.`;
+      }),
+  );
+
+  server.registerTool(
+    "merge_exercises",
+    {
+      title: "Übungen zusammenführen",
+      description:
+        "Führt eine doppelte Übung (source) in eine andere (target) zusammen: " +
+        "Sätze, Planeinträge aller Nutzer, Maschinen-Zuordnungen und die Wahl " +
+        "in laufenden Trainings wandern zu target, source wird gelöscht. Hat " +
+        "ein Nutzer an derselben Maschine schon eine Variante von target, " +
+        "landen die Sätze dort. Nicht umkehrbar – vorher mit dem Nutzer " +
+        "klären, welcher Name bleibt. Nur durch den, der source angelegt hat, " +
+        "oder einen Admin. Unterschiedliche Messarten nur, wenn umrechenbar " +
+        "(Gewicht ↔ Körpergewicht + Zusatz).",
+      inputSchema: {
+        source: z.string().describe("Übung, die aufgeht und danach nicht mehr existiert"),
+        target: z.string().describe("Übung, die bleibt"),
+      },
+    },
+    async (args) =>
+      run(async () => {
+        const source = await resolveMovement(args.source);
+        const target = await resolveMovement(args.target);
+        const r = await mergeMovements(user, source.id, target.id);
+        return [
+          `„${source.name}“ ist in „${target.name}“ aufgegangen.`,
+          `Varianten umgezogen: ${r.movedVariants}, mit vorhandenen zusammengelegt: ${r.mergedVariants} (${r.movedSets} Sätze verschoben).`,
+          `Planeinträge umgehängt: ${r.movedPlanItems}${r.droppedPlanItems ? `, entfallen (target stand schon im Plan): ${r.droppedPlanItems}` : ""}.`,
+          `Neue Maschinen-Zuordnungen: ${r.movedMachines}.`,
+        ].join("\n");
       }),
   );
 

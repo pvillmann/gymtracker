@@ -14,7 +14,7 @@ import {
 } from "@/db/schema";
 import { newId } from "@/lib/ids";
 import { removeImage, storeImage } from "@/lib/images";
-import { assertCanDeleteCatalog } from "@/lib/services/catalog";
+import { assertCanDeleteCatalog, assertNameFree, nameKey } from "@/lib/services/catalog";
 import { ServiceError } from "@/lib/services/errors";
 
 /** Mehr Fotos braucht niemand, um eine Maschine wiederzuerkennen. */
@@ -43,7 +43,12 @@ export async function requireEquipment(equipmentId: string) {
   return row;
 }
 
+async function equipmentNames() {
+  return db.select({ id: equipment.id, name: equipment.name }).from(equipment);
+}
+
 export async function createEquipment(user: User, input: EquipmentInput): Promise<string> {
+  assertNameFree(await equipmentNames(), input.name, "Ein Gerät");
   const id = newId();
   try {
     await db.insert(equipment).values({ id, userId: user.id, ...input });
@@ -59,7 +64,10 @@ export async function updateEquipment(
   equipmentId: string,
   input: EquipmentInput,
 ): Promise<void> {
-  await requireEquipment(equipmentId);
+  const current = await requireEquipment(equipmentId);
+  if (nameKey(input.name) !== nameKey(current.name)) {
+    assertNameFree(await equipmentNames(), input.name, "Ein Gerät", equipmentId);
+  }
   try {
     await db.update(equipment).set(input).where(eq(equipment.id, equipmentId));
   } catch (error) {

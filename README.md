@@ -65,6 +65,9 @@ Homescreen.
   Eigengewicht. Übersetzung und Eigengewicht fließen ins bewegte Gewicht ein;
   Fotos werden verkleinert und ohne Metadaten (auch ohne GPS) im Daten-Volume
   gespeichert
+- Dubletten: Namen, die sich nur in Groß-/Kleinschreibung unterscheiden, werden
+  beim Anlegen abgelehnt. Bestehende Dubletten lassen sich auf der Übungsseite
+  (oder per MCP) zusammenführen – Verlauf, Pläne und Maschinen wandern mit
 - Archivieren statt Löschen: Übungen und Maschinen mit Verlauf lassen sich
   archivieren – sie verschwinden aus Auswahllisten und Vorschlägen, Verlauf und
   Pläne bleiben. Löschen geht nur, solange niemand daran trainiert hat
@@ -382,6 +385,7 @@ dort nichts Brauchbares steht.
 | `update_exercise` | Name, Muskelgruppe, Messart einer Übung ändern (Messart nur umrechenbar: Gewicht ↔ Körpergewicht + Zusatz) |
 | `archive_exercise`, `archive_equipment` | Aus Auswahllisten ausblenden, Verlauf bleibt; `restore` holt zurück |
 | `delete_exercise`, `delete_equipment` | Endgültig löschen – nur ohne Verlauf, nur Anleger oder Admin |
+| `merge_exercises` | Doppelte Übung in eine andere zusammenführen: Verlauf, Pläne aller Nutzer und Maschinen wandern mit, die Dublette verschwindet |
 | `reorder_plan`, `replace_plan_exercise` | Übungen im Plan nach vorn stellen bzw. austauschen, Zielwerte und Notiz bleiben; `plan: "*"` für alle Pläne |
 | `photo_upload_link` | Einmal-Link für ein Maschinenfoto |
 
