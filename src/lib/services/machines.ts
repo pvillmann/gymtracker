@@ -15,7 +15,7 @@ import {
   type User,
 } from "@/db/schema";
 import { newId } from "@/lib/ids";
-import { assertCanDeleteCatalog } from "@/lib/services/catalog";
+import { assertCanDeleteCatalog, assertNameFree, nameKey } from "@/lib/services/catalog";
 import { recomputeVolumes, requireEquipment } from "@/lib/services/equipment";
 import { ServiceError } from "@/lib/services/errors";
 import { requireGym } from "@/lib/services/gyms";
@@ -172,6 +172,10 @@ export async function getOrCreateVariant(
   return id;
 }
 
+async function movementNames() {
+  return db.select({ id: movements.id, name: movements.name }).from(movements);
+}
+
 export type MovementInput = {
   name: string;
   muscleGroup: string | null;
@@ -191,6 +195,7 @@ export async function createMovement(
   input: MovementInput,
   wgerId?: number | null,
 ): Promise<string> {
+  assertNameFree(await movementNames(), input.name, "Eine Übung");
   const source = wgerId ? await getWgerExercise(wgerId) : null;
   const id = newId();
   try {
@@ -227,7 +232,7 @@ export async function createMovement(
  * aufgelegtes Gewicht (die Hackenschmidt-Kniebeuge mit Scheiben). Gegengewicht
  * bedeutet das Gegenteil, und Zeit hat keine Wiederholungen.
  */
-const CONVERTIBLE: ReadonlyArray<[TrackingMode, TrackingMode]> = [
+export const CONVERTIBLE: ReadonlyArray<[TrackingMode, TrackingMode]> = [
   ["weight_reps", "bodyweight_reps"],
   ["bodyweight_reps", "weight_reps"],
 ];
@@ -254,6 +259,11 @@ export async function updateMovement(
   input: MovementInput,
 ): Promise<void> {
   const current = await requireMovement(movementId);
+  // Nur bei neuem Namen prüfen – sonst ließe sich eine bestehende Dublette
+  // nicht einmal mehr bearbeiten.
+  if (nameKey(input.name) !== nameKey(current.name)) {
+    assertNameFree(await movementNames(), input.name, "Eine Übung", movementId);
+  }
   const modeChanged = current.trackingMode !== input.trackingMode;
   if (
     modeChanged &&

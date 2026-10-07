@@ -8,6 +8,7 @@ import { requireUser } from "@/lib/auth";
 import { optionalText, text } from "@/lib/formdata";
 import { fail, type FormState } from "@/lib/result";
 import { isServiceError } from "@/lib/services/errors";
+import { mergeMovements } from "@/lib/services/merge";
 import {
   createMovement,
   deleteMovement,
@@ -145,4 +146,22 @@ export async function deleteMovementAction(movementId: string): Promise<void> {
   await deleteMovement(user, movementId);
   revalidatePath("/exercises");
   redirect("/exercises");
+}
+
+/** Diese Übung in eine andere zusammenführen – danach gibt es sie nicht mehr. */
+export async function mergeMovementAction(
+  sourceId: string,
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const user = await requireUser();
+  const targetId = text(formData, "targetId");
+  if (!targetId) return fail("Bitte die Übung wählen, die bleibt.");
+  const failed = await guarded(async () => {
+    await mergeMovements(user, sourceId, targetId);
+  });
+  if (failed) return failed;
+  revalidatePath("/exercises");
+  revalidatePath("/plans");
+  redirect(`/movements/${targetId}`);
 }

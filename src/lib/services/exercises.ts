@@ -12,6 +12,7 @@ import {
 } from "@/db/schema";
 import { newId } from "@/lib/ids";
 import { recomputeVolumes, requireEquipment } from "@/lib/services/equipment";
+import { nameKey } from "@/lib/services/catalog";
 import { ServiceError } from "@/lib/services/errors";
 import { linkMovementEquipment } from "@/lib/services/machines";
 import { getWgerExercise } from "@/lib/wger";
@@ -55,16 +56,19 @@ async function resolveMovement(
   wgerId?: number | null,
 ): Promise<{ id: string; muscleGroup: string | null; trackingMode: TrackingMode; created: boolean }> {
   const userId = user.id;
-  const [existing] = await db
-    .select({
-      id: movements.id,
-      muscleGroup: movements.muscleGroup,
-      trackingMode: movements.trackingMode,
-      ownerId: movements.userId,
-    })
-    .from(movements)
-    .where(eq(movements.name, name))
-    .limit(1);
+  // Ohne Rücksicht auf Groß-/Kleinschreibung: „rudern schmal“ meint die
+  // vorhandene Übung, statt eine Dublette anzulegen.
+  const existing = (
+    await db
+      .select({
+        id: movements.id,
+        name: movements.name,
+        muscleGroup: movements.muscleGroup,
+        trackingMode: movements.trackingMode,
+        ownerId: movements.userId,
+      })
+      .from(movements)
+  ).find((m) => nameKey(m.name) === nameKey(name));
 
   if (!existing) {
     const id = newId();
