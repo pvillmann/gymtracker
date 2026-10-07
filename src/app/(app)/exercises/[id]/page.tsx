@@ -5,10 +5,9 @@ import { notFound } from "next/navigation";
 import {
   deleteExerciseAction,
   setExerciseArchivedAction,
-  updateExerciseAction,
 } from "@/actions/exercises";
 import { LineChart, type LinePoint } from "@/components/charts";
-import { ExerciseForm } from "@/components/ExerciseForm";
+import { VariantForm } from "@/components/VariantForm";
 import { GymExerciseSettingsForm } from "@/components/GymExerciseSettingsForm";
 import { SubmitButton } from "@/components/SubmitButton";
 import { TrendBadge } from "@/components/TrendBadge";
@@ -358,14 +357,23 @@ export default async function ExerciseDetailPage({
         <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
           Bearbeiten
         </h2>
-        <ExerciseForm
-          action={updateExerciseAction.bind(null, exercise.id)}
-          exercise={exercise}
-          movementName={movement?.name}
-          movements={movements}
-          equipment={equipment.map((e) => ({ id: e.id, name: e.name }))}
-          submitLabel="Änderungen speichern"
+        <VariantForm
+          exerciseId={exercise.id}
+          name={exercise.name}
+          machineSetup={exercise.machineSetup}
         />
+        <p className="mt-2 px-1 text-xs text-faint">
+          Messart und Muskelgruppe gehören zur Übung
+          {movement ? (
+            <>
+              {" "}
+              <Link href={`/movements/${movement.id}`} className="underline">
+                {movement.name}
+              </Link>
+            </>
+          ) : null}
+          , die Maschine wechselst du im Training.
+        </p>
       </section>
 
       <div className="flex flex-wrap gap-3">
