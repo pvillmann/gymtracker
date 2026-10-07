@@ -9,6 +9,7 @@ import {
   unlinkMovementMachineAction,
   updateMovementAction,
 } from "@/actions/movements";
+import { ChangeLog } from "@/components/ChangeLog";
 import { ConfirmSubmitButton } from "@/components/ConfirmSubmitButton";
 import { InlineActionForm } from "@/components/InlineActionForm";
 import { MergeMovementForm } from "@/components/MergeMovementForm";
@@ -18,6 +19,7 @@ import { WgerAttribution } from "@/components/WgerAttribution";
 import { Card, PageHeader, Select } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
 import { canDeleteCatalog } from "@/lib/services/catalog";
+import { listChanges } from "@/lib/services/changelog";
 import { movementHasHistory } from "@/lib/services/machines";
 import { TRACKING_MODES } from "@/lib/constants";
 import { describeSets, loadUnitOf } from "@/lib/describe";
@@ -78,9 +80,10 @@ export default async function MovementPage({ params }: { params: Promise<{ id: s
       }),
   );
   const bare = own.find((v) => v.equipmentId === null);
-  const [deletable, hasHistory] = await Promise.all([
+  const [deletable, hasHistory, changes] = await Promise.all([
     canDeleteCatalog(user, movement.userId),
     movementHasHistory(movement.id),
+    listChanges("movement", movement.id),
   ]);
   const addable = equipment.filter((e) => !linkedIds.has(e.id) && e.archivedAt === null);
   const mode = TRACKING_MODES.find((m) => m.value === movement.trackingMode)?.label;
@@ -219,6 +222,8 @@ export default async function MovementPage({ params }: { params: Promise<{ id: s
           Die Übung gehört zum gemeinsamen Katalog – Änderungen gelten für alle.
         </p>
       </section>
+
+      <ChangeLog entries={changes} />
 
       <div className="space-y-3 px-1">
         <form action={setMovementArchivedAction.bind(null, movement.id, movement.archivedAt === null)}>

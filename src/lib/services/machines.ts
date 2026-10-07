@@ -16,6 +16,7 @@ import {
 } from "@/db/schema";
 import { newId } from "@/lib/ids";
 import { assertCanDeleteCatalog, assertNameFree, nameKey } from "@/lib/services/catalog";
+import { diffFields, logChange } from "@/lib/services/changelog";
 import { recomputeVolumes, requireEquipment } from "@/lib/services/equipment";
 import { ServiceError } from "@/lib/services/errors";
 import { requireGym } from "@/lib/services/gyms";
@@ -43,40 +44,66 @@ export async function linkMovementEquipment(
   movementId: string,
   equipmentId: string,
 ): Promise<void> {
-  await requireMovement(movementId);
-  await requireEquipment(equipmentId);
-  await db
+  const movement = await requireMovement(movementId);
+  const machine = await requireEquipment(equipmentId);
+  const inserted = await db
     .insert(movementEquipment)
     .values({ movementId, equipmentId, addedBy: user.id })
-    .onConflictDoNothing();
+    .onConflictDoNothing()
+    .returning({ movementId: movementEquipment.movementId });
+  if (inserted.length > 0) {
+    await logChange(user, "movement", movementId, movement.name, "link", { note: `Maschine „${machine.name}“` });
+    await logChange(user, "equipment", equipmentId, machine.name, "link", { note: `Übung „${movement.name}“` });
+  }
 }
 
 /** Korrigieren darf jeder – auch eine falsche Zuordnung entfernen. */
 export async function unlinkMovementEquipment(
-  _user: User,
+  user: User,
   movementId: string,
   equipmentId: string,
 ): Promise<void> {
-  await db
+  const removed = await db
     .delete(movementEquipment)
     .where(
       and(eq(movementEquipment.movementId, movementId), eq(movementEquipment.equipmentId, equipmentId)),
-    );
+    )
+    .returning({ movementId: movementEquipment.movementId });
+  if (removed.length > 0) {
+    const [movement] = await db.select({ name: movements.name }).from(movements).where(eq(movements.id, movementId));
+    const [machine] = await db.select({ name: equipment.name }).from(equipment).where(eq(equipment.id, equipmentId));
+    if (movement && machine) {
+      await logChange(user, "movement", movementId, movement.name, "unlink", { note: `Maschine „${machine.name}“` });
+      await logChange(user, "equipment", equipmentId, machine.name, "unlink", { note: `Übung „${movement.name}“` });
+    }
+  }
 }
 
 export async function linkGymEquipment(user: User, gymId: string, equipmentId: string): Promise<void> {
-  await requireGym(gymId);
-  await requireEquipment(equipmentId);
-  await db
+  const gym = await requireGym(gymId);
+  const machine = await requireEquipment(equipmentId);
+  const inserted = await db
     .insert(gymEquipment)
     .values({ gymId, equipmentId, addedBy: user.id })
-    .onConflictDoNothing();
+    .onConflictDoNothing()
+    .returning({ gymId: gymEquipment.gymId });
+  if (inserted.length > 0) {
+    await logChange(user, "gym", gymId, gym.name, "link", { note: `Maschine „${machine.name}“` });
+    await logChange(user, "equipment", equipmentId, machine.name, "link", { note: `Studio „${gym.name}“` });
+  }
 }
 
-export async function unlinkGymEquipment(_user: User, gymId: string, equipmentId: string): Promise<void> {
-  await db
+export async function unlinkGymEquipment(user: User, gymId: string, equipmentId: string): Promise<void> {
+  const removed = await db
     .delete(gymEquipment)
-    .where(and(eq(gymEquipment.gymId, gymId), eq(gymEquipment.equipmentId, equipmentId)));
+    .where(and(eq(gymEquipment.gymId, gymId), eq(gymEquipment.equipmentId, equipmentId)))
+    .returning({ gymId: gymEquipment.gymId });
+  if (removed.length > 0) {
+    const gym = await requireGym(gymId);
+    const machine = await requireEquipment(equipmentId);
+    await logChange(user, "gym", gymId, gym.name, "unlink", { note: `Maschine „${machine.name}“` });
+    await logChange(user, "equipment", equipmentId, machine.name, "unlink", { note: `Studio „${gym.name}“` });
+  }
 }
 
 /** Die Maschinen einer Übung – auf Wunsch nur die in einem Studio. */
@@ -219,13 +246,10 @@ export async function createMovement(
     if (isDuplicateName(error)) throw new ServiceError("Eine Übung mit diesem Namen gibt es schon.");
     throw error;
   }
+  await logChange(user, "movement", id, input.name, "create", source ? { note: `aus wger (${source.name})` } : undefined);
   return id;
 }
 
-/**
- * Ändert eine Übung für alle – jeder darf korrigieren. Muskelgruppe und
- * Messart wandern in die Varianten aller Nutzer mit.
- */
 /**
  * Welche Messarten sich ineinander überführen lassen, wenn schon Sätze
  * dranhängen: Gewicht × Wdh. und Körpergewicht + Zusatz messen beide ein
@@ -254,7 +278,7 @@ export async function movementHasHistory(movementId: string): Promise<boolean> {
  * Messart wird das bewegte Gewicht bisheriger Sätze neu berechnet.
  */
 export async function updateMovement(
-  _user: User,
+  user: User,
   movementId: string,
   input: MovementInput,
 ): Promise<void> {
@@ -280,6 +304,14 @@ export async function updateMovement(
     if (isDuplicateName(error)) throw new ServiceError("Eine Übung mit diesem Namen gibt es schon.");
     throw error;
   }
+  const changes = diffFields(current, input, {
+    name: "Name",
+    muscleGroup: "Muskelgruppe",
+    trackingMode: "Messart",
+  });
+  if (Object.keys(changes).length > 0) {
+    await logChange(user, "movement", movementId, input.name, "update", changes);
+  }
   const variants = await db
     .update(exercises)
     .set({ muscleGroup: input.muscleGroup, trackingMode: input.trackingMode })
@@ -294,8 +326,15 @@ export async function updateMovement(
  * Archivieren blendet eine Übung aus Auswahllisten aus; Verlauf und
  * Planeinträge bleiben. Gemeinsamer Katalog: darf jeder, wie Bearbeiten.
  */
-export async function setMovementArchived(movementId: string, archived: boolean): Promise<void> {
-  await requireMovement(movementId);
+export async function setMovementArchived(
+  user: User,
+  movementId: string,
+  archived: boolean,
+): Promise<void> {
+  const movement = await requireMovement(movementId);
+  if ((movement.archivedAt !== null) !== archived) {
+    await logChange(user, "movement", movementId, movement.name, archived ? "archive" : "restore");
+  }
   await db
     .update(movements)
     .set({ archivedAt: archived ? Math.floor(Date.now() / 1000) : null })
@@ -325,5 +364,6 @@ export async function deleteMovement(
   // Varianten ohne Sätze verweisen noch auf die Übung (ohne Kaskade) – erst sie.
   await db.delete(exercises).where(eq(exercises.movementId, movementId));
   await db.delete(movements).where(eq(movements.id, movementId));
+  await logChange(user, "movement", movementId, movement.name, "delete");
   return { removedFromPlans: inPlans.length };
 }

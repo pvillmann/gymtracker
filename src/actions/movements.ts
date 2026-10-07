@@ -134,8 +134,8 @@ export async function setMachineInGymAction(
 
 /** Archivieren bzw. wiederherstellen – gemeinsamer Katalog, darf jeder. */
 export async function setMovementArchivedAction(movementId: string, archived: boolean): Promise<void> {
-  await requireUser();
-  await setMovementArchived(movementId, archived);
+  const user = await requireUser();
+  await setMovementArchived(user, movementId, archived);
   revalidatePath("/exercises");
   revalidatePath(`/movements/${movementId}`);
 }

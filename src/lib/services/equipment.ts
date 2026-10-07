@@ -16,6 +16,7 @@ import {
 import { newId } from "@/lib/ids";
 import { removeImage, storeImage } from "@/lib/images";
 import { assertCanDeleteCatalog, assertNameFree, nameKey } from "@/lib/services/catalog";
+import { diffFields, logChange } from "@/lib/services/changelog";
 import { ServiceError } from "@/lib/services/errors";
 
 /** Mehr Fotos braucht niemand, um eine Maschine wiederzuerkennen. */
@@ -59,6 +60,7 @@ export async function createEquipment(user: User, input: EquipmentInput): Promis
     if (isDuplicateName(error)) throw new ServiceError("Ein Gerät mit diesem Namen gibt es schon.");
     throw error;
   }
+  await logChange(user, "equipment", id, input.name, "create");
   return id;
 }
 
@@ -76,6 +78,20 @@ export async function updateEquipment(
   } catch (error) {
     if (isDuplicateName(error)) throw new ServiceError("Ein Gerät mit diesem Namen gibt es schon.");
     throw error;
+  }
+  const changes = diffFields(current, input, {
+    name: "Name",
+    manufacturer: "Hersteller",
+    model: "Modell",
+    kind: "Art",
+    loadFactor: "Übersetzung (Faktor)",
+    baseLoadKg: "Eigengewicht (kg)",
+    perSide: "Gewicht je Seite",
+    loadUnit: "Einheit",
+    notes: "Notiz",
+  });
+  if (Object.keys(changes).length > 0) {
+    await logChange(user, "equipment", equipmentId, input.name, "update", changes);
   }
   // Übersetzung und Eigengewicht gelten für alle, die das Gerät benutzen.
   await recomputeVolumes({ equipmentId });
@@ -118,6 +134,7 @@ export async function deleteEquipment(user: User, equipmentId: string): Promise<
   for (const image of images) await removeImage(image.id);
   // Ohne Gerät gilt wieder das eingestellte Gewicht als Last.
   await recomputeVolumes({ exerciseIds: affected.map((e) => e.id) });
+  await logChange(user, "equipment", equipmentId, current.name, "delete");
 }
 
 /**
@@ -125,8 +142,15 @@ export async function deleteEquipment(user: User, equipmentId: string): Promise<
  * Verlauf, Fotos und Zuordnungen bleiben. Rückgängig jederzeit. Gemeinsamer
  * Katalog: darf jeder, wie Bearbeiten.
  */
-export async function setEquipmentArchived(equipmentId: string, archived: boolean): Promise<void> {
-  await requireEquipment(equipmentId);
+export async function setEquipmentArchived(
+  user: User,
+  equipmentId: string,
+  archived: boolean,
+): Promise<void> {
+  const current = await requireEquipment(equipmentId);
+  if ((current.archivedAt !== null) !== archived) {
+    await logChange(user, "equipment", equipmentId, current.name, archived ? "archive" : "restore");
+  }
   await db
     .update(equipment)
     .set({ archivedAt: archived ? Math.floor(Date.now() / 1000) : null })

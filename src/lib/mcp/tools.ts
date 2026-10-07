@@ -45,6 +45,7 @@ import {
   updateEquipment,
 } from "@/lib/services/equipment";
 import { findOrCreateGym } from "@/lib/services/gyms";
+import { listChanges } from "@/lib/services/changelog";
 import { mergeMovements } from "@/lib/services/merge";
 import { UPLOAD_LINK_MINUTES, createPhotoUploadLink } from "@/lib/services/photo-upload";
 import {
@@ -1232,7 +1233,7 @@ export function registerGymTools(server: McpServer, user: User): void {
     async ({ exercise, restore }) =>
       run(async () => {
         const movement = await resolveMovement(exercise);
-        await setMovementArchived(movement.id, !restore);
+        await setMovementArchived(user, movement.id, !restore);
         return restore ? `„${movement.name}“ ist wieder aktiv.` : `„${movement.name}“ archiviert.`;
       }),
   );
@@ -1291,6 +1292,47 @@ export function registerGymTools(server: McpServer, user: User): void {
   );
 
   server.registerTool(
+    "catalog_history",
+    {
+      title: "Änderungen im Katalog",
+      description:
+        "Wer hat eine Übung, ein Gerät oder ein Studio wann geändert – mit den " +
+        "alten Werten. Der Katalog ist gemeinsam und jeder darf bearbeiten; " +
+        "nutze das, um ungewollte Änderungen zu finden und mit update_exercise " +
+        "bzw. update_equipment zurückzudrehen.",
+      inputSchema: {
+        kind: z.enum(["exercise", "equipment", "gym"]).describe("Art des Eintrags"),
+        name: z.string().describe("Name der Übung, des Geräts bzw. Studios"),
+        limit: z.number().int().min(1).max(50).optional(),
+      },
+    },
+    async ({ kind, name, limit }) =>
+      run(async () => {
+        let id: string;
+        let label: string;
+        if (kind === "exercise") {
+          const m = await resolveMovement(name);
+          [id, label] = [m.id, m.name];
+        } else if (kind === "equipment") {
+          const e = await resolveEquipment(user, name);
+          [id, label] = [e.id, e.name];
+        } else {
+          const gym = (await listGyms()).find((g) => g.name.toLowerCase() === name.toLowerCase().trim());
+          if (!gym) throw new ServiceError(`Kein Studio namens „${name}“.`);
+          [id, label] = [gym.id, gym.name];
+        }
+        const entries = await listChanges(kind === "exercise" ? "movement" : kind, id, limit ?? 20);
+        if (entries.length === 0) return `Für „${label}“ ist keine Änderung protokolliert.`;
+        return [
+          `Änderungen an „${label}“ (neueste zuerst):`,
+          ...entries.map(
+            (e) => `- ${formatDateTime(e.createdAt)} · ${e.userName ?? "gelöschtes Konto"}: ${e.text}`,
+          ),
+        ].join("\n");
+      }),
+  );
+
+  server.registerTool(
     "archive_equipment",
     {
       title: "Gerät archivieren",
@@ -1306,7 +1348,7 @@ export function registerGymTools(server: McpServer, user: User): void {
     async ({ equipment, restore }) =>
       run(async () => {
         const found = await resolveEquipment(user, equipment);
-        await setEquipmentArchived(found.id, !restore);
+        await setEquipmentArchived(user, found.id, !restore);
         return restore ? `„${found.name}“ ist wieder aktiv.` : `„${found.name}“ archiviert.`;
       }),
   );

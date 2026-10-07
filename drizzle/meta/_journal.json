@@ -113,6 +113,13 @@
       "when": 1791372586091,
       "tag": "0015_load_unit_per_side",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1791372854911,
+      "tag": "0016_catalog_changes",
+      "breakpoints": true
     }
   ]
 }

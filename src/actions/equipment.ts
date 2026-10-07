@@ -138,8 +138,8 @@ export async function deleteEquipmentImageAction(imageId: string): Promise<void>
 
 /** Archivieren bzw. wiederherstellen – gemeinsamer Katalog, darf jeder. */
 export async function setEquipmentArchivedAction(equipmentId: string, archived: boolean): Promise<void> {
-  await requireUser();
-  await setEquipmentArchived(equipmentId, archived);
+  const user = await requireUser();
+  await setEquipmentArchived(user, equipmentId, archived);
   revalidatePath("/equipment");
   revalidatePath(`/equipment/${equipmentId}`);
 }

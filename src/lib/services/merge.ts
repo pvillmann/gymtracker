@@ -15,6 +15,7 @@ import {
 } from "@/db/schema";
 import { canDeleteCatalog } from "@/lib/services/catalog";
 import { recomputeVolumes } from "@/lib/services/equipment";
+import { logChange } from "@/lib/services/changelog";
 import { ServiceError } from "@/lib/services/errors";
 import { CONVERTIBLE, movementHasHistory, requireMovement } from "@/lib/services/machines";
 
@@ -230,6 +231,14 @@ export async function mergeMovements(
 
     // 5. Die Quelle selbst – Zuordnungen gehen per Kaskade mit.
     tx.delete(movements).where(eq(movements.id, sourceId)).run();
+  });
+
+  const summary = `${report.movedVariants + report.mergedVariants} Varianten, ${report.movedSets} Sätze zusammengelegt, ${report.movedPlanItems} Planeinträge umgehängt`;
+  await logChange(user, "movement", targetId, target.name, "merge", {
+    note: `„${source.name}“ ist hierin aufgegangen (${summary})`,
+  });
+  await logChange(user, "movement", sourceId, source.name, "merge", {
+    note: `in „${target.name}“ aufgegangen und gelöscht`,
   });
 
   // Bei anderer Messart rechnen die umgezogenen Sätze neu; sonst ändert sich

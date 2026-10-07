@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 
 import { deleteGymAction } from "@/actions/gyms";
 import { setMachineInGymAction } from "@/actions/movements";
+import { ChangeLog } from "@/components/ChangeLog";
 import { ConfirmSubmitButton } from "@/components/ConfirmSubmitButton";
 import { RenameGymForm } from "@/components/GymForms";
 import { InlineActionForm } from "@/components/InlineActionForm";
@@ -18,6 +19,7 @@ import {
   listMovements,
 } from "@/lib/queries";
 import { canDeleteCatalog } from "@/lib/services/catalog";
+import { listChanges } from "@/lib/services/changelog";
 
 export const metadata: Metadata = { title: "Studio · GymTracker" };
 
@@ -45,7 +47,10 @@ export default async function GymPage({ params }: { params: Promise<{ id: string
   const machines = equipment.filter((e) => here.has(e.id));
   const addable = equipment.filter((e) => !here.has(e.id) && e.archivedAt === null);
   const mine = stats.get(gym.id);
-  const deletable = await canDeleteCatalog(user, gym.userId);
+  const [deletable, changes] = await Promise.all([
+    canDeleteCatalog(user, gym.userId),
+    listChanges("gym", gym.id),
+  ]);
 
   return (
     <>
@@ -152,6 +157,8 @@ export default async function GymPage({ params }: { params: Promise<{ id: string
           Das Studio gehört zum gemeinsamen Katalog – Änderungen gelten für alle.
         </p>
       </section>
+
+      <ChangeLog entries={changes} />
 
       {deletable ? (
         <form action={deleteGymAction.bind(null, gym.id)}>
