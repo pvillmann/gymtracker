@@ -39,6 +39,8 @@ const equipmentInput = z.object({
   baseLoadKg: decimal.pipe(
     z.number().min(0, "Das Eigengewicht kann nicht negativ sein.").max(500),
   ),
+  perSide: z.boolean(),
+  loadUnit: z.enum(["kg", "level"]),
   notes: z
     .string()
     .trim()
@@ -55,6 +57,8 @@ function readForm(formData: FormData) {
     kind: text(formData, "kind", "other"),
     loadFactor: text(formData, "loadFactor", "1"),
     baseLoadKg: text(formData, "baseLoadKg", "0"),
+    perSide: formData.get("perSide") === "on",
+    loadUnit: text(formData, "loadUnit", "kg"),
     notes: optionalText(formData, "notes"),
   });
 }
@@ -134,8 +138,8 @@ export async function deleteEquipmentImageAction(imageId: string): Promise<void>
 
 /** Archivieren bzw. wiederherstellen – gemeinsamer Katalog, darf jeder. */
 export async function setEquipmentArchivedAction(equipmentId: string, archived: boolean): Promise<void> {
-  await requireUser();
-  await setEquipmentArchived(equipmentId, archived);
+  const user = await requireUser();
+  await setEquipmentArchived(user, equipmentId, archived);
   revalidatePath("/equipment");
   revalidatePath(`/equipment/${equipmentId}`);
 }

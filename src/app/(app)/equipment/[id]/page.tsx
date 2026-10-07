@@ -9,6 +9,7 @@ import {
   updateEquipmentAction,
 } from "@/actions/equipment";
 import { linkMovementMachineAction, setMachineInGymAction, unlinkMovementMachineAction } from "@/actions/movements";
+import { ChangeLog } from "@/components/ChangeLog";
 import { ConfirmSubmitButton } from "@/components/ConfirmSubmitButton";
 import { EquipmentForm } from "@/components/EquipmentForm";
 import { EquipmentImageUpload } from "@/components/EquipmentImageUpload";
@@ -16,6 +17,7 @@ import { InlineActionForm } from "@/components/InlineActionForm";
 import { Card, PageHeader, Select } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
 import { canDeleteCatalog } from "@/lib/services/catalog";
+import { listChanges } from "@/lib/services/changelog";
 import { equipmentHasHistory } from "@/lib/services/equipment";
 import { SubmitButton } from "@/components/SubmitButton";
 import { EQUIPMENT_KINDS } from "@/lib/constants";
@@ -60,9 +62,10 @@ export default async function EquipmentDetailPage({
   const addableMovements = movements.filter((m) => !movementLink.has(m.id) && m.archivedAt === null);
   // Der Katalog gehört allen; die eigenen Übungen bleiben privat.
   const linked = exercises.filter((e) => e.equipmentId === item.id);
-  const [deletable, hasHistory] = await Promise.all([
+  const [deletable, hasHistory, changes] = await Promise.all([
     canDeleteCatalog(user, item.userId),
     equipmentHasHistory(item.id),
+    listChanges("equipment", item.id),
   ]);
   const kind = EQUIPMENT_KINDS.find((k) => k.value === item.kind)?.label;
 
@@ -272,6 +275,8 @@ export default async function EquipmentDetailPage({
           Die Maschine gehört zum gemeinsamen Katalog – Änderungen gelten für alle.
         </p>
       </section>
+
+      <ChangeLog entries={changes} />
 
       <div className="space-y-3 px-1">
         <form action={setEquipmentArchivedAction.bind(null, item.id, item.archivedAt === null)}>

@@ -11,7 +11,7 @@ import {
   type User,
 } from "@/db/schema";
 import { newId } from "@/lib/ids";
-import { recomputeVolumes, requireEquipment } from "@/lib/services/equipment";
+import { requireEquipment } from "@/lib/services/equipment";
 import { nameKey } from "@/lib/services/catalog";
 import { ServiceError } from "@/lib/services/errors";
 import { linkMovementEquipment } from "@/lib/services/machines";
@@ -174,54 +174,22 @@ export async function createExercise(
   return id;
 }
 
-export async function updateExercise(
+/** Name und eigene Einstellung einer Variante – nur die eigene. */
+export async function updateVariant(
   user: User,
   exerciseId: string,
-  input: ExerciseInput,
+  input: { name: string; machineSetup: string | null },
 ): Promise<void> {
-  const [current] = await db
-    .select({ movementId: exercises.movementId, equipmentId: exercises.equipmentId })
-    .from(exercises)
-    .where(and(eq(exercises.id, exerciseId), eq(exercises.userId, user.id)))
-    .limit(1);
-  if (!current) throw new ServiceError("Diese Übung gibt es nicht.");
-  if (input.equipmentId) await requireEquipment(input.equipmentId);
-
-  // Beim Bearbeiten steht die Muskelgruppe im Formular – auch ein leeres Feld
-  // ist dann eine Angabe.
-  const movement = await resolveMovement(
-    user,
-    input.movementName?.trim() || input.name,
-    input.muscleGroup ?? null,
-    input.trackingMode,
-    input.wgerId,
-  );
-
   try {
-    await db
+    const updated = await db
       .update(exercises)
-      .set({
-        name: input.name,
-        movementId: movement.id,
-        muscleGroup: movement.muscleGroup,
-        ...(input.equipmentId !== undefined ? { equipmentId: input.equipmentId } : {}),
-        machineSetup: input.machineSetup ?? null,
-        trackingMode: input.trackingMode,
-        weightStepKg: input.weightStepKg,
-      })
-      .where(and(eq(exercises.id, exerciseId), eq(exercises.userId, user.id)));
+      .set(input)
+      .where(and(eq(exercises.id, exerciseId), eq(exercises.userId, user.id)))
+      .returning({ id: exercises.id });
+    if (updated.length === 0) throw new ServiceError("Diese Übung gibt es nicht.");
   } catch (error) {
-    if (movement.created) await deleteJustCreatedMovement(movement.id);
-    if (isDuplicateName(error)) {
-      throw new ServiceError("Eine Übung mit diesem Namen gibt es schon.");
-    }
+    if (isDuplicateName(error)) throw new ServiceError("Eine Variante mit diesem Namen hast du schon.");
     throw error;
-  }
-
-  if (input.equipmentId) await linkMovementEquipment(user, movement.id, input.equipmentId);
-  // Anderes Gerät heißt andere Übersetzung: das bewegte Gewicht neu rechnen.
-  if (input.equipmentId !== undefined && input.equipmentId !== current.equipmentId) {
-    await recomputeVolumes({ exerciseIds: [exerciseId] });
   }
 }
 

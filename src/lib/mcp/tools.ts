@@ -9,6 +9,7 @@ import {
   describeSets,
   effortLabel,
   lastEffort,
+  loadUnitOf,
   trackingModeLabel,
 } from "@/lib/describe";
 import {
@@ -44,6 +45,7 @@ import {
   updateEquipment,
 } from "@/lib/services/equipment";
 import { findOrCreateGym } from "@/lib/services/gyms";
+import { listChanges } from "@/lib/services/changelog";
 import { mergeMovements } from "@/lib/services/merge";
 import { UPLOAD_LINK_MINUTES, createPhotoUploadLink } from "@/lib/services/photo-upload";
 import {
@@ -183,6 +185,10 @@ const machineSchema = z
 
 /** Registriert alle Werkzeuge für genau ein Konto. */
 export function registerGymTools(server: McpServer, user: User): void {
+  /** Gewicht je Seite bzw. Stufen – von der Maschine einer Variante. */
+  const unitOf = async (equipmentId: string | null) =>
+    equipmentId ? loadUnitOf((await listEquipment()).find((e) => e.id === equipmentId)) : null;
+
   // ---------------------------------------------------------------- Lesen
 
   server.registerTool(
@@ -317,8 +323,9 @@ export function registerGymTools(server: McpServer, user: User): void {
 
         return [
           `${found.name}, ${formatRelativeDay(last.performedAt)} (${formatDate(last.performedAt)}):`,
-          describeSets(last.sets, found.trackingMode),
-          `Bewegt: ${formatVolume(last.totalVolumeKg)}`,
+          describeSets(last.sets, found.trackingMode, await unitOf(found.equipmentId)),
+          // Stufen sind keine kg – dann gibt es kein bewegtes Gewicht.
+          ...(last.totalVolumeKg > 0 ? [`Bewegt: ${formatVolume(last.totalVolumeKg)}`] : []),
           ...(effort ? [`Letzter Satz: ${effortLabel(effort)}`] : []),
         ].join("\n");
       }),
@@ -344,11 +351,12 @@ export function registerGymTools(server: McpServer, user: User): void {
         });
         const sessions = await getExerciseSessions(user.id, found.id, limit ?? 10);
         if (sessions.length === 0) return `„${found.name}“ wurde noch nie trainiert.`;
+        const unit = await unitOf(found.equipmentId);
 
         return `${found.name}:\n` + sessions
           .map(
             (s) =>
-              `${formatDate(s.performedAt)}: ${describeSets(s.sets, found.trackingMode)} · ${formatVolume(s.totalVolumeKg)}`,
+              `${formatDate(s.performedAt)}: ${describeSets(s.sets, found.trackingMode, unit)}${s.totalVolumeKg > 0 ? ` · ${formatVolume(s.totalVolumeKg)}` : ""}`,
           )
           .join("\n");
       }),
@@ -657,8 +665,12 @@ export function registerGymTools(server: McpServer, user: User): void {
           return `Training „${active.name}“ läuft, noch kein Satz gespeichert.`;
         }
 
-        const all = await listExercises(user.id, { includeArchived: true });
+        const [all, devices] = await Promise.all([
+          listExercises(user.id, { includeArchived: true }),
+          listEquipment(),
+        ]);
         const byId = new Map(all.map((e) => [e.id, e]));
+        const deviceById = new Map(devices.map((d) => [d.id, d]));
         const grouped = new Map<string, typeof logged>();
         for (const set of logged) {
           grouped.set(set.exerciseId, [...(grouped.get(set.exerciseId) ?? []), set]);
@@ -667,8 +679,9 @@ export function registerGymTools(server: McpServer, user: User): void {
         const lines = [...grouped.entries()].map(([exerciseId, entries]) => {
           const exercise = byId.get(exerciseId);
           const mode = exercise?.trackingMode ?? "weight_reps";
+          const unit = loadUnitOf(exercise?.equipmentId ? deviceById.get(exercise.equipmentId) : null);
           return `${exercise?.name ?? "Unbekannt"}: ${entries
-            .map((s) => `${s.isWarmup ? "Aufwärmen " : ""}${describeSet(s, mode)}`)
+            .map((s) => `${s.isWarmup ? "Aufwärmen " : ""}${describeSet(s, mode, unit)}`)
             .join(", ")}`;
         });
 
@@ -735,9 +748,9 @@ export function registerGymTools(server: McpServer, user: User): void {
         });
 
         const prefix = workout.started ? "Freies Training gestartet. " : "";
-        return `${prefix}${result.isWarmup ? "Aufwärmsatz" : "Satz"} ${result.ordinal} bei „${result.exerciseName}“ gespeichert (${formatVolume(
-          result.volumeKg,
-        )} bewegt).`;
+        // Ohne bewegtes Gewicht (Zeit, Stufen) keine „0 kg“ melden.
+        const moved = result.volumeKg > 0 ? ` (${formatVolume(result.volumeKg)} bewegt)` : "";
+        return `${prefix}${result.isWarmup ? "Aufwärmsatz" : "Satz"} ${result.ordinal} bei „${result.exerciseName}“ gespeichert${moved}.`;
       }),
   );
 
@@ -969,6 +982,8 @@ export function registerGymTools(server: McpServer, user: User): void {
         [e.manufacturer, e.model].filter(Boolean).join(" "),
         e.loadFactor !== 1 ? `Übersetzung ${Math.round(1 / e.loadFactor)}:1` : null,
         e.baseLoadKg > 0 ? `Eigengewicht ${formatKg(e.baseLoadKg)} kg` : null,
+        e.perSide ? "Gewicht je Seite" : null,
+        e.loadUnit === "level" ? "Stufen statt kg" : null,
         e.imageId ? "mit Foto" : "OHNE Foto",
         e.archivedAt !== null ? "archiviert" : null,
       ]
@@ -1047,6 +1062,14 @@ export function registerGymTools(server: McpServer, user: User): void {
         kind: kindSchema,
         ratio: ratioSchema,
         base_load_kg: z.number().min(0).max(500).optional().describe("Eigengewicht, z. B. Schlitten"),
+        per_side: z
+          .boolean()
+          .optional()
+          .describe("Getrennte Arme mit eigenen Scheiben: eingetragen wird das Gewicht je Seite, bewegt wird das Doppelte"),
+        load_unit: z
+          .enum(["kg", "level"])
+          .optional()
+          .describe("level: Steckgewicht mit Stufen (z. B. 1–12) statt kg – zählt nicht als bewegtes Gewicht"),
         notes: z.string().max(1000).optional(),
         exercise: z.string().max(80).optional().describe("Übung, die an dem Gerät geht"),
         gym: z.string().max(60).optional().describe("Studio, in dem das Gerät steht"),
@@ -1061,6 +1084,8 @@ export function registerGymTools(server: McpServer, user: User): void {
           kind: args.kind ?? "other",
           loadFactor: factorOf(args.ratio) ?? 1,
           baseLoadKg: args.base_load_kg ?? 0,
+          perSide: args.per_side ?? false,
+          loadUnit: args.load_unit ?? "kg",
           notes: args.notes ?? null,
         });
 
@@ -1090,8 +1115,9 @@ export function registerGymTools(server: McpServer, user: User): void {
       description:
         "Ändert Angaben eines Geräts, z. B. die Übersetzung, sobald sie am " +
         "Gerät abgelesen wurde. Nicht genannte Felder bleiben unverändert. " +
-        "Eine geänderte Übersetzung oder ein geändertes Eigengewicht rechnet " +
-        "das bewegte Gewicht bisheriger Sätze an diesem Gerät neu.",
+        "Eine geänderte Übersetzung, ein geändertes Eigengewicht, per_side " +
+        "oder load_unit rechnet das bewegte Gewicht bisheriger Sätze an diesem " +
+        "Gerät neu.",
       inputSchema: {
         equipment: z.string().describe("Name des Geräts"),
         name: z.string().min(1).max(80).optional(),
@@ -1100,6 +1126,14 @@ export function registerGymTools(server: McpServer, user: User): void {
         kind: kindSchema,
         ratio: ratioSchema,
         base_load_kg: z.number().min(0).max(500).optional(),
+        per_side: z
+          .boolean()
+          .optional()
+          .describe("Getrennte Arme mit eigenen Scheiben: eingetragen wird das Gewicht je Seite, bewegt wird das Doppelte"),
+        load_unit: z
+          .enum(["kg", "level"])
+          .optional()
+          .describe("level: Steckgewicht mit Stufen (z. B. 1–12) statt kg – zählt nicht als bewegtes Gewicht"),
         notes: z.string().max(1000).optional(),
       },
     },
@@ -1113,6 +1147,8 @@ export function registerGymTools(server: McpServer, user: User): void {
           kind: args.kind ?? found.kind,
           loadFactor: factorOf(args.ratio) ?? found.loadFactor,
           baseLoadKg: args.base_load_kg ?? found.baseLoadKg,
+          perSide: args.per_side ?? found.perSide,
+          loadUnit: args.load_unit ?? found.loadUnit,
           notes: args.notes ?? found.notes,
         });
         return `Gerät „${args.name ?? found.name}“ gespeichert. Fotos: ${equipmentUrl(found.id)}`;
@@ -1197,7 +1233,7 @@ export function registerGymTools(server: McpServer, user: User): void {
     async ({ exercise, restore }) =>
       run(async () => {
         const movement = await resolveMovement(exercise);
-        await setMovementArchived(movement.id, !restore);
+        await setMovementArchived(user, movement.id, !restore);
         return restore ? `„${movement.name}“ ist wieder aktiv.` : `„${movement.name}“ archiviert.`;
       }),
   );
@@ -1256,6 +1292,47 @@ export function registerGymTools(server: McpServer, user: User): void {
   );
 
   server.registerTool(
+    "catalog_history",
+    {
+      title: "Änderungen im Katalog",
+      description:
+        "Wer hat eine Übung, ein Gerät oder ein Studio wann geändert – mit den " +
+        "alten Werten. Der Katalog ist gemeinsam und jeder darf bearbeiten; " +
+        "nutze das, um ungewollte Änderungen zu finden und mit update_exercise " +
+        "bzw. update_equipment zurückzudrehen.",
+      inputSchema: {
+        kind: z.enum(["exercise", "equipment", "gym"]).describe("Art des Eintrags"),
+        name: z.string().describe("Name der Übung, des Geräts bzw. Studios"),
+        limit: z.number().int().min(1).max(50).optional(),
+      },
+    },
+    async ({ kind, name, limit }) =>
+      run(async () => {
+        let id: string;
+        let label: string;
+        if (kind === "exercise") {
+          const m = await resolveMovement(name);
+          [id, label] = [m.id, m.name];
+        } else if (kind === "equipment") {
+          const e = await resolveEquipment(user, name);
+          [id, label] = [e.id, e.name];
+        } else {
+          const gym = (await listGyms()).find((g) => g.name.toLowerCase() === name.toLowerCase().trim());
+          if (!gym) throw new ServiceError(`Kein Studio namens „${name}“.`);
+          [id, label] = [gym.id, gym.name];
+        }
+        const entries = await listChanges(kind === "exercise" ? "movement" : kind, id, limit ?? 20);
+        if (entries.length === 0) return `Für „${label}“ ist keine Änderung protokolliert.`;
+        return [
+          `Änderungen an „${label}“ (neueste zuerst):`,
+          ...entries.map(
+            (e) => `- ${formatDateTime(e.createdAt)} · ${e.userName ?? "gelöschtes Konto"}: ${e.text}`,
+          ),
+        ].join("\n");
+      }),
+  );
+
+  server.registerTool(
     "archive_equipment",
     {
       title: "Gerät archivieren",
@@ -1271,7 +1348,7 @@ export function registerGymTools(server: McpServer, user: User): void {
     async ({ equipment, restore }) =>
       run(async () => {
         const found = await resolveEquipment(user, equipment);
-        await setEquipmentArchived(found.id, !restore);
+        await setEquipmentArchived(user, found.id, !restore);
         return restore ? `„${found.name}“ ist wieder aktiv.` : `„${found.name}“ archiviert.`;
       }),
   );

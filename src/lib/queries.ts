@@ -646,6 +646,8 @@ export type WorkoutDetailEntry = {
   name: string;
   muscleGroup: string | null;
   trackingMode: TrackingMode;
+  /** Gewicht je Seite bzw. Stufen statt kg – von der Maschine. */
+  unit: { perSide: boolean; level: boolean } | null;
   sets: LoggedSet[];
   volumeKg: number;
 };
@@ -670,10 +672,13 @@ export async function getWorkoutDetail(
       name: exercises.name,
       muscleGroup: exercises.muscleGroup,
       trackingMode: exercises.trackingMode,
+      perSide: equipment.perSide,
+      loadUnit: equipment.loadUnit,
     })
     .from(workoutSets)
     .innerJoin(workouts, eq(workouts.id, workoutSets.workoutId))
     .innerJoin(exercises, eq(exercises.id, workoutSets.exerciseId))
+    .leftJoin(equipment, eq(equipment.id, exercises.equipmentId))
     .where(and(eq(workouts.id, workoutId), eq(workouts.userId, userId)))
     .orderBy(asc(workoutSets.completedAt), asc(workoutSets.setNumber));
 
@@ -688,6 +693,10 @@ export async function getWorkoutDetail(
         name: row.name,
         muscleGroup: row.muscleGroup,
         trackingMode: row.trackingMode,
+        unit:
+          row.perSide === null || row.loadUnit === null
+            ? null
+            : { perSide: row.perSide, level: row.loadUnit === "level" },
         sets: [],
         volumeKg: 0,
       };

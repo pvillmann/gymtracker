@@ -65,6 +65,17 @@ Homescreen.
   Eigengewicht. Übersetzung und Eigengewicht fließen ins bewegte Gewicht ein;
   Fotos werden verkleinert und ohne Metadaten (auch ohne GPS) im Daten-Volume
   gespeichert
+- Maschinen mit getrennten Armen (Iso-Lateral) lassen sich auf „Gewicht je
+  Seite“ stellen: eingetragen wird, was auf einer Seite steckt, angezeigt als
+  „40 kg/Seite“, ins Volumen geht das Doppelte. Maschinen mit Stufen statt
+  Kilo (z. B. Life Fitness 1–20) zeigen „Stufe 8“; Stufen zählen nicht ins
+  Volumen, weil sich daraus keine Last ableiten lässt
+- Änderungsprotokoll: Auf den Seiten von Übung, Maschine und Studio steht,
+  wer wann was geändert, zugeordnet, archiviert oder zusammengeführt hat
+  (per MCP: `catalog_history`) – Gegenstück dazu, dass jeder bearbeiten darf
+- Varianten (Übung × Maschine) sind nur noch über Name und eigene Einstellung
+  bearbeitbar; Messart, Muskelgruppe und Maschine gehören zur Übung bzw.
+  Maschine und werden dort für alle geändert
 - Dubletten: Namen, die sich nur in Groß-/Kleinschreibung unterscheiden, werden
   beim Anlegen abgelehnt. Bestehende Dubletten lassen sich auf der Übungsseite
   (oder per MCP) zusammenführen – Verlauf, Pläne und Maschinen wandern mit
@@ -381,7 +392,8 @@ dort nichts Brauchbares steht.
 | `edit_workout`, `delete_workout` | Zeiten eines Trainings korrigieren oder es löschen |
 | `log_set`, `undo_last_set` | Sätze protokollieren und korrigieren |
 | `search_equipment`, `list_equipment` | Maschinen finden (auch über die Notiz, z. B. „Nr. 24“), nach Studio oder Übung filtern; zeigt Foto-Status und mögliche Dubletten |
-| `create_equipment`, `update_equipment` | Maschinen anlegen und ändern |
+| `create_equipment`, `update_equipment` | Maschinen anlegen und ändern; `per_side` (Gewicht je Seite), `load_unit` (`kg` oder `level` für Stufen) |
+| `catalog_history` | Änderungsprotokoll einer Übung, Maschine oder eines Studios |
 | `update_exercise` | Name, Muskelgruppe, Messart einer Übung ändern (Messart nur umrechenbar: Gewicht ↔ Körpergewicht + Zusatz) |
 | `archive_exercise`, `archive_equipment` | Aus Auswahllisten ausblenden, Verlauf bleibt; `restore` holt zurück |
 | `delete_exercise`, `delete_equipment` | Endgültig löschen – nur ohne Verlauf, nur Anleger oder Admin |
@@ -562,3 +574,8 @@ Sätze. Das in den Einstellungen hinterlegte Körpergewicht geht dabei in die
 beiden Körpergewichts-Messarten ein — sonst wären Klimmzüge rechnerisch
 wertlos. Mehr Gegengewicht als Körpergewicht ergibt null statt einer negativen
 Last.
+
+Bei Maschinen mit **Gewicht je Seite** zählt die eingetragene Last doppelt
+(Faktor und Eigengewicht wie gehabt: Eigengewicht + Gewicht × Übersetzung × 2).
+Maschinen mit **Stufen** liefern kein Volumen – „Stufe 8“ ist keine Masse.
+Wer eine Maschine umstellt, rechnet damit alle bisherigen Sätze daran neu.

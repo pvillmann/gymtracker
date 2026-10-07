@@ -6,6 +6,7 @@ import { db } from "@/db";
 import { gymExercises, gyms, plans, type User } from "@/db/schema";
 import { newId } from "@/lib/ids";
 import { assertCanDeleteCatalog, assertNameFree, nameKey } from "@/lib/services/catalog";
+import { logChange } from "@/lib/services/changelog";
 import { ServiceError } from "@/lib/services/errors";
 import { requireOwnExercise } from "@/lib/services/workouts";
 
@@ -38,6 +39,7 @@ export async function findOrCreateGym(user: User, rawName: string): Promise<stri
 
   const id = newId();
   await db.insert(gyms).values({ id, userId: user.id, name });
+  await logChange(user, "gym", id, name, "create");
   return id;
 }
 
@@ -50,6 +52,7 @@ export async function renameGym(user: User, gymId: string, rawName: string): Pro
   }
   try {
     await db.update(gyms).set({ name }).where(eq(gyms.id, gymId));
+    if (name !== gym.name) await logChange(user, "gym", gymId, name, "update", { Name: [gym.name, name] });
   } catch (error) {
     if (isDuplicateName(error)) {
       throw new ServiceError("Ein Studio mit diesem Namen gibt es schon.");
@@ -68,6 +71,7 @@ export async function deleteGym(user: User, gymId: string): Promise<void> {
   const gym = await requireGym(gymId);
   await assertCanDeleteCatalog(user, gym.userId, `Das Studio „${gym.name}“`);
   await db.delete(gyms).where(eq(gyms.id, gymId));
+  await logChange(user, "gym", gymId, gym.name, "delete");
 }
 
 /**

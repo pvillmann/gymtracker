@@ -162,6 +162,8 @@ export const apiTokens = sqliteTable(
 );
 
 /** Bauart eines Geräts – bestimmt, wie man sich die Last vorstellen muss. */
+export type LoadUnit = "kg" | "level";
+
 export type EquipmentKind =
   | "stack"
   | "plates"
@@ -201,6 +203,17 @@ export const equipment = sqliteTable(
     baseLoadKg: real("base_load_kg").notNull().default(0),
     /** Kleinster Gewichtssprung – steuert die +/- Tasten; pro Studio überschreibbar. */
     weightStepKg: real("weight_step_kg").notNull().default(2.5),
+    /**
+     * Getrennte Arme mit eigenen Scheiben (Iso-Lateral Row): eingetragen wird
+     * das Gewicht einer Seite, bewegt wird das Doppelte.
+     */
+    perSide: integer("per_side", { mode: "boolean" }).notNull().default(false),
+    /**
+     * "level": Steckgewicht mit Stufen statt kg (Life Fitness 1–12). Die
+     * Stufe wird wie ein Gewicht erfasst und am selben Gerät verglichen,
+     * zählt aber nicht als bewegtes Gewicht – sie ist keine Masse.
+     */
+    loadUnit: text("load_unit").notNull().default("kg").$type<LoadUnit>(),
     notes: text("notes"),
     /** Archiviert: nicht mehr vorgeschlagen, Verlauf bleibt. Siehe movements.archivedAt. */
     archivedAt: integer("archived_at"),
@@ -561,3 +574,27 @@ export type Plan = typeof plans.$inferSelect;
 export type PlanExercise = typeof planExercises.$inferSelect;
 export type Workout = typeof workouts.$inferSelect;
 export type WorkoutSet = typeof workoutSets.$inferSelect;
+
+/**
+ * Änderungsprotokoll des gemeinsamen Katalogs. Jeder darf Übungen,
+ * Maschinen und Studios bearbeiten – das Protokoll macht nachvollziehbar,
+ * wer was wann geändert hat, und hält die alten Werte fest, damit sich ein
+ * Fehler von Hand zurückdrehen lässt. Bewusst ohne Fremdschlüssel auf den
+ * Eintrag: auch Löschungen und Zusammenführungen bleiben protokolliert.
+ */
+export const catalogChanges = sqliteTable(
+  "catalog_changes",
+  {
+    id: text("id").primaryKey(),
+    entity: text("entity").notNull().$type<"movement" | "equipment" | "gym">(),
+    entityId: text("entity_id").notNull(),
+    /** Name zum Zeitpunkt der Änderung – bleibt lesbar, auch wenn der Eintrag weg ist. */
+    entityName: text("entity_name").notNull(),
+    userId: text("user_id").references(() => users.id, { onDelete: "set null" }),
+    action: text("action").notNull(),
+    /** JSON: { Feld: [alt, neu] } bzw. ein Hinweis bei Zuordnungen. */
+    details: text("details"),
+    createdAt: integer("created_at").notNull().default(now),
+  },
+  (t) => [index("catalog_changes_entity_idx").on(t.entity, t.entityId, t.createdAt)],
+);

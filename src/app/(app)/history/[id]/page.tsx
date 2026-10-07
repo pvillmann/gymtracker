@@ -199,6 +199,7 @@ export default async function WorkoutDetailPage({
                     reference,
                     entry.trackingMode,
                     user.bodyweightKg,
+                    entry.unit,
                   );
 
                   return (
@@ -219,7 +220,7 @@ export default async function WorkoutDetailPage({
                         )}
                       >
                         {set.isWarmup ? <span className="sr-only">Aufwärmsatz: </span> : null}
-                        {describeSet(set, entry.trackingMode)}
+                        {describeSet(set, entry.trackingMode, entry.unit)}
                       </span>
                       <TrendBadge
                         trend={comparison.trend}
