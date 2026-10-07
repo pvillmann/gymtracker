@@ -6,7 +6,7 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { ButtonLink, Card, EmptyState, PageHeader } from "@/components/ui";
 import type { Movement } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
-import { describeSets } from "@/lib/describe";
+import { describeSets, loadUnitOf } from "@/lib/describe";
 import { formatRelativeDay } from "@/lib/format";
 import {
   getPreviousPerformances,
@@ -110,7 +110,11 @@ export default async function ExercisesPage() {
                             </p>
                             {last ? (
                               <p className="mt-0.5 truncate text-xs text-faint">
-                                {describeSets(last.performance!.sets, last.variant.trackingMode)} ·{" "}
+                                {describeSets(
+                                  last.performance!.sets,
+                                  last.variant.trackingMode,
+                                  loadUnitOf(equipment.find((e) => e.id === last.variant.equipmentId)),
+                                )} ·{" "}
                                 {formatRelativeDay(last.performance!.performedAt)}
                               </p>
                             ) : null}

@@ -39,6 +39,8 @@ const equipmentInput = z.object({
   baseLoadKg: decimal.pipe(
     z.number().min(0, "Das Eigengewicht kann nicht negativ sein.").max(500),
   ),
+  perSide: z.boolean(),
+  loadUnit: z.enum(["kg", "level"]),
   notes: z
     .string()
     .trim()
@@ -55,6 +57,8 @@ function readForm(formData: FormData) {
     kind: text(formData, "kind", "other"),
     loadFactor: text(formData, "loadFactor", "1"),
     baseLoadKg: text(formData, "baseLoadKg", "0"),
+    perSide: formData.get("perSide") === "on",
+    loadUnit: text(formData, "loadUnit", "kg"),
     notes: optionalText(formData, "notes"),
   });
 }

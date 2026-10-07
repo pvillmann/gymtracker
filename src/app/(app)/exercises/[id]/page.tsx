@@ -15,7 +15,7 @@ import { TrendBadge } from "@/components/TrendBadge";
 import { WgerAttribution } from "@/components/WgerAttribution";
 import { Card, EmptyState, PageHeader } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
-import { describeSets } from "@/lib/describe";
+import { describeSets, describeWeight, loadUnitOf } from "@/lib/describe";
 import {
   formatDate,
   formatDuration,
@@ -92,6 +92,8 @@ export default async function ExerciseDetailPage({
   };
 
   // Für den Chart chronologisch, für die Liste neueste zuerst.
+  // Gewicht je Seite bzw. Stufen statt kg – von der Maschine.
+  const unit = loadUnitOf(device);
   const chronological = [...sessions].reverse();
   const points: LinePoint[] = chronological.map((session) => {
     const best = bestOf(session.sets);
@@ -100,7 +102,7 @@ export default async function ExerciseDetailPage({
       value: Math.round(best.score * 10) / 10,
       label: isTimed
         ? formatDuration(best.score)
-        : `${formatKg(best.score)} kg (geschätztes 1RM)`,
+        : `${describeWeight(best.score, unit)} (geschätztes 1RM)`,
       caption: formatDate(session.performedAt),
       axisLabel: shortDate.format(new Date(session.performedAt * 1000)),
     };
@@ -188,7 +190,7 @@ export default async function ExerciseDetailPage({
               <p className="mt-1 text-lg font-bold tnum">
                 {isTimed
                   ? formatDuration(latestScore)
-                  : `${formatKg(loadOf(bestOf(latest.sets).set?.weightKg ?? 0))} kg`}
+                  : describeWeight(loadOf(bestOf(latest.sets).set?.weightKg ?? 0), unit)}
               </p>
               <div className="mt-1.5">
                 <TrendBadge
@@ -211,7 +213,7 @@ export default async function ExerciseDetailPage({
                   ? "Schwerstes Gewicht"
                   : "Höchste Last"}
               </p>
-              <p className="mt-1 text-lg font-bold tnum">{formatKg(heaviest)} kg</p>
+              <p className="mt-1 text-lg font-bold tnum">{describeWeight(heaviest, unit)}</p>
               <p className="mt-1.5 text-xs text-faint">
                 Beste Wiederholungen: {bestReps}
               </p>
@@ -264,7 +266,7 @@ export default async function ExerciseDetailPage({
                       </span>
                     </div>
                     <p className="mt-0.5 text-sm text-muted">
-                      {describeSets(session.sets, exercise.trackingMode)}
+                      {describeSets(session.sets, exercise.trackingMode, loadUnitOf(device))}
                     </p>
                   </li>
                 ))}
@@ -293,7 +295,7 @@ export default async function ExerciseDetailPage({
                       <p className="font-semibold">{sibling.name}</p>
                       <p className="mt-0.5 text-sm text-muted">
                         {last
-                          ? `${describeSets(last.sets, sibling.trackingMode)} · ${formatRelativeDay(last.performedAt)}`
+                          ? `${describeSets(last.sets, sibling.trackingMode, loadUnitOf(equipment.find((e) => e.id === sibling.equipmentId)))} · ${formatRelativeDay(last.performedAt)}`
                           : "Noch nicht trainiert"}
                       </p>
                     </Link>

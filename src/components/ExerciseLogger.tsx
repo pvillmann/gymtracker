@@ -17,6 +17,7 @@ import type { SetEffort, TrackingMode } from "@/db/schema";
 import {
   EFFORTS,
   describeSet,
+  describeWeight,
   effortLabel,
   lastEffort,
   nthOfKind,
@@ -416,6 +417,7 @@ export function ExerciseLogger({
               reference,
               exercise.trackingMode,
               bodyweightKg,
+              exercise.transfer,
             );
 
             return (
@@ -436,7 +438,7 @@ export function ExerciseLogger({
                   )}
                 >
                   {set.isWarmup ? <span className="sr-only">Aufwärmsatz: </span> : null}
-                  {describeSet(set, exercise.trackingMode)}
+                  {describeSet(set, exercise.trackingMode, exercise.transfer)}
                 </span>
                 <TrendBadge
                   trend={comparison.trend}
@@ -544,7 +546,11 @@ export function ExerciseLogger({
                   ? "Zusatzgewicht (kg)"
                   : exercise.trackingMode === "assisted_reps"
                     ? "Gegengewicht (kg)"
-                    : "Gewicht (kg)"
+                    : exercise.transfer?.level
+                      ? "Stufe"
+                      : exercise.transfer?.perSide
+                        ? "Gewicht je Seite (kg)"
+                        : "Gewicht (kg)"
               }
               name="weightKg"
               value={weight}
@@ -553,7 +559,7 @@ export function ExerciseLogger({
                 // Bei Körpergewichts-Übungen ohne Zusatzgewicht wäre "0 kg"
                 // nur Rauschen.
                 previousForNext && previousForNext.weightKg > 0
-                  ? `letztes Mal ${formatKg(previousForNext.weightKg)} kg`
+                  ? `letztes Mal ${describeWeight(previousForNext.weightKg, exercise.transfer)}`
                   : undefined
               }
             />

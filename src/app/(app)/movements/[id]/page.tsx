@@ -20,7 +20,7 @@ import { requireUser } from "@/lib/auth";
 import { canDeleteCatalog } from "@/lib/services/catalog";
 import { movementHasHistory } from "@/lib/services/machines";
 import { TRACKING_MODES } from "@/lib/constants";
-import { describeSets } from "@/lib/describe";
+import { describeSets, loadUnitOf } from "@/lib/describe";
 import { formatRelativeDay } from "@/lib/format";
 import {
   getMovement,
@@ -138,7 +138,7 @@ export default async function MovementPage({ params }: { params: Promise<{ id: s
                     </p>
                     {last && variant ? (
                       <p className="mt-0.5 text-xs text-faint">
-                        {describeSets(last.sets, variant.trackingMode)} · {formatRelativeDay(last.performedAt)}{" "}
+                        {describeSets(last.sets, variant.trackingMode, loadUnitOf(machine))} · {formatRelativeDay(last.performedAt)}{" "}
                         ·{" "}
                         <Link href={`/exercises/${variant.id}`} className="underline">
                           Verlauf

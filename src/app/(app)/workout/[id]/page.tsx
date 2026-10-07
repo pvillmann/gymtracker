@@ -10,7 +10,7 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { Card, EmptyState } from "@/components/ui";
 import { WorkoutClock } from "@/components/WorkoutClock";
 import { requireUser } from "@/lib/auth";
-import { describeSets } from "@/lib/describe";
+import { describeSets, loadUnitOf } from "@/lib/describe";
 import {
   formatDateTime,
   formatDurationLong,
@@ -289,7 +289,12 @@ export default async function WorkoutPage({
                       ? equipmentById.get(exercise.equipmentId)
                       : undefined;
                     return device
-                      ? { loadFactor: device.loadFactor, baseLoadKg: device.baseLoadKg }
+                      ? {
+                          loadFactor: device.loadFactor,
+                          baseLoadKg: device.baseLoadKg,
+                          perSide: device.perSide,
+                          level: device.loadUnit === "level",
+                        }
                       : null;
                   })(),
                 }}
@@ -318,6 +323,11 @@ export default async function WorkoutPage({
                         summary: describeSets(
                           elsewhere.performance.sets,
                           elsewhere.variant.trackingMode,
+                          loadUnitOf(
+                            elsewhere.variant.equipmentId
+                              ? equipmentById.get(elsewhere.variant.equipmentId)
+                              : null,
+                          ),
                         ),
                       }
                     : null
@@ -327,7 +337,13 @@ export default async function WorkoutPage({
                   last
                     ? {
                         relative: formatRelativeDay(last.performedAt),
-                        summary: describeSets(last.sets, exercise.trackingMode),
+                        summary: describeSets(
+                          last.sets,
+                          exercise.trackingMode,
+                          loadUnitOf(
+                            exercise.equipmentId ? equipmentById.get(exercise.equipmentId) : null,
+                          ),
+                        ),
                         sets: last.sets,
                       }
                     : null

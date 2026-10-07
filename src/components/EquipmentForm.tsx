@@ -88,6 +88,30 @@ export function EquipmentForm({
             defaultValue={formatKg(equipment?.baseLoadKg ?? 0)}
           />
         </Field>
+        <Field
+          label="Einheit"
+          hint="Manche Steckgewichte zeigen Stufen (z. B. 1–12) statt kg. Stufen werden am selben Gerät verglichen, zählen aber nicht ins bewegte Gewicht."
+        >
+          <Select name="loadUnit" defaultValue={equipment?.loadUnit ?? "kg"}>
+            <option value="kg">kg</option>
+            <option value="level">Stufen</option>
+          </Select>
+        </Field>
+        <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-line px-4 py-3 text-sm">
+          <input
+            type="checkbox"
+            name="perSide"
+            defaultChecked={equipment?.perSide ?? false}
+            className="mt-0.5 h-4 w-4 rounded border-line accent-[var(--color-accent)]"
+          />
+          <span>
+            <span className="font-medium">Gewicht je Seite</span>
+            <span className="block text-muted">
+              Getrennte Arme mit eigenen Scheiben: du trägst das Gewicht einer Seite ein,
+              bewegt wird das Doppelte.
+            </span>
+          </span>
+        </label>
         <Field label="Notiz">
           <Textarea
             name="notes"

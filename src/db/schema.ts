@@ -162,6 +162,8 @@ export const apiTokens = sqliteTable(
 );
 
 /** Bauart eines Geräts – bestimmt, wie man sich die Last vorstellen muss. */
+export type LoadUnit = "kg" | "level";
+
 export type EquipmentKind =
   | "stack"
   | "plates"
@@ -201,6 +203,17 @@ export const equipment = sqliteTable(
     baseLoadKg: real("base_load_kg").notNull().default(0),
     /** Kleinster Gewichtssprung – steuert die +/- Tasten; pro Studio überschreibbar. */
     weightStepKg: real("weight_step_kg").notNull().default(2.5),
+    /**
+     * Getrennte Arme mit eigenen Scheiben (Iso-Lateral Row): eingetragen wird
+     * das Gewicht einer Seite, bewegt wird das Doppelte.
+     */
+    perSide: integer("per_side", { mode: "boolean" }).notNull().default(false),
+    /**
+     * "level": Steckgewicht mit Stufen statt kg (Life Fitness 1–12). Die
+     * Stufe wird wie ein Gewicht erfasst und am selben Gerät verglichen,
+     * zählt aber nicht als bewegtes Gewicht – sie ist keine Masse.
+     */
+    loadUnit: text("load_unit").notNull().default("kg").$type<LoadUnit>(),
     notes: text("notes"),
     /** Archiviert: nicht mehr vorgeschlagen, Verlauf bleibt. Siehe movements.archivedAt. */
     archivedAt: integer("archived_at"),

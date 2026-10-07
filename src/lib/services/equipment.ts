@@ -10,6 +10,7 @@ import {
   users,
   workoutSets,
   type EquipmentKind,
+  type LoadUnit,
   type User,
 } from "@/db/schema";
 import { newId } from "@/lib/ids";
@@ -29,6 +30,8 @@ export type EquipmentInput = {
   baseLoadKg: number;
   /** Kleinster Gewichtssprung – steuert die +/− Tasten im Training. */
   weightStepKg?: number;
+  perSide?: boolean;
+  loadUnit?: LoadUnit;
   notes?: string | null;
 };
 
@@ -209,6 +212,8 @@ export async function recomputeVolumes(
       trackingMode: exercises.trackingMode,
       loadFactor: equipment.loadFactor,
       baseLoadKg: equipment.baseLoadKg,
+      perSide: equipment.perSide,
+      loadUnit: equipment.loadUnit,
       // Das Körpergewicht wird nicht pro Satz gespeichert – es gilt das
       // aktuelle aus dem Profil, wie beim Erfassen.
       bodyweightKg: users.bodyweightKg,
@@ -229,7 +234,7 @@ export async function recomputeVolumes(
 
   // Dieselbe Rechnung wie setVolume in lib/training.ts, nur in SQL.
   for (const target of targets) {
-    const factor = target.loadFactor ?? 1;
+    const factor = (target.loadFactor ?? 1) * (target.perSide ? 2 : 1);
     const base = target.baseLoadKg ?? 0;
     const bodyweight = target.bodyweightKg;
     const volume =
@@ -239,7 +244,9 @@ export async function recomputeVolumes(
           ? sql`max(0, (${bodyweight} + ${workoutSets.weightKg}) * ${workoutSets.reps})`
           : target.trackingMode === "assisted_reps"
             ? sql`max(0, ${bodyweight} - ${workoutSets.weightKg}) * ${workoutSets.reps}`
-            : sql`max(0, (${base} + ${workoutSets.weightKg} * ${factor}) * ${workoutSets.reps})`;
+            : target.loadUnit === "level"
+              ? sql`0`
+              : sql`max(0, (${base} + ${workoutSets.weightKg} * ${factor}) * ${workoutSets.reps})`;
     await db
       .update(workoutSets)
       .set({ volumeKg: volume })

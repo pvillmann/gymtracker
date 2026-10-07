@@ -9,7 +9,14 @@ import type { TrackingMode } from "@/db/schema";
  * Wie ein Gerät die eingestellte Last weitergibt: Übersetzung (0.5 bei einem
  * 2:1-Kabelzug) und Eigengewicht (Schlitten der Beinpresse).
  */
-export type LoadTransfer = { loadFactor: number; baseLoadKg: number };
+export type LoadTransfer = {
+  loadFactor: number;
+  baseLoadKg: number;
+  /** Getrennte Arme: das eingetragene Gewicht gilt je Seite, bewegt wird das Doppelte. */
+  perSide?: boolean;
+  /** Stufen statt kg: kein bewegtes Gewicht, nur Vergleich am selben Gerät. */
+  level?: boolean;
+};
 
 export function setVolume(
   mode: TrackingMode,
@@ -19,11 +26,13 @@ export function setVolume(
   transfer?: LoadTransfer | null,
 ): number {
   if (mode === "time") return 0;
+  // Eine Stufe ist keine Masse – sie zählt nicht in die Tonnage.
+  if (mode === "weight_reps" && transfer?.level) return 0;
   // Übersetzung und Eigengewicht gelten nur für Gewicht × Wiederholungen –
   // bei Körpergewichts-Übungen ist die Last der Körper, nicht das Gerät.
   const load =
     mode === "weight_reps" && transfer
-      ? transfer.baseLoadKg + weightKg * transfer.loadFactor
+      ? transfer.baseLoadKg + weightKg * transfer.loadFactor * (transfer.perSide ? 2 : 1)
       : effectiveLoad(mode, weightKg, bodyweightKg);
   return Math.max(0, load * reps);
 }
@@ -102,6 +111,8 @@ export function compareSets(
   previous: ComparableSet | null | undefined,
   mode: TrackingMode,
   bodyweightKg: number,
+  /** Stufen statt kg bzw. Gewicht je Seite – nur für den Text. */
+  unit?: { perSide?: boolean; level?: boolean } | null,
 ): SetComparison {
   if (!previous) return { trend: "new", label: "neu" };
 
@@ -133,8 +144,17 @@ export function compareSets(
     const value = rounded.toLocaleString("de-DE", { maximumFractionDigits: 1 });
     // Beim Gegengewicht benennt das Label die Hilfe, der Pfeil die Leistung:
     // "▲ −5 kg Hilfe" heißt fünf Kilo weniger Unterstützung.
-    const unit = mode === "assisted_reps" ? " kg Hilfe" : " kg";
-    parts.push(`${weightDiff > 0 ? "+" : "−"}${value}${unit}`);
+    const suffix =
+      mode === "assisted_reps"
+        ? " kg Hilfe"
+        : unit?.level
+          ? rounded === 1
+            ? " Stufe"
+            : " Stufen"
+          : unit?.perSide
+            ? " kg/Seite"
+            : " kg";
+    parts.push(`${weightDiff > 0 ? "+" : "−"}${value}${suffix}`);
   }
 
   // Beide Größen nennen, wenn sich beide geändert haben: "▼ +1 kg" allein

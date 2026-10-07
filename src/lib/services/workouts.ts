@@ -62,6 +62,8 @@ export async function requireOwnExercise(userId: string, exerciseId: string) {
       equipmentId: exercises.equipmentId,
       loadFactor: equipment.loadFactor,
       baseLoadKg: equipment.baseLoadKg,
+      perSide: equipment.perSide,
+      loadUnit: equipment.loadUnit,
     })
     .from(exercises)
     .leftJoin(equipment, eq(equipment.id, exercises.equipmentId))
@@ -70,10 +72,12 @@ export async function requireOwnExercise(userId: string, exerciseId: string) {
 
   const row = rows[0];
   if (!row) throw new ServiceError("Diese Übung gibt es nicht.");
-  const { loadFactor, baseLoadKg, ...exercise } = row;
+  const { loadFactor, baseLoadKg, perSide, loadUnit, ...exercise } = row;
   // Ohne Gerät kommt das eingestellte Gewicht 1:1 an.
   const transfer: LoadTransfer | null =
-    loadFactor === null || baseLoadKg === null ? null : { loadFactor, baseLoadKg };
+    loadFactor === null || baseLoadKg === null
+      ? null
+      : { loadFactor, baseLoadKg, perSide: Boolean(perSide), level: loadUnit === "level" };
   return { ...exercise, transfer };
 }
 
