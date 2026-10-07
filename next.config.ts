@@ -9,6 +9,12 @@ const nextConfig: NextConfig = {
     serverActions: { bodySizeLimit: "16mb" },
   },
   typedRoutes: false,
+  // sharp bringt eine WebAssembly-Variante (~9 MB) für Plattformen ohne
+  // native Binärdatei mit. Im Linux-Container läuft die native – die
+  // WASM-Variante würde nur das Image aufblähen.
+  outputFileTracingExcludes: {
+    "*": ["node_modules/@img/sharp-wasm32/**", "node_modules/@emnapi/**"],
+  },
   async headers() {
     // Upload-Links tragen ihren Schlüssel in der URL – nie weitergeben.
     return [
