@@ -20,6 +20,7 @@ import {
   formatKg,
   formatRelativeDay,
   formatVolume,
+  exerciseCount,
   sets as setsLabel,
 } from "@/lib/format";
 import {
@@ -38,6 +39,13 @@ import {
   listWorkoutSummaries,
 } from "@/lib/queries";
 import { ServiceError, isServiceError } from "@/lib/services/errors";
+import {
+  importSharedPlan,
+  sharePlan,
+  shareUrl,
+  tokenFromLink,
+  unsharePlan,
+} from "@/lib/services/plan-sharing";
 import {
   createEquipment,
   deleteEquipment,
@@ -260,7 +268,7 @@ export function registerGymTools(server: McpServer, user: User): void {
         return all
           .map(
             (p) =>
-              `- ${p.name}: ${p.exerciseCount} Übungen${
+              `- ${p.name}: ${exerciseCount(p.exerciseCount)}${
                 p.archivedAt ? " (archiviert)" : ""
               }${p.notes ? ` – ${p.notes}` : ""}`,
           )
@@ -295,6 +303,55 @@ export function registerGymTools(server: McpServer, user: User): void {
           }`;
         });
         return `Plan „${found.name}“:\n${lines.join("\n")}`;
+      }),
+  );
+
+  server.registerTool(
+    "share_plan",
+    {
+      title: "Plan teilen",
+      description:
+        "Gibt den öffentlichen Link eines eigenen Plans aus (legt ihn bei Bedarf an). " +
+        "Wer den Link hat, sieht den Plan auch ohne Konto und kann ihn als eigene Kopie " +
+        "übernehmen. Geteilt werden Übungen, Zielwerte, Pausen und Eintrags-Notizen – " +
+        "nicht Plan-Notiz, Studio oder Name. renew: neuer Link, der alte wird ungültig; " +
+        "revoke: Teilen beenden. Gib den Link unverändert weiter.",
+      inputSchema: {
+        plan: z.string().describe("Name des Plans"),
+        renew: z.boolean().optional(),
+        revoke: z.boolean().optional(),
+      },
+    },
+    async ({ plan, renew, revoke }) =>
+      run(async () => {
+        const found = await resolvePlan(user, plan);
+        if (revoke) {
+          const removed = await unsharePlan(user, found.id);
+          return removed
+            ? `Teilen von „${found.name}“ beendet – der Link funktioniert nicht mehr. Bereits übernommene Kopien bleiben.`
+            : `„${found.name}“ war nicht geteilt.`;
+        }
+        const token = await sharePlan(user, found.id, { renew: renew ?? false });
+        return `Link für „${found.name}“${renew ? " (neu, der alte gilt nicht mehr)" : ""}: ${shareUrl(token)}`;
+      }),
+  );
+
+  server.registerTool(
+    "import_shared_plan",
+    {
+      title: "Geteilten Plan übernehmen",
+      description:
+        "Übernimmt einen geteilten Plan (Link …/p/… oder nur der Token) als eigene Kopie. " +
+        "Spätere Änderungen am Original kommen nicht an.",
+      inputSchema: { link: z.string().describe("Der Teilen-Link") },
+    },
+    async ({ link }) =>
+      run(async () => {
+        const token = tokenFromLink(link);
+        if (!token) throw new ServiceError("Das sieht nicht wie ein Teilen-Link aus (…/p/ und 64 Zeichen).");
+        const copied = await importSharedPlan(user, token);
+        const items = await listPlanItems(copied.planId);
+        return `Plan „${copied.name}“ übernommen (${exerciseCount(items.length)}). Studio und bevorzugte Maschinen legt das Training fest.`;
       }),
   );
 

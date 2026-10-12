@@ -18,7 +18,7 @@ import {
   verifyPassword,
 } from "@/lib/auth";
 import { newId } from "@/lib/ids";
-import { optionalText, text } from "@/lib/formdata";
+import { optionalText, safeNextPath, text } from "@/lib/formdata";
 import { appUrl, sendPasswordResetEmail } from "@/lib/mail";
 import { fail, type FormState } from "@/lib/result";
 import { sendVerificationLink } from "@/lib/verification";
@@ -124,7 +124,7 @@ export async function loginAction(
   await createSession(user.id);
 
   // Das Übergangskonto kann nur eines: die Einrichtung abschließen.
-  redirect(user.isSetupAccount ? "/setup" : "/");
+  redirect(user.isSetupAccount ? "/setup" : (safeNextPath(text(formData, "next")) ?? "/"));
 }
 
 export async function logoutAction(): Promise<void> {

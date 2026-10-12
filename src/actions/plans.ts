@@ -4,10 +4,11 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
-import { requireUser } from "@/lib/auth";
+import { getCurrentUser, requireUser } from "@/lib/auth";
 import { optionalText, text } from "@/lib/formdata";
 import { fail, type FormState } from "@/lib/result";
 import { isServiceError } from "@/lib/services/errors";
+import { importSharedPlan, sharePlan, unsharePlan } from "@/lib/services/plan-sharing";
 import {
   addPlanItem,
   createPlan,
@@ -197,4 +198,36 @@ export async function movePlanExerciseAction(
   const { planId } = await movePlanItem(user, itemId, direction);
 
   revalidatePath(`/plans/${planId}`);
+}
+
+/** Link erzeugen; `renew` ersetzt einen bestehenden, der alte wird ungültig. */
+export async function sharePlanAction(planId: string, renew: boolean): Promise<void> {
+  const user = await requireUser();
+  await sharePlan(user, planId, { renew });
+  revalidatePath(`/plans/${planId}`);
+}
+
+export async function unsharePlanAction(planId: string): Promise<void> {
+  const user = await requireUser();
+  await unsharePlan(user, planId);
+  revalidatePath(`/plans/${planId}`);
+}
+
+/**
+ * Übernimmt einen geteilten Plan. Ohne Anmeldung geht es erst zum Login und
+ * danach zurück auf die Seite des Links.
+ */
+export async function importSharedPlanAction(
+  token: string,
+  _prev: FormState,
+  _formData: FormData,
+): Promise<FormState> {
+  const user = await getCurrentUser();
+  if (!user) redirect(`/login?${new URLSearchParams({ next: `/p/${token}` })}`);
+
+  const result = await guarded(() => importSharedPlan(user, token));
+  if (!result.ok) return result.state;
+
+  revalidatePath("/plans");
+  redirect(`/plans/${result.value.planId}?uebernommen=1`);
 }

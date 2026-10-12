@@ -49,6 +49,11 @@ Homescreen.
 - Mehrere Trainingspläne mit sortierter Übungsreihenfolge und Zielvorgaben
   (Sätze, Wiederholungsbereich, Pausenlänge)
 - Ein Startpaket gängiger Geräte lässt sich per Klick anlegen
+- Pläne teilen: Auf der Planseite einen Link erzeugen – wer ihn hat, sieht den
+  Plan auch ohne Konto und übernimmt ihn mit Konto als eigene Kopie. Geteilt
+  werden Übungen, Zielwerte, Pausen und die Notizen der Einträge; nicht die
+  Plan-Notiz, das Studio oder wer geteilt hat. Der Link lässt sich erneuern
+  oder widerrufen, übernommene Kopien bleiben davon unberührt
 - Übung, Maschine, Studio: Eine Übung (z. B. „Seitheben“) geht an mehreren
   Maschinen, eine Maschine steht in mehreren Studios – beides wird einmal
   zugeordnet und gilt für alle. Im Plan steht nur die Übung; im Training
@@ -387,6 +392,7 @@ dort nichts Brauchbares steht.
 | `recent_workouts`, `training_stats` | Verlauf und Kennzahlen |
 | `create_exercise`, `assign_machine` | Neue Übung anlegen, Maschinen Übungen und Studios zuordnen |
 | `create_plan`, `add_exercise_to_plan` | Plan aufbauen |
+| `share_plan`, `import_shared_plan` | Link zu einem Plan ausgeben, erneuern (`renew`) oder widerrufen (`revoke`); geteilten Plan als Kopie übernehmen |
 | `update_plan_exercise`, `remove_exercise_from_plan` | Zielwerte ändern, Übung entfernen |
 | `start_workout`, `current_workout`, `finish_workout` | Training führen |
 | `edit_workout`, `delete_workout` | Zeiten eines Trainings korrigieren oder es löschen |

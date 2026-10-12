@@ -8,11 +8,15 @@ import {
   movePlanExerciseAction,
   removePlanExerciseAction,
   setPlanArchivedAction,
+  sharePlanAction,
+  unsharePlanAction,
   updatePlanAction,
   updatePlanExerciseAction,
 } from "@/actions/plans";
 import { setPlanGymAction, startWorkoutAction } from "@/actions/workouts";
+import { ConfirmSubmitButton } from "@/components/ConfirmSubmitButton";
 import { AddPlanItemForm, EditPlanItemForm } from "@/components/PlanItemForm";
+import { ShareLink } from "@/components/PlanShare";
 import { PlanForm } from "@/components/PlanForm";
 import { SubmitButton } from "@/components/SubmitButton";
 import { Card, EmptyState, PageHeader, Select } from "@/components/ui";
@@ -25,24 +29,29 @@ import {
   listMovements,
   listPlanItems,
 } from "@/lib/queries";
+import { getPlanShare, shareUrl } from "@/lib/services/plan-sharing";
 
 export const metadata: Metadata = { title: "Plan · GymTracker" };
 
 export default async function PlanDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ uebernommen?: string }>;
 }) {
   const { id } = await params;
+  const { uebernommen } = await searchParams;
   const user = await requireUser();
   const plan = await getPlan(user.id, id);
   if (!plan) notFound();
 
-  const [items, movements, gyms, links] = await Promise.all([
+  const [items, movements, gyms, links, shareToken] = await Promise.all([
     listPlanItems(plan.id),
     listMovements(),
     listGyms(),
     listMachineLinks(),
+    getPlanShare(user, plan.id),
   ]);
   const exercises = movements;
   const rememberedGym = plan.rememberGym
@@ -77,6 +86,13 @@ export default async function PlanDetailPage({
           </Link>
         }
       />
+
+      {uebernommen ? (
+        <p className="mb-4 rounded-xl border border-up/30 bg-up/10 px-4 py-3 text-sm text-up">
+          Plan übernommen – das ist jetzt deine eigene Kopie. Studio und bevorzugte Maschinen
+          legst du selbst fest.
+        </p>
+      ) : null}
 
       {plan.notes ? (
         <p className="mb-4 text-sm text-muted">{plan.notes}</p>
@@ -250,6 +266,50 @@ export default async function PlanDetailPage({
               Speichern
             </SubmitButton>
           </form>
+        </Card>
+      </section>
+
+      <section className="mt-6">
+        <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+          Teilen
+        </h2>
+        <Card className="space-y-3">
+          <p className="text-sm text-muted">
+            Wer den Link hat, sieht den Plan – auch ohne Konto – und kann ihn als eigene Kopie
+            übernehmen. Mit geteilt werden Übungen, Zielwerte, Pausen und die Notizen der
+            Übungen; nicht die Plan-Notiz, dein Studio oder dein Name. Spätere Änderungen
+            kommen bei bereits übernommenen Kopien nicht an.
+          </p>
+          {shareToken ? (
+            <>
+              <ShareLink url={shareUrl(shareToken)} />
+              <div className="flex flex-wrap gap-3 border-t border-line-soft pt-3">
+                <form action={sharePlanAction.bind(null, plan.id, true)}>
+                  <ConfirmSubmitButton
+                    variant="secondary"
+                    size="sm"
+                    message="Neuen Link erzeugen? Der bisherige funktioniert dann nicht mehr."
+                  >
+                    Neuer Link
+                  </ConfirmSubmitButton>
+                </form>
+                <form action={unsharePlanAction.bind(null, plan.id)}>
+                  <ConfirmSubmitButton
+                    size="sm"
+                    message="Teilen beenden? Der Link funktioniert dann nicht mehr; bereits übernommene Kopien bleiben."
+                  >
+                    Teilen beenden
+                  </ConfirmSubmitButton>
+                </form>
+              </div>
+            </>
+          ) : (
+            <form action={sharePlanAction.bind(null, plan.id, false)}>
+              <SubmitButton variant="secondary" size="sm" className="w-full">
+                Link zum Teilen erzeugen
+              </SubmitButton>
+            </form>
+          )}
         </Card>
       </section>
 

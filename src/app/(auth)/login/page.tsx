@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { loginAction } from "@/actions/auth";
 import { AuthForm } from "@/components/AuthForm";
 import { SETUP_LOGIN } from "@/db/bootstrap";
+import { safeNextPath } from "@/lib/formdata";
 import { isSetupPending } from "@/lib/groups";
 
 export const metadata: Metadata = { title: "Anmelden · GymTracker" };
@@ -10,9 +11,9 @@ export const metadata: Metadata = { title: "Anmelden · GymTracker" };
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ deleted?: string; eingerichtet?: string }>;
+  searchParams: Promise<{ deleted?: string; eingerichtet?: string; next?: string }>;
 }) {
-  const { deleted, eingerichtet } = await searchParams;
+  const { deleted, eingerichtet, next } = await searchParams;
   const setupPending = await isSetupPending();
 
   return (
@@ -46,7 +47,7 @@ export default async function LoginPage({
         </p>
       ) : null}
 
-      <AuthForm mode="login" action={loginAction} />
+      <AuthForm mode="login" action={loginAction} next={safeNextPath(next)} />
     </>
   );
 }
