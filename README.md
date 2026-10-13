@@ -601,7 +601,8 @@ Nützliche Skripte:
 | `npm run build` | Produktions-Build (Standalone-Output für Docker) |
 | `npm run typecheck` | TypeScript prüfen |
 | `npm run lint` | ESLint mit den Next.js-Regeln (React, Hooks, Barrierefreiheit) |
-| `npm test` | Unit-Tests (Volumenrechnung, Formatierung, Login-Schutz) |
+| `npm test` | Unit- und Service-Tests: Volumen, Zusammenführen, Namensauflösung, Rechte, Teilen – je Testdatei gegen eine frische SQLite-Datenbank |
+| `npm run e2e` | Browser-Tests (Playwright) gegen den Produktions-Build – vorher `npm run build`; lokal mit vorhandenem Chromium: `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/pfad/zu/chromium` |
 | `npm run db:generate` | Migration aus `src/db/schema.ts` erzeugen |
 | `npm run db:migrate` | Migrationen anwenden |
 
