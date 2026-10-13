@@ -428,6 +428,24 @@ export const planExercises = sqliteTable(
   (t) => [index("plan_exercises_plan_idx").on(t.planId, t.position)],
 );
 
+/**
+ * Öffentlicher Link auf einen Plan – einer pro Plan. Wer ihn hat, sieht den
+ * Plan und kann ihn als Kopie übernehmen; ändern kann er das Original nicht.
+ * Der Token steht im Klartext, damit der Besitzer den Link wieder kopieren
+ * kann: Er öffnet nur diesen einen Plan zum Lesen und ist widerrufbar.
+ */
+export const planShares = sqliteTable(
+  "plan_shares",
+  {
+    planId: text("plan_id")
+      .primaryKey()
+      .references(() => plans.id, { onDelete: "cascade" }),
+    token: text("token").notNull(),
+    createdAt: integer("created_at").notNull().default(now),
+  },
+  (t) => [uniqueIndex("plan_shares_token_unique").on(t.token)],
+);
+
 export const workouts = sqliteTable(
   "workouts",
   {

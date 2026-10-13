@@ -12,3 +12,12 @@ export function text(formData: FormData, key: string, fallback = ""): string {
   const value = formData.get(key);
   return value === null ? fallback : String(value);
 }
+
+/**
+ * Ziel nach dem Login – nur ein Pfad auf dieser Instanz. „//host“ und „/\host“
+ * würden Browser als fremde Adresse lesen: eine offene Weiterleitung.
+ */
+export function safeNextPath(value: string | null | undefined): string | null {
+  if (!value || !value.startsWith("/") || value.startsWith("//") || value.includes("\\")) return null;
+  return /^[\x21-\x7e]+$/.test(value) ? value : null;
+}

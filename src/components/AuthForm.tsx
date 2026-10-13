@@ -13,10 +13,13 @@ export function AuthForm({
   mode,
   action,
   requiresCode = false,
+  next,
 }: {
   mode: "login" | "register";
   action: Action;
   requiresCode?: boolean;
+  /** Wohin es nach dem Login geht, z. B. zurück zu einem geteilten Plan. */
+  next?: string | null;
 }) {
   const [state, formAction] = useActionState<FormState, FormData>(action, {});
   const isRegister = mode === "register";
@@ -24,6 +27,7 @@ export function AuthForm({
   return (
     <Card className="p-5">
       <form action={formAction} className="space-y-4">
+        {next ? <input type="hidden" name="next" value={next} /> : null}
         {isRegister ? (
           <Field label="Name">
             <Input name="name" autoComplete="name" required placeholder="Pascal" />
