@@ -575,6 +575,7 @@ Nützliche Skripte:
 | `npm run dev` | Entwicklungsserver |
 | `npm run build` | Produktions-Build (Standalone-Output für Docker) |
 | `npm run typecheck` | TypeScript prüfen |
+| `npm run lint` | ESLint mit den Next.js-Regeln (React, Hooks, Barrierefreiheit) |
 | `npm test` | Unit-Tests (Volumenrechnung, Formatierung, Login-Schutz) |
 | `npm run db:generate` | Migration aus `src/db/schema.ts` erzeugen |
 | `npm run db:migrate` | Migrationen anwenden |

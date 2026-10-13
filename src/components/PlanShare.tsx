@@ -1,21 +1,21 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useState, useSyncExternalStore } from "react";
 
 import { SubmitButton } from "@/components/SubmitButton";
 import { ErrorMessage } from "@/components/ui";
 import type { FormState } from "@/lib/result";
 
+const noSubscribe = () => () => {};
+
 /** Teilen-Link mit Kopier-Schaltfläche; ohne APP_URL ergänzt der Browser die Adresse. */
 export function ShareLink({ url }: { url: string }) {
-  const [full, setFull] = useState(url);
   const [copied, setCopied] = useState(false);
-  // Erst im Browser bekannt – im Effekt, damit Server und Client gleich rendern.
-  const [canShare, setCanShare] = useState(false);
-  useEffect(() => {
-    if (url.startsWith("/")) setFull(window.location.origin + url);
-    setCanShare("share" in navigator);
-  }, [url]);
+  // Adresse und Teilen-Menü kennt erst der Browser; auf dem Server bleibt es
+  // beim relativen Link und ohne Teilen-Knopf – ohne Hydration-Fehler.
+  const origin = useSyncExternalStore(noSubscribe, () => window.location.origin, () => "");
+  const canShare = useSyncExternalStore(noSubscribe, () => "share" in navigator, () => false);
+  const full = url.startsWith("/") ? origin + url : url;
 
   return (
     <div>

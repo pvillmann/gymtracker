@@ -37,7 +37,7 @@ const hashToken = sha256Hex;
  * nach dem tatsächlichen Protokoll. COOKIE_SECURE=true erzwingt es für
  * Reverse Proxies, die kein X-Forwarded-Proto mitschicken.
  */
-async function useSecureCookie(): Promise<boolean> {
+async function shouldUseSecureCookie(): Promise<boolean> {
   if (process.env.COOKIE_SECURE === "true") return true;
   if (process.env.COOKIE_SECURE === "false") return false;
 
@@ -62,7 +62,7 @@ export async function createSession(userId: string): Promise<void> {
   store.set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: await useSecureCookie(),
+    secure: await shouldUseSecureCookie(),
     path: "/",
     maxAge: SESSION_TTL_SECONDS,
   });
