@@ -18,6 +18,7 @@ Homescreen.
 | 📋 **Pläne** | Übungen mit Zielwerten; die Maschine wählt das Training nach Studio; per Link teilen |
 | 📈 **Fortschritt** | 1RM-Verlauf, Rekorde, Wochenvolumen, Serien |
 | 💬 **Per Chat** | Eigener MCP-Server: „Latzug 20 kg, 12 Wiederholungen“ wird zum Satz |
+| 🎨 **Darstellung** | Kopfleiste und Navigation als schwebende Glasebene über einem dezenten Farbverlauf; Akzentfarbe und Glasstärke pro Konto |
 | 🔒 **Selbst gehostet** | Ein Container, eine SQLite-Datei, keine Cloud, keine Tracker |
 
 **Inhalt:** [Was drin ist](#was-drin-ist) ·
@@ -117,6 +118,16 @@ Homescreen.
   wger-Instanz ein
 - Vier Messarten: Gewicht × Wiederholungen, Körpergewicht (+ Zusatzgewicht),
   Körpergewicht − Gegengewicht (assistierte Maschinen) und Zeit
+
+**Darstellung**
+- Kopfleiste, Trainingsleiste und Navigation liegen als schwebende Ebene über
+  dem Inhalt, die Navigation als Kapsel wie bei iOS. Inhalte (Sätze, Zahlen)
+  bleiben auf deckenden Karten – im Gym zählt Lesbarkeit
+- In den Einstellungen wählt jedes Konto Akzentfarbe (Blau, Cyan, Violett,
+  Orange, Pink, Lime) und Glasstärke (deckend, gedämpft, klar). Standard:
+  Blau, deckend. Grün und Rot bleiben für besser/schlechter reserviert
+- Ist auf dem Gerät „Transparenz reduzieren“ oder „Kontrast erhöhen“ an,
+  bleibt die Ebene deckend
 
 **Fortschritt sehen**
 - Pro Übung: Verlaufskurve des besten Satzes, schwerstes Gewicht, bestes Training

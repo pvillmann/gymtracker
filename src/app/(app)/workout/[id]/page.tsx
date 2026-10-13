@@ -218,7 +218,7 @@ export default async function WorkoutPage({
 
   return (
     <>
-      <div className="sticky top-14 z-20 -mx-5 mb-4 border-b border-line-soft bg-ink/95 px-5 py-3 backdrop-blur">
+      <div className="glass sticky top-14 z-20 -mx-5 mb-4 border-b px-5 py-3">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="truncate font-bold">{workout.name}</p>

@@ -14,6 +14,7 @@ import {
   requireUser,
   verifyPassword,
 } from "@/lib/auth";
+import { isAccent, isGlassLevel } from "@/lib/appearance";
 import { text } from "@/lib/formdata";
 import { fail, type FormState } from "@/lib/result";
 import { handOverCatalog } from "@/lib/services/catalog";
@@ -47,6 +48,25 @@ export async function updateProfileAction(
 
   revalidatePath("/settings");
   revalidatePath("/stats");
+  return { ok: true };
+}
+
+/** Akzentfarbe und Glasstärke – gilt sofort für alle Seiten des Kontos. */
+export async function updateAppearanceAction(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const user = await requireUser();
+  const accentColor = text(formData, "accentColor");
+  const glass = text(formData, "glass");
+  if (!isAccent(accentColor) || !isGlassLevel(glass)) {
+    return fail("Diese Auswahl gibt es nicht.");
+  }
+
+  await db.update(users).set({ accentColor, glass }).where(eq(users.id, user.id));
+
+  // Das Layout trägt Farbe und Glas – also alles neu rendern.
+  revalidatePath("/", "layout");
   return { ok: true };
 }
 

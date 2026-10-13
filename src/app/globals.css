@@ -10,8 +10,9 @@
   --color-muted: #97a4b5;
   --color-faint: #7b8899;
 
-  --color-accent: #c8f14e;
-  --color-accent-dim: #9dbf3a;
+  /* Standard Blau; pro Nutzer überschrieben, siehe lib/appearance.ts. */
+  --color-accent: #4f9dff;
+  --color-accent-dim: #3b82e0;
   --color-up: #4ade80;
   --color-down: #f87171;
   --color-flat: #94a3b8;
@@ -34,10 +35,64 @@ html {
 }
 
 body {
-  background-color: var(--color-ink);
+  /* Transparent, damit die Farbflächen (.app-backdrop) durchscheinen –
+     die Grundfarbe trägt html. */
+  background-color: transparent;
   color: var(--color-fg);
   font-family: var(--font-sans);
   overscroll-behavior-y: none;
+}
+
+/*
+ * Dezente Farbflächen hinter der App – erst sie machen die schwebende Ebene
+ * als eigene Schicht sichtbar. Sie folgen der Akzentfarbe.
+ */
+.app-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(45% 30% at 15% 10%, color-mix(in srgb, var(--color-accent) 14%, transparent), transparent 70%),
+    radial-gradient(45% 35% at 90% 45%, rgb(56 189 248 / 0.08), transparent 70%),
+    radial-gradient(55% 35% at 25% 95%, rgb(167 139 250 / 0.09), transparent 70%),
+    var(--color-ink);
+}
+
+/*
+ * Die schwebende Ebene (Kopfleiste, Navigation, Trainingsleiste). Inhalte
+ * bleiben auf deckenden Karten – Glas nur für das, was über ihnen liegt.
+ * Stufe über data-glass am App-Container: solid (Standard), medium, clear.
+ */
+.glass {
+  background: var(--color-surface);
+  border-color: var(--color-line);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.08),
+    0 10px 30px rgb(0 0 0 / 0.35);
+}
+[data-glass="medium"] .glass,
+[data-glass="clear"] .glass {
+  -webkit-backdrop-filter: blur(22px) saturate(170%);
+  backdrop-filter: blur(22px) saturate(170%);
+  border-color: rgb(255 255 255 / 0.12);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.2),
+    0 10px 30px rgb(0 0 0 / 0.35);
+}
+[data-glass="medium"] .glass {
+  background: rgb(26 31 39 / 0.72);
+}
+[data-glass="clear"] .glass {
+  background: rgb(255 255 255 / 0.07);
+}
+/* Systemeinstellungen gehen vor: dann ist Glas immer deckend. */
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  [data-glass] .glass {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: var(--color-surface);
+  }
 }
 
 /* Zahlen sollen beim Hochzählen nicht springen. */

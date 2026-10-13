@@ -3,12 +3,19 @@ import type { Metadata } from "next";
 import { logoutAction } from "@/actions/auth";
 import { SubmitButton } from "@/components/SubmitButton";
 import {
+  AppearanceForm,
   DeleteAccountForm,
   PasswordForm,
   ProfileForm,
 } from "@/components/SettingsForms";
 import { ApiTokenManager } from "@/components/ApiTokenManager";
 import { ButtonLink, Card, PageHeader } from "@/components/ui";
+import {
+  DEFAULT_ACCENT,
+  DEFAULT_GLASS,
+  isAccent,
+  isGlassLevel,
+} from "@/lib/appearance";
 import { requireUser } from "@/lib/auth";
 import { listApiTokens } from "@/lib/api-tokens";
 import { isAdmin } from "@/lib/groups";
@@ -33,6 +40,18 @@ export default async function SettingsPage() {
         </h2>
         <Card>
           <ProfileForm name={user.name} bodyweightKg={user.bodyweightKg} />
+        </Card>
+      </section>
+
+      <section className="mb-6">
+        <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+          Darstellung
+        </h2>
+        <Card>
+          <AppearanceForm
+            accent={isAccent(user.accentColor) ? user.accentColor : DEFAULT_ACCENT}
+            glass={isGlassLevel(user.glass) ? user.glass : DEFAULT_GLASS}
+          />
         </Card>
       </section>
 

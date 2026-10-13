@@ -73,3 +73,25 @@ test("Login: falsches Ziel nach dem Login wird ignoriert", async ({ page }) => {
   await login(page, "ben@e2e.local");
   await expect(page).toHaveURL("/");
 });
+
+test("Darstellung: Standard Blau und deckend, pro Konto umstellbar", async ({ page }) => {
+  const errors = watchErrors(page);
+  await page.goto("/login");
+  await login(page, "ben@e2e.local");
+
+  const app = page.locator("[data-glass]");
+  await expect(app).toHaveAttribute("data-glass", "solid");
+  expect(await app.evaluate((el) => getComputedStyle(el).getPropertyValue("--color-accent").trim())).toBe("#4f9dff");
+
+  await page.goto("/settings");
+  await page.locator("label", { hasText: "Violett" }).click();
+  await page.locator("label", { hasText: "Gedämpft" }).click();
+  await page.locator("form", { hasText: "Akzentfarbe" }).getByRole("button", { name: "Speichern" }).click();
+  await expect(page.getByText("Gespeichert.")).toBeVisible();
+
+  await page.goto("/plans");
+  await expect(app).toHaveAttribute("data-glass", "medium");
+  expect(await app.evaluate((el) => getComputedStyle(el).getPropertyValue("--color-accent").trim())).toBe("#a78bfa");
+  expect(await page.locator("nav ul").evaluate((el) => getComputedStyle(el).backdropFilter)).toContain("blur");
+  expect(errors).toEqual([]);
+});
