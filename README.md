@@ -477,6 +477,14 @@ docker compose cp gymtracker:/data/backup.db ./gym-backup-$(date +%F).db
 Ein einfaches `cp` der Datei reicht nicht zuverlässig, solange die App läuft:
 SQLite schreibt im WAL-Modus, die Änderungen stecken dann noch in `gym.db-wal`.
 
+**Automatisch vor Updates:** Bringt ein neues Image Datenbank-Migrationen mit,
+legt GymTracker vor dem Anwenden eine Kopie unter `/data/backups/` an
+(`gym-<Zeitpunkt>-vor-<Migration>.db`, die letzten fünf bleiben liegen).
+Schlägt eine Migration fehl, startet der Container nicht – dann das alte Image
+nehmen und die Kopie zurück an `/data/gym.db` legen. Abschalten lässt sich das
+mit `DB_BACKUP_BEFORE_MIGRATION=false`. Es ersetzt kein Backup außerhalb des
+Servers.
+
 ## Update
 
 Zwei Wege, je nachdem ob du das fertige Image aus der GitHub Container
@@ -584,6 +592,7 @@ Nützliche Skripte:
 | `SMTP_FROM` | — | Pflicht. Absender inkl. Anzeigename, z. B. `GymTracker <noreply@example.com>` |
 | `SMTP_SECURE` | automatisch (Port 465) | Erzwingt implizites TLS unabhängig vom Port |
 | `APP_URL` | — | Pflicht. Basis-URL für Links in Mails, ohne `/` am Ende |
+| `DB_BACKUP_BEFORE_MIGRATION` | `true` | Vor ausstehenden Migrationen eine Kopie nach `backups/` neben der Datenbank schreiben |
 | `TZ` | Systemzeitzone | Bestimmt, wann eine Trainingswoche beginnt |
 | `PORT` | `3000` | Port des Servers |
 
