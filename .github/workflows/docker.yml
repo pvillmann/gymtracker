@@ -21,6 +21,24 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  # Typprüfung und Tests – schneller als der Image-Build und mit klarer
+  # Fehlermeldung statt eines abgebrochenen Docker-Schritts.
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Node einrichten
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
   build:
     runs-on: ubuntu-latest
     steps:

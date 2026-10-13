@@ -11,6 +11,24 @@ Für das Handy gebaut: große Tap-Ziele, Gewicht und Wiederholungen direkt
 eintippen, dunkles Design, funktioniert als Web-App auf dem
 Homescreen.
 
+| | |
+| --- | --- |
+| 📱 **Im Gym** | Satz für Satz mitschreiben, Vergleich zum letzten Mal an derselben Maschine, Pausentimer |
+| 🏋️ **Maschinen & Studios** | Gemeinsamer Katalog mit Fotos, Übersetzung, Eigengewicht, Gewicht je Seite oder Stufen |
+| 📋 **Pläne** | Übungen mit Zielwerten; die Maschine wählt das Training nach Studio; per Link teilen |
+| 📈 **Fortschritt** | 1RM-Verlauf, Rekorde, Wochenvolumen, Serien |
+| 💬 **Per Chat** | Eigener MCP-Server: „Latzug 20 kg, 12 Wiederholungen“ wird zum Satz |
+| 🔒 **Selbst gehostet** | Ein Container, eine SQLite-Datei, keine Cloud, keine Tracker |
+
+**Inhalt:** [Was drin ist](#was-drin-ist) ·
+[Schnellstart](#schnellstart-mit-docker) ·
+[E-Mail](#e-mail-versand) ·
+[Administration](#benutzergruppen-und-administration) ·
+[MCP / Claude](#anbindung-an-claude-mcp) ·
+[Backup](#backup) · [Update](#update) ·
+[Sicherheit](#sicherheit) ·
+[Entwicklung](#lokale-entwicklung) · [Technik](#technik)
+
 ## Screenshots
 
 <table>
@@ -215,6 +233,12 @@ gym.example.com {
 
 Und in der `docker-compose.yml` den Port auf `127.0.0.1:3000:3000` einschränken,
 damit der Container nicht direkt aus dem Netz erreichbar ist.
+
+**Host-Header:** Next.js vergleicht bei jedem Formular-Absenden die Herkunft
+(`Origin`) mit dem `Host` bzw. `X-Forwarded-Host` – das ist der Schutz gegen
+untergeschobene Formulare von fremden Seiten. Caddy und Traefik reichen den
+Host durch; bei nginx `proxy_set_header Host $host;` setzen, sonst lehnt die
+App Formulare ab.
 
 **Upload-Größe:** Handyfotos sind schnell 5–10 MB; GymTracker nimmt bis 15 MB
 an. Caddy und Traefik begrenzen standardmäßig nicht, **nginx schon (1 MB)** –
@@ -493,6 +517,41 @@ Private** stellst, muss sich der Server einmalig einloggen, z. B. mit einem
 echo "<dein-token>" | docker login ghcr.io -u <dein-github-nutzername> --password-stdin
 ```
 
+## Sicherheit
+
+Was GymTracker selbst mitbringt:
+
+- **Passwörter** als scrypt-Hash; Session-, Mail- und API-Tokens nur als
+  SHA-256-Hash in der Datenbank. Eine gestohlene `gym.db` öffnet keine Sitzung.
+- **Login-Bremse:** nach 10 Fehlversuchen für dieselbe Adresse 15 Minuten
+  Pause. Gezählt wird im Speicher des Containers, ein Neustart setzt zurück.
+  Die Kehrseite: Wer deine Adresse kennt, kann deinen Login so eine
+  Viertelstunde blockieren – der Reverse Proxy (fail2ban, Rate-Limit) ist der
+  bessere Ort für eine Bremse je IP.
+- **Header:** kein Einbetten in fremde Seiten (`frame-ancestors 'none'`),
+  `nosniff`, sparsamer Referrer; Links mit Schlüssel in der URL (Upload,
+  geteilte Pläne) mit `no-referrer` und `noindex`.
+- **Server Actions** prüfen in Next.js die Herkunft (Origin gegen Host) –
+  das ist der CSRF-Schutz der Formulare. Hinter einem Reverse Proxy muss der
+  deshalb den `Host`-Header durchreichen (siehe [Reverse Proxy](#hinter-einem-reverse-proxy)).
+- **Fotos** werden serverseitig neu kodiert (WebP, ohne Metadaten), mit
+  Pixel-Obergrenze gegen Dekompressionsbomben, und nur angemeldeten Nutzern
+  ausgeliefert.
+- **Rechte:** Trainings, Pläne und Einstellungen sieht nur ihr Besitzer – auch
+  kein Administrator. Den Katalog (Übungen, Maschinen, Studios) darf jeder
+  bearbeiten; jede Änderung steht im Änderungsprotokoll.
+
+Was du selbst tun solltest:
+
+- **TLS davor.** Ohne HTTPS gehen Passwort, Session-Cookie und MCP-Schlüssel
+  im Klartext übers Netz.
+- **Registrierung zumachen** (`REGISTRATION_CODE`), wenn die Instanz aus dem
+  Internet erreichbar ist.
+- **Backups** der `gym.db` (siehe [Backup](#backup)) – und sie wie Passwörter
+  behandeln: Sie enthalten E-Mail-Adressen und Trainingsdaten.
+- **Updates** einspielen: Das Image wird bei jedem Merge neu gebaut und
+  enthält damit die aktuellen Sicherheitsupdates von Next.js und Co.
+
 ## Lokale Entwicklung
 
 ```bash
@@ -508,6 +567,7 @@ Nützliche Skripte:
 | `npm run dev` | Entwicklungsserver |
 | `npm run build` | Produktions-Build (Standalone-Output für Docker) |
 | `npm run typecheck` | TypeScript prüfen |
+| `npm test` | Unit-Tests (Volumenrechnung, Formatierung, Login-Schutz) |
 | `npm run db:generate` | Migration aus `src/db/schema.ts` erzeugen |
 | `npm run db:migrate` | Migrationen anwenden |
 

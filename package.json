@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "node -e \"const{cpSync}=require('node:fs');cpSync('public','.next/standalone/public',{recursive:true});cpSync('.next/static','.next/standalone/.next/static',{recursive:true})\" && node .next/standalone/server.js",
     "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/*.test.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/db/migrate.ts"
   },

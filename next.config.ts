@@ -19,6 +19,26 @@ const nextConfig: NextConfig = {
     // Upload-Links tragen ihren Schlüssel in der URL – nie weitergeben.
     return [
       {
+        // Für alle Seiten: nicht in fremde Frames (Clickjacking auf Buttons wie
+        // „Plan löschen“), keine MIME-Ratespiele, keine vollen URLs nach außen.
+        source: "/:path*",
+        headers: [
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=()" },
+        ],
+      },
+      {
+        // Geteilte Pläne tragen ihren Schlüssel ebenfalls in der URL.
+        source: "/p/:token*",
+        headers: [
+          { key: "Referrer-Policy", value: "no-referrer" },
+          { key: "X-Robots-Tag", value: "noindex" },
+        ],
+      },
+      {
         source: "/upload/:token*",
         headers: [
           { key: "Referrer-Policy", value: "no-referrer" },

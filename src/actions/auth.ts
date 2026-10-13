@@ -20,6 +20,7 @@ import {
 import { newId } from "@/lib/ids";
 import { optionalText, safeNextPath, text } from "@/lib/formdata";
 import { appUrl, sendPasswordResetEmail } from "@/lib/mail";
+import { FailureLimiter } from "@/lib/rate-limit";
 import { fail, type FormState } from "@/lib/result";
 import { sendVerificationLink } from "@/lib/verification";
 
@@ -88,6 +89,9 @@ export async function registerAction(
   redirect(`/verify-email/pending?${query}`);
 }
 
+/** 10 Fehlversuche je Adresse in 15 Minuten, dann Pause. */
+const loginFailures = new FailureLimiter(10, 15 * 60_000);
+
 export async function loginAction(
   _prev: FormState,
   formData: FormData,
@@ -100,6 +104,16 @@ export async function loginAction(
   // damit man nicht durchprobieren kann, welche E-Mails registriert sind.
   if (!parsed.success) return fail("E-Mail oder Passwort ist falsch.");
 
+  // Bremse gegen Passwort-Raten: je Konto-Adresse, nicht je IP – die
+  // ließe sich hinter einem Proxy per X-Forwarded-For beliebig fälschen.
+  const limitKey = parsed.data.email.toLowerCase();
+  const wait = loginFailures.retryAfter(limitKey);
+  if (wait > 0) {
+    return fail(
+      `Zu viele Fehlversuche. Bitte in ${Math.ceil(wait / 60_000)} Minuten erneut versuchen.`,
+    );
+  }
+
   const found = await db
     .select()
     .from(users)
@@ -108,8 +122,10 @@ export async function loginAction(
 
   const user = found[0];
   if (!user || !(await verifyPassword(parsed.data.password, user.passwordHash))) {
+    loginFailures.fail(limitKey);
     return fail("E-Mail oder Passwort ist falsch.");
   }
+  loginFailures.reset(limitKey);
 
   // Vor der Verifizierungs-Weiterleitung prüfen, sonst landet ein gesperrtes
   // unbestätigtes Konto im Bestätigungsablauf statt an dieser Wand.
