@@ -232,15 +232,15 @@ export async function movePlanItem(
   const [reordered] = siblings.splice(index, 1);
   siblings.splice(targetIndex, 0, reordered);
 
-  // Positionen komplett neu vergeben, damit keine Lücken entstehen.
-  for (const [position, sibling] of siblings.entries()) {
-    if (sibling.position !== position) {
-      await db
-        .update(planExercises)
-        .set({ position })
-        .where(eq(planExercises.id, sibling.id));
+  // Positionen komplett neu vergeben, damit keine Lücken entstehen – in
+  // einem Zug, sonst stünden nach einem Abbruch zwei Einträge auf einer Stelle.
+  db.transaction((tx) => {
+    for (const [position, sibling] of siblings.entries()) {
+      if (sibling.position !== position) {
+        tx.update(planExercises).set({ position }).where(eq(planExercises.id, sibling.id)).run();
+      }
     }
-  }
+  });
 
   return { planId: item.planId };
 }
@@ -265,9 +265,11 @@ export async function reorderPlan(
   const front = [...new Set(firstItemIds)];
   if (front.some((id) => !known.has(id))) throw new ServiceError("Ein Eintrag gehört nicht zu diesem Plan.");
   const order = [...front, ...items.map((i) => i.id).filter((id) => !front.includes(id))];
-  for (const [position, id] of order.entries()) {
-    await db.update(planExercises).set({ position }).where(eq(planExercises.id, id));
-  }
+  db.transaction((tx) => {
+    for (const [position, id] of order.entries()) {
+      tx.update(planExercises).set({ position }).where(eq(planExercises.id, id)).run();
+    }
+  });
 }
 
 /**
