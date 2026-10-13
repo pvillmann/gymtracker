@@ -240,6 +240,27 @@ untergeschobene Formulare von fremden Seiten. Caddy und Traefik reichen den
 Host durch; bei nginx `proxy_set_header Host $host;` setzen, sonst lehnt die
 App Formulare ab.
 
+**Bremse je IP:** GymTracker bremst Fehlversuche je Adresse (siehe
+[Sicherheit](#sicherheit)). Eine Bremse je IP gehört an den Proxy, der die
+echte Adresse kennt – für nginx etwa:
+
+```nginx
+limit_req_zone $binary_remote_addr zone=gym_login:10m rate=10r/m;
+
+server {
+    # …
+    location = /login {
+        limit_req zone=gym_login burst=5 nodelay;
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+Caddy bringt dafür kein Bordmittel mit; dort hilft das Plugin
+`caddy-ratelimit` oder fail2ban auf das Zugriffslog.
+
 **Upload-Größe:** Handyfotos sind schnell 5–10 MB; GymTracker nimmt bis 15 MB
 an. Caddy und Traefik begrenzen standardmäßig nicht, **nginx schon (1 MB)** –
 dort `client_max_body_size 16m;` setzen, sonst scheitert der Foto-Upload mit
@@ -534,11 +555,15 @@ Was GymTracker selbst mitbringt:
 - **Login-Bremse:** nach 10 Fehlversuchen für dieselbe Adresse 15 Minuten
   Pause. Gezählt wird im Speicher des Containers, ein Neustart setzt zurück.
   Die Kehrseite: Wer deine Adresse kennt, kann deinen Login so eine
-  Viertelstunde blockieren – der Reverse Proxy (fail2ban, Rate-Limit) ist der
-  bessere Ort für eine Bremse je IP.
-- **Header:** kein Einbetten in fremde Seiten (`frame-ancestors 'none'`),
+  Viertelstunde blockieren – der Reverse Proxy ist der bessere Ort für eine
+  Bremse je IP (Beispiel unter [Reverse Proxy](#hinter-einem-reverse-proxy)).
+- **Content-Security-Policy mit Nonce:** Jede Seite bekommt pro Anfrage
+  einen Zufallswert; nur Skripte, die Next.js selbst damit ausliefert,
+  laufen (`src/proxy.ts`). Dazu: kein Einbetten in fremde Seiten,
   `nosniff`, sparsamer Referrer; Links mit Schlüssel in der URL (Upload,
-  geteilte Pläne) mit `no-referrer` und `noindex`.
+  geteilte Pläne) mit `no-referrer` und `noindex`. Inline-Styles bleiben
+  erlaubt (Diagramme), `upgrade-insecure-requests` fehlt bewusst – sonst
+  ginge der Betrieb über `http://` im Heimnetz nicht mehr.
 - **Server Actions** prüfen in Next.js die Herkunft (Origin gegen Host) –
   das ist der CSRF-Schutz der Formulare. Hinter einem Reverse Proxy muss der
   deshalb den `Host`-Header durchreichen (siehe [Reverse Proxy](#hinter-einem-reverse-proxy)).
