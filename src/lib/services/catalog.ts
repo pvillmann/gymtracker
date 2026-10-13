@@ -50,9 +50,12 @@ export async function handOverCatalog(userId: string): Promise<void> {
   }
   if (!successor) return;
 
-  for (const table of [movements, equipment, gyms]) {
-    await db.update(table).set({ userId: successor }).where(eq(table.userId, userId));
-  }
+  const heir = successor;
+  db.transaction((tx) => {
+    for (const table of [movements, equipment, gyms]) {
+      tx.update(table).set({ userId: heir }).where(eq(table.userId, userId)).run();
+    }
+  });
 }
 
 

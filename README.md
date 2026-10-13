@@ -11,6 +11,25 @@ Für das Handy gebaut: große Tap-Ziele, Gewicht und Wiederholungen direkt
 eintippen, dunkles Design, funktioniert als Web-App auf dem
 Homescreen.
 
+| | |
+| --- | --- |
+| 📱 **Im Gym** | Satz für Satz mitschreiben, Vergleich zum letzten Mal an derselben Maschine, Pausentimer |
+| 🏋️ **Maschinen & Studios** | Gemeinsamer Katalog mit Fotos, Übersetzung, Eigengewicht, Gewicht je Seite oder Stufen |
+| 📋 **Pläne** | Übungen mit Zielwerten; die Maschine wählt das Training nach Studio; per Link teilen |
+| 📈 **Fortschritt** | 1RM-Verlauf, Rekorde, Wochenvolumen, Serien |
+| 💬 **Per Chat** | Eigener MCP-Server: „Latzug 20 kg, 12 Wiederholungen“ wird zum Satz |
+| 🎨 **Darstellung** | Kopfleiste und Navigation als schwebende Glasebene über einem dezenten Farbverlauf; Akzentfarbe und Glasstärke pro Konto |
+| 🔒 **Selbst gehostet** | Ein Container, eine SQLite-Datei, keine Cloud, keine Tracker |
+
+**Inhalt:** [Was drin ist](#was-drin-ist) ·
+[Schnellstart](#schnellstart-mit-docker) ·
+[E-Mail](#e-mail-versand) ·
+[Administration](#benutzergruppen-und-administration) ·
+[MCP / Claude](#anbindung-an-claude-mcp) ·
+[Backup](#backup) · [Update](#update) ·
+[Sicherheit](#sicherheit) ·
+[Entwicklung](#lokale-entwicklung) · [Technik](#technik)
+
 ## Screenshots
 
 <table>
@@ -99,6 +118,16 @@ Homescreen.
   wger-Instanz ein
 - Vier Messarten: Gewicht × Wiederholungen, Körpergewicht (+ Zusatzgewicht),
   Körpergewicht − Gegengewicht (assistierte Maschinen) und Zeit
+
+**Darstellung**
+- Kopfleiste, Trainingsleiste und Navigation liegen als schwebende Ebene über
+  dem Inhalt, die Navigation als Kapsel wie bei iOS. Inhalte (Sätze, Zahlen)
+  bleiben auf deckenden Karten – im Gym zählt Lesbarkeit
+- In den Einstellungen wählt jedes Konto Akzentfarbe (Blau, Cyan, Violett,
+  Orange, Pink, Lime) und Glasstärke (deckend, gedämpft, klar). Standard:
+  Blau, deckend. Grün und Rot bleiben für besser/schlechter reserviert
+- Ist auf dem Gerät „Transparenz reduzieren“ oder „Kontrast erhöhen“ an,
+  bleibt die Ebene deckend
 
 **Fortschritt sehen**
 - Pro Übung: Verlaufskurve des besten Satzes, schwerstes Gewicht, bestes Training
@@ -215,6 +244,33 @@ gym.example.com {
 
 Und in der `docker-compose.yml` den Port auf `127.0.0.1:3000:3000` einschränken,
 damit der Container nicht direkt aus dem Netz erreichbar ist.
+
+**Host-Header:** Next.js vergleicht bei jedem Formular-Absenden die Herkunft
+(`Origin`) mit dem `Host` bzw. `X-Forwarded-Host` – das ist der Schutz gegen
+untergeschobene Formulare von fremden Seiten. Caddy und Traefik reichen den
+Host durch; bei nginx `proxy_set_header Host $host;` setzen, sonst lehnt die
+App Formulare ab.
+
+**Bremse je IP:** GymTracker bremst Fehlversuche je Adresse (siehe
+[Sicherheit](#sicherheit)). Eine Bremse je IP gehört an den Proxy, der die
+echte Adresse kennt – für nginx etwa:
+
+```nginx
+limit_req_zone $binary_remote_addr zone=gym_login:10m rate=10r/m;
+
+server {
+    # …
+    location = /login {
+        limit_req zone=gym_login burst=5 nodelay;
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+Caddy bringt dafür kein Bordmittel mit; dort hilft das Plugin
+`caddy-ratelimit` oder fail2ban auf das Zugriffslog.
 
 **Upload-Größe:** Handyfotos sind schnell 5–10 MB; GymTracker nimmt bis 15 MB
 an. Caddy und Traefik begrenzen standardmäßig nicht, **nginx schon (1 MB)** –
@@ -453,6 +509,14 @@ docker compose cp gymtracker:/data/backup.db ./gym-backup-$(date +%F).db
 Ein einfaches `cp` der Datei reicht nicht zuverlässig, solange die App läuft:
 SQLite schreibt im WAL-Modus, die Änderungen stecken dann noch in `gym.db-wal`.
 
+**Automatisch vor Updates:** Bringt ein neues Image Datenbank-Migrationen mit,
+legt GymTracker vor dem Anwenden eine Kopie unter `/data/backups/` an
+(`gym-<Zeitpunkt>-vor-<Migration>.db`, die letzten fünf bleiben liegen).
+Schlägt eine Migration fehl, startet der Container nicht – dann das alte Image
+nehmen und die Kopie zurück an `/data/gym.db` legen. Abschalten lässt sich das
+mit `DB_BACKUP_BEFORE_MIGRATION=false`. Es ersetzt kein Backup außerhalb des
+Servers.
+
 ## Update
 
 Zwei Wege, je nachdem ob du das fertige Image aus der GitHub Container
@@ -493,6 +557,45 @@ Private** stellst, muss sich der Server einmalig einloggen, z. B. mit einem
 echo "<dein-token>" | docker login ghcr.io -u <dein-github-nutzername> --password-stdin
 ```
 
+## Sicherheit
+
+Was GymTracker selbst mitbringt:
+
+- **Passwörter** als scrypt-Hash; Session-, Mail- und API-Tokens nur als
+  SHA-256-Hash in der Datenbank. Eine gestohlene `gym.db` öffnet keine Sitzung.
+- **Login-Bremse:** nach 10 Fehlversuchen für dieselbe Adresse 15 Minuten
+  Pause. Gezählt wird im Speicher des Containers, ein Neustart setzt zurück.
+  Die Kehrseite: Wer deine Adresse kennt, kann deinen Login so eine
+  Viertelstunde blockieren – der Reverse Proxy ist der bessere Ort für eine
+  Bremse je IP (Beispiel unter [Reverse Proxy](#hinter-einem-reverse-proxy)).
+- **Content-Security-Policy mit Nonce:** Jede Seite bekommt pro Anfrage
+  einen Zufallswert; nur Skripte, die Next.js selbst damit ausliefert,
+  laufen (`src/proxy.ts`). Dazu: kein Einbetten in fremde Seiten,
+  `nosniff`, sparsamer Referrer; Links mit Schlüssel in der URL (Upload,
+  geteilte Pläne) mit `no-referrer` und `noindex`. Inline-Styles bleiben
+  erlaubt (Diagramme), `upgrade-insecure-requests` fehlt bewusst – sonst
+  ginge der Betrieb über `http://` im Heimnetz nicht mehr.
+- **Server Actions** prüfen in Next.js die Herkunft (Origin gegen Host) –
+  das ist der CSRF-Schutz der Formulare. Hinter einem Reverse Proxy muss der
+  deshalb den `Host`-Header durchreichen (siehe [Reverse Proxy](#hinter-einem-reverse-proxy)).
+- **Fotos** werden serverseitig neu kodiert (WebP, ohne Metadaten), mit
+  Pixel-Obergrenze gegen Dekompressionsbomben, und nur angemeldeten Nutzern
+  ausgeliefert.
+- **Rechte:** Trainings, Pläne und Einstellungen sieht nur ihr Besitzer – auch
+  kein Administrator. Den Katalog (Übungen, Maschinen, Studios) darf jeder
+  bearbeiten; jede Änderung steht im Änderungsprotokoll.
+
+Was du selbst tun solltest:
+
+- **TLS davor.** Ohne HTTPS gehen Passwort, Session-Cookie und MCP-Schlüssel
+  im Klartext übers Netz.
+- **Registrierung zumachen** (`REGISTRATION_CODE`), wenn die Instanz aus dem
+  Internet erreichbar ist.
+- **Backups** der `gym.db` (siehe [Backup](#backup)) – und sie wie Passwörter
+  behandeln: Sie enthalten E-Mail-Adressen und Trainingsdaten.
+- **Updates** einspielen: Das Image wird bei jedem Merge neu gebaut und
+  enthält damit die aktuellen Sicherheitsupdates von Next.js und Co.
+
 ## Lokale Entwicklung
 
 ```bash
@@ -508,6 +611,9 @@ Nützliche Skripte:
 | `npm run dev` | Entwicklungsserver |
 | `npm run build` | Produktions-Build (Standalone-Output für Docker) |
 | `npm run typecheck` | TypeScript prüfen |
+| `npm run lint` | ESLint mit den Next.js-Regeln (React, Hooks, Barrierefreiheit) |
+| `npm test` | Unit- und Service-Tests: Volumen, Zusammenführen, Namensauflösung, Rechte, Teilen – je Testdatei gegen eine frische SQLite-Datenbank |
+| `npm run e2e` | Browser-Tests (Playwright) gegen den Produktions-Build – vorher `npm run build`; lokal mit vorhandenem Chromium: `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/pfad/zu/chromium` |
 | `npm run db:generate` | Migration aus `src/db/schema.ts` erzeugen |
 | `npm run db:migrate` | Migrationen anwenden |
 
@@ -524,6 +630,7 @@ Nützliche Skripte:
 | `SMTP_FROM` | — | Pflicht. Absender inkl. Anzeigename, z. B. `GymTracker <noreply@example.com>` |
 | `SMTP_SECURE` | automatisch (Port 465) | Erzwingt implizites TLS unabhängig vom Port |
 | `APP_URL` | — | Pflicht. Basis-URL für Links in Mails, ohne `/` am Ende |
+| `DB_BACKUP_BEFORE_MIGRATION` | `true` | Vor ausstehenden Migrationen eine Kopie nach `backups/` neben der Datenbank schreiben |
 | `TZ` | Systemzeitzone | Bestimmt, wann eine Trainingswoche beginnt |
 | `PORT` | `3000` | Port des Servers |
 

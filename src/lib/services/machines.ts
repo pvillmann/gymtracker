@@ -17,7 +17,7 @@ import {
 import { newId } from "@/lib/ids";
 import { assertCanDeleteCatalog, assertNameFree, nameKey } from "@/lib/services/catalog";
 import { diffFields, logChange } from "@/lib/services/changelog";
-import { recomputeVolumes, requireEquipment } from "@/lib/services/equipment";
+import { recomputeVolumesIn, requireEquipment } from "@/lib/services/equipment";
 import { ServiceError } from "@/lib/services/errors";
 import { requireGym } from "@/lib/services/gyms";
 import { getWgerExercise } from "@/lib/wger";
@@ -299,7 +299,20 @@ export async function updateMovement(
     );
   }
   try {
-    await db.update(movements).set(input).where(eq(movements.id, movementId));
+    // Übung, gespiegelte Varianten und – bei neuer Messart – die Volumina
+    // gemeinsam, sonst passten Messart und Tonnage nach einem Abbruch nicht.
+    db.transaction((tx) => {
+      tx.update(movements).set(input).where(eq(movements.id, movementId)).run();
+      const variants = tx
+        .update(exercises)
+        .set({ muscleGroup: input.muscleGroup, trackingMode: input.trackingMode })
+        .where(eq(exercises.movementId, movementId))
+        .returning({ id: exercises.id })
+        .all();
+      if (modeChanged) {
+        recomputeVolumesIn(tx, { exerciseIds: variants.map((v) => v.id) }, { allModes: true });
+      }
+    });
   } catch (error) {
     if (isDuplicateName(error)) throw new ServiceError("Eine Übung mit diesem Namen gibt es schon.");
     throw error;
@@ -311,14 +324,6 @@ export async function updateMovement(
   });
   if (Object.keys(changes).length > 0) {
     await logChange(user, "movement", movementId, input.name, "update", changes);
-  }
-  const variants = await db
-    .update(exercises)
-    .set({ muscleGroup: input.muscleGroup, trackingMode: input.trackingMode })
-    .where(eq(exercises.movementId, movementId))
-    .returning({ id: exercises.id });
-  if (modeChanged) {
-    await recomputeVolumes({ exerciseIds: variants.map((v) => v.id) }, { allModes: true });
   }
 }
 
@@ -362,8 +367,10 @@ export async function deleteMovement(
     .from(planExercises)
     .where(eq(planExercises.movementId, movementId));
   // Varianten ohne Sätze verweisen noch auf die Übung (ohne Kaskade) – erst sie.
-  await db.delete(exercises).where(eq(exercises.movementId, movementId));
-  await db.delete(movements).where(eq(movements.id, movementId));
+  db.transaction((tx) => {
+    tx.delete(exercises).where(eq(exercises.movementId, movementId)).run();
+    tx.delete(movements).where(eq(movements.id, movementId)).run();
+  });
   await logChange(user, "movement", movementId, movement.name, "delete");
   return { removedFromPlans: inPlans.length };
 }

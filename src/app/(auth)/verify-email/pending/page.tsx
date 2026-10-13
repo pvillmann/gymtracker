@@ -28,7 +28,7 @@ export default async function VerifyEmailPendingPage({
       ) : (
         <p className="mt-2 text-sm text-muted">
           Wir haben {email ? <strong className="text-fg">{email}</strong> : "dir"}{" "}
-          einen Bestätigungslink geschickt. Ohne Klick auf den Link geht's
+          einen Bestätigungslink geschickt. Ohne Klick auf den Link geht’s
           nicht weiter — schau notfalls auch im Spam-Ordner nach.
         </p>
       )}

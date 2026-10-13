@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { connection } from "next/server";
 
 import "./globals.css";
 
@@ -17,7 +18,10 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Jede Seite pro Anfrage rendern: Nur so trägt sie den Nonce der
+  // Content-Security-Policy (siehe src/proxy.ts).
+  await connection();
   return (
     <html lang="de">
       <body className="min-h-dvh antialiased">{children}</body>

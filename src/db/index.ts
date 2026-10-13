@@ -2,4 +2,4 @@
 // gebündelt wird. Das Migrationsskript importiert direkt aus "./connection".
 import "server-only";
 
-export { db, schema } from "./connection";
+export { db, schema, type Tx } from "./connection";

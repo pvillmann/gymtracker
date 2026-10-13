@@ -33,6 +33,10 @@ export const users = sqliteTable(
     name: text("name").notNull(),
     /** Für das Volumen von Körpergewichts-Übungen (Klimmzüge, Dips ...). */
     bodyweightKg: real("bodyweight_kg").notNull().default(80),
+    /** Akzentfarbe der Oberfläche, siehe lib/appearance.ts. */
+    accentColor: text("accent_color").notNull().default("blue"),
+    /** Wie durchsichtig Kopfleiste und Navigation sind: solid, medium, clear. */
+    glass: text("glass").notNull().default("solid"),
     /** null = noch nicht bestätigt. Login ist erst danach möglich. */
     emailVerifiedAt: integer("email_verified_at"),
     /**

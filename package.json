@@ -7,6 +7,9 @@
     "build": "next build",
     "start": "node -e \"const{cpSync}=require('node:fs');cpSync('public','.next/standalone/public',{recursive:true});cpSync('.next/static','.next/standalone/.next/static',{recursive:true})\" && node .next/standalone/server.js",
     "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "tsx --conditions=react-server --test tests/*.test.mts",
+    "e2e": "playwright test",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/db/migrate.ts"
   },
@@ -15,7 +18,7 @@
     "better-sqlite3": "^13.0.3",
     "drizzle-orm": "^0.45.2",
     "next": "^16.3.3",
-    "nodemailer": "^9.1.0",
+    "nodemailer": "^10.1.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "server-only": "^0.0.1",
@@ -23,17 +26,21 @@
     "zod": "^4.5.4"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.0",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^26.4.0",
     "@types/nodemailer": "^8.0.1",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.5",
+    "@typescript/native": "npm:typescript@^7.0.2",
     "drizzle-kit": "^0.31.10",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.4.0",
     "postcss": "^8.5.26",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.23.12",
-    "typescript": "^7.0.2"
+    "typescript": "npm:@typescript/typescript6@^6.0.2"
   },
   "description": "Selbst gehosteter Gym-Tracker: Trainingsplan, Satz-Tracking und Fortschritt."
 }

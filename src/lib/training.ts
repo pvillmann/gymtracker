@@ -1,11 +1,6 @@
 import type { TrackingMode } from "@/db/schema";
 
 /**
- * Bewegtes Gewicht eines Satzes. Bei Körpergewichts-Übungen zählt das
- * Körpergewicht mit, sonst wären Klimmzüge im Volumen immer 0.
- * Zeit-Übungen tragen kein Volumen bei.
- */
-/**
  * Wie ein Gerät die eingestellte Last weitergibt: Übersetzung (0.5 bei einem
  * 2:1-Kabelzug) und Eigengewicht (Schlitten der Beinpresse).
  */
@@ -18,6 +13,11 @@ export type LoadTransfer = {
   level?: boolean;
 };
 
+/**
+ * Bewegtes Gewicht eines Satzes. Bei Körpergewichts-Übungen zählt das
+ * Körpergewicht mit, sonst wären Klimmzüge im Volumen immer 0.
+ * Zeit-Übungen tragen kein Volumen bei.
+ */
 export function setVolume(
   mode: TrackingMode,
   weightKg: number,

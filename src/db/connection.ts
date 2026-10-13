@@ -54,4 +54,10 @@ if (process.env.NODE_ENV !== "production") {
   globalForDb.__gymtrackerDb = db;
 }
 
+/**
+ * Eine laufende Transaktion. better-sqlite3 arbeitet synchron, also auch die
+ * Transaktion: darin kein `await`, sondern `.run()`, `.all()`, `.get()`.
+ */
+export type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
 export { schema };

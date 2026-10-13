@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { BottomNav } from "@/components/BottomNav";
+import { accentStyle } from "@/lib/appearance";
 import { requireUser } from "@/lib/auth";
 
 export default async function AppLayout({
@@ -16,9 +17,11 @@ export default async function AppLayout({
   const initials = user.name.trim().slice(0, 2).toUpperCase();
 
   return (
-    <div className="min-h-dvh">
+    // Akzentfarbe und Glasstärke des Nutzers gelten für alles darunter.
+    <div className="min-h-dvh" style={accentStyle(user.accentColor)} data-glass={user.glass}>
+      <div className="app-backdrop" aria-hidden="true" />
       <header
-        className="sticky top-0 z-30 border-b border-line-soft bg-ink/95 backdrop-blur"
+        className="glass sticky top-0 z-30 border-b"
         style={{ paddingTop: "env(safe-area-inset-top)" }}
       >
         <div className="mx-auto flex h-14 max-w-2xl items-center justify-between px-5">

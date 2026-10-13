@@ -2,7 +2,7 @@ import "server-only";
 
 import { and, eq, inArray, sql } from "drizzle-orm";
 
-import { db } from "@/db";
+import { db, type Tx } from "@/db";
 import {
   equipment,
   equipmentImages,
@@ -74,7 +74,13 @@ export async function updateEquipment(
     assertNameFree(await equipmentNames(), input.name, "Ein Gerät", equipmentId);
   }
   try {
-    await db.update(equipment).set(input).where(eq(equipment.id, equipmentId));
+    // Angaben und bisherige Volumina gemeinsam – sonst stünden bei einem
+    // Abbruch neue Übersetzung und alte Tonnage nebeneinander.
+    db.transaction((tx) => {
+      tx.update(equipment).set(input).where(eq(equipment.id, equipmentId)).run();
+      // Übersetzung und Eigengewicht gelten für alle, die das Gerät benutzen.
+      recomputeVolumesIn(tx, { equipmentId });
+    });
   } catch (error) {
     if (isDuplicateName(error)) throw new ServiceError("Ein Gerät mit diesem Namen gibt es schon.");
     throw error;
@@ -93,8 +99,6 @@ export async function updateEquipment(
   if (Object.keys(changes).length > 0) {
     await logChange(user, "equipment", equipmentId, input.name, "update", changes);
   }
-  // Übersetzung und Eigengewicht gelten für alle, die das Gerät benutzen.
-  await recomputeVolumes({ equipmentId });
 }
 
 /** Hängen an einer Maschine Sätze – bei irgendeinem Nutzer? */
@@ -130,10 +134,13 @@ export async function deleteEquipment(user: User, equipmentId: string): Promise<
     .from(exercises)
     .where(eq(exercises.equipmentId, equipmentId));
 
-  await db.delete(equipment).where(eq(equipment.id, equipmentId));
+  db.transaction((tx) => {
+    tx.delete(equipment).where(eq(equipment.id, equipmentId)).run();
+    // Ohne Gerät gilt wieder das eingestellte Gewicht als Last.
+    recomputeVolumesIn(tx, { exerciseIds: affected.map((e) => e.id) });
+  });
+  // Dateien erst nach dem Commit – ein Rollback brächte sie nicht zurück.
   for (const image of images) await removeImage(image.id);
-  // Ohne Gerät gilt wieder das eingestellte Gewicht als Last.
-  await recomputeVolumes({ exerciseIds: affected.map((e) => e.id) });
   await logChange(user, "equipment", equipmentId, current.name, "delete");
 }
 
@@ -215,11 +222,6 @@ export async function imageExists(imageId: string): Promise<boolean> {
 }
 
 /**
- * Das vorberechnete Volumen der Sätze an die Übersetzung und das Eigengewicht
- * des Geräts anpassen. Betrifft nur Gewicht × Wiederholungen – bei den anderen
- * Messarten spielt das Gerät für die Last keine Rolle.
- */
-/**
  * Rechnet das bewegte Gewicht bestehender Sätze neu. Normalerweise nur für
  * Gewicht × Wiederholungen (Übersetzung, Eigengewicht). `allModes` nimmt die
  * übrigen Messarten dazu – nur beim Wechsel der Messart, denn bei
@@ -227,10 +229,21 @@ export async function imageExists(imageId: string): Promise<boolean> {
  * Sätze.
  */
 export async function recomputeVolumes(
-  scope: { equipmentId: string } | { exerciseIds: string[] },
-  { allModes = false }: { allModes?: boolean } = {},
+  scope: VolumeScope,
+  options: { allModes?: boolean } = {},
 ): Promise<void> {
-  const targets = await db
+  db.transaction((tx) => recomputeVolumesIn(tx, scope, options));
+}
+
+type VolumeScope = { equipmentId: string } | { exerciseIds: string[] };
+
+/** Wie recomputeVolumes, aber innerhalb einer laufenden Transaktion. */
+export function recomputeVolumesIn(
+  tx: Tx,
+  scope: VolumeScope,
+  { allModes = false }: { allModes?: boolean } = {},
+): void {
+  const targets = tx
     .select({
       id: exercises.id,
       trackingMode: exercises.trackingMode,
@@ -254,7 +267,8 @@ export async function recomputeVolumes(
             ? inArray(exercises.id, scope.exerciseIds)
             : sql`0`,
       ),
-    );
+    )
+    .all();
 
   // Dieselbe Rechnung wie setVolume in lib/training.ts, nur in SQL.
   for (const target of targets) {
@@ -271,9 +285,9 @@ export async function recomputeVolumes(
             : target.loadUnit === "level"
               ? sql`0`
               : sql`max(0, (${base} + ${workoutSets.weightKg} * ${factor}) * ${workoutSets.reps})`;
-    await db
-      .update(workoutSets)
+    tx.update(workoutSets)
       .set({ volumeKg: volume })
-      .where(eq(workoutSets.exerciseId, target.id));
+      .where(eq(workoutSets.exerciseId, target.id))
+      .run();
   }
 }

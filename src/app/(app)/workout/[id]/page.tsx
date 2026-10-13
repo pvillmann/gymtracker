@@ -211,12 +211,14 @@ export default async function WorkoutPage({
   // Wer das Beenden vergisst, hat ein Training mit absurder Dauer im Verlauf –
   // und die verzerrt hinterher jede Auswertung über die Trainingszeit. Der
   // letzte Satz sagt, wann tatsächlich Schluss war.
+  // Server-Komponente: wird pro Anfrage gerendert, die Uhrzeit ist gewollt.
+  // eslint-disable-next-line react-hooks/purity
   const runningFor = Math.floor(Date.now() / 1000) - workout.startedAt;
   const lastSet = runningFor > IMPLAUSIBLE_SECONDS ? await lastSetAt(workout.id) : null;
 
   return (
     <>
-      <div className="sticky top-14 z-20 -mx-5 mb-4 border-b border-line-soft bg-ink/95 px-5 py-3 backdrop-blur">
+      <div className="glass sticky top-14 z-20 -mx-5 mb-4 border-b px-5 py-3">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="truncate font-bold">{workout.name}</p>

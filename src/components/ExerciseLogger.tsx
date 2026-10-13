@@ -153,10 +153,18 @@ export function ExerciseLogger({
   activeMachine?: string;
   elsewhere?: LoggerElsewhere | null;
 }) {
-  const boundAction = useMemo(
-    () => logSetAction.bind(null, workoutId),
-    [workoutId],
-  );
+  const [restEndsAt, setRestEndsAt] = useState<number | null>(null);
+  const restSeconds = target?.restSeconds ?? 0;
+  // Nach einem gespeicherten Satz startet die Pause – direkt im Anschluss an
+  // die Action statt in einem Effekt, der auf das Ergebnis reagiert.
+  const boundAction = useMemo(() => {
+    const save = logSetAction.bind(null, workoutId);
+    return async (prev: FormState, formData: FormData) => {
+      const result = await save(prev, formData);
+      if (result.ok && restSeconds > 0) setRestEndsAt(Date.now() + restSeconds * 1000);
+      return result;
+    };
+  }, [workoutId, restSeconds]);
   const [state, formAction] = useActionState<FormState, FormData>(boundAction, {});
   const [isPending, startTransition] = useTransition();
 
@@ -213,7 +221,6 @@ export function ExerciseLogger({
   // Hat der Nutzer schon etwas eingetippt, bleibt es beim Umschalten des
   // Aufwärm-Hakens stehen.
   const [touched, setTouched] = useState(false);
-  const [restEndsAt, setRestEndsAt] = useState<number | null>(null);
 
   const applyPrefill = (warmup: boolean) => {
     const next = prefillFor(warmup);
@@ -232,18 +239,13 @@ export function ExerciseLogger({
     applyPrefill(defaultWarmup);
     // prefillFor hängt nur an loggedSets und previous – beides ändert sich
     // hier mit loggedSets.length.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- siehe oben
   }, [loggedSets.length, defaultWarmup]);
 
   const edit = (setter: (value: string) => void) => (value: string) => {
     setter(value);
     setTouched(true);
   };
-
-  useEffect(() => {
-    if (state.ok && target && target.restSeconds > 0) {
-      setRestEndsAt(Date.now() + target.restSeconds * 1000);
-    }
-  }, [state, target]);
 
   const nextOrdinal = (isWarmup ? warmupsToday : workingToday) + 1;
   const previousForNext = previous

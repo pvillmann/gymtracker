@@ -19,6 +19,26 @@ const nextConfig: NextConfig = {
     // Upload-Links tragen ihren Schlüssel in der URL – nie weitergeben.
     return [
       {
+        // Für alle Antworten: nicht in fremde Frames (Clickjacking auf Buttons
+        // wie „Plan löschen“), keine MIME-Ratespiele, keine vollen URLs nach
+        // außen. Die Content-Security-Policy mit Nonce setzt src/proxy.ts.
+        source: "/:path*",
+        headers: [
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=()" },
+        ],
+      },
+      {
+        // Geteilte Pläne tragen ihren Schlüssel ebenfalls in der URL.
+        source: "/p/:token*",
+        headers: [
+          { key: "Referrer-Policy", value: "no-referrer" },
+          { key: "X-Robots-Tag", value: "noindex" },
+        ],
+      },
+      {
         source: "/upload/:token*",
         headers: [
           { key: "Referrer-Policy", value: "no-referrer" },

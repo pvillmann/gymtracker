@@ -83,10 +83,11 @@ export function BottomNav() {
   return (
     <nav
       aria-label="Hauptnavigation"
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-line-soft bg-ink/95 backdrop-blur"
-      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      // Schwebende Kapsel über dem Inhalt, mit Abstand zum Home-Indikator.
+      className="fixed inset-x-3 z-40"
+      style={{ bottom: "calc(env(safe-area-inset-bottom) + 0.75rem)" }}
     >
-      <ul className="mx-auto flex max-w-2xl">
+      <ul className="glass mx-auto flex max-w-2xl rounded-full border px-1">
         {items.map((item) => {
           const active =
             item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
@@ -97,8 +98,8 @@ export function BottomNav() {
                 href={item.href}
                 aria-current={active ? "page" : undefined}
                 className={cx(
-                  "flex h-16 flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors",
-                  active ? "text-accent" : "text-faint hover:text-muted",
+                  "my-1.5 flex h-13 flex-col items-center justify-center gap-0.5 rounded-full text-[11px] font-medium transition-colors",
+                  active ? "bg-accent/12 text-accent" : "text-faint hover:text-muted",
                 )}
               >
                 {item.icon}

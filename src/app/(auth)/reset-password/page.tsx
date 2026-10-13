@@ -18,7 +18,7 @@ export default async function ResetPasswordPage({
       <Card className="p-5 text-center">
         <h1 className="text-xl font-bold">Kein Reset-Link</h1>
         <p className="mt-2 text-sm text-muted">
-          Diese Seite braucht den Link aus deiner "Passwort vergessen"-Mail.
+          Diese Seite braucht den Link aus deiner „Passwort vergessen“-Mail.
         </p>
         <Link
           href="/forgot-password"
