@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import type { User } from "@/db/schema";
+import { BODY_METRICS, bodyMetricSummary } from "@/lib/body-metrics-view";
 import {
   describeSets,
   describeWeight,
@@ -12,6 +13,7 @@ import {
   setsOfKind,
   trackingModeLabel,
 } from "@/lib/describe";
+import { bodyMetricSeries } from "@/lib/services/body-metrics";
 import {
   formatDate,
   formatDuration,
@@ -265,7 +267,7 @@ export function registerReadTools(server: McpServer, user: User): void {
     "training_stats",
     {
       title: "Statistik",
-      description: "Gesamtzahlen und aktuelle Trainingsserie.",
+      description: "Gesamtzahlen, Trainingsserie, Sätze pro Muskelgruppe und Körperwerte (Gewicht, aus Apple Health auch Ruhepuls, HRV, Schlaf …).",
       inputSchema: {},
     },
     async () =>
@@ -276,6 +278,9 @@ export function registerReadTools(server: McpServer, user: User): void {
         const total = totals(summaries);
         const streak = weekStreak(summaries);
         const muscles = weeklySetsByMuscle(await listWorkingSetsSince(user.id, muscleWeeksSince()));
+        const body = bodyMetricSummary(
+          await bodyMetricSeries(user.id, Math.floor(Date.now() / 1000) - 60 * 86_400),
+        );
         return [
           `Trainings: ${total.workouts}`,
           `Sätze: ${total.sets}, Wiederholungen: ${total.reps}`,
@@ -291,6 +296,9 @@ export function registerReadTools(server: McpServer, user: User): void {
                     `- ${m.group}: ${m.thisWeek} / ${m.average.toLocaleString("de-DE", { maximumFractionDigits: 1 })}`,
                 ),
               ]
+            : []),
+          ...(body.length
+            ? ["Körperwerte (letzter Wert):", ...body.map((b) => `- ${BODY_METRICS[b.metric].label}: ${b.value}${b.detail ? ` (${b.detail})` : ""}`)]
             : []),
         ].join("\n");
       }),

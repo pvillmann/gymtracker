@@ -136,3 +136,38 @@ test("Benachrichtigungen: Abschnitt in den Einstellungen, Service Worker erreich
   expect(await sw.text()).toContain("showNotification");
   expect(errors).toEqual([]);
 });
+
+test("Apple Health: Schlüssel erzeugen, Export senden, Verlauf in der Statistik", async ({ page, request }) => {
+  const errors = watchErrors(page);
+  await page.goto("/login");
+  await login(page, "anna@e2e.local");
+  await page.goto("/settings");
+  await page.getByRole("button", { name: "Import-Schlüssel erzeugen" }).click();
+  const token = (await page.locator("code", { hasText: "gymh_" }).innerText()).trim();
+
+  const denied = await request.post("/api/health", { data: {}, headers: { authorization: "Bearer gymh_falsch" } });
+  expect(denied.status()).toBe(401);
+
+  const response = await request.post("/api/health", {
+    headers: { authorization: `Bearer ${token}` },
+    data: {
+      data: {
+        metrics: [
+          { name: "weight_body_mass", units: "kg", data: [
+            { qty: 81.2, date: "2026-10-01 07:00:00 +0200", source: "Waage" },
+            { qty: 79.8, date: "2026-11-10 07:00:00 +0100", source: "Waage" },
+          ] },
+          { name: "resting_heart_rate", units: "count/min", data: [{ qty: 54, date: "2026-11-10 00:00:00 +0100" }] },
+        ],
+      },
+    },
+  });
+  expect(response.status()).toBe(200);
+  expect(await response.json()).toMatchObject({ imported: 3, bodyweightKg: 79.8 });
+
+  await page.goto("/stats");
+  await expect(page.getByRole("heading", { name: "Körper" })).toBeVisible();
+  await expect(page.locator("main")).toContainText("Körpergewicht (kg)");
+  await expect(page.locator("main")).toContainText("54 /min");
+  expect(errors).toEqual([]);
+});

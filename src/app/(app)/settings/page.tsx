@@ -10,6 +10,7 @@ import {
 } from "@/components/SettingsForms";
 import { ApiTokenManager } from "@/components/ApiTokenManager";
 import { AiSettings } from "@/components/AiSettings";
+import { HealthSettings } from "@/components/HealthSettings";
 import { PushSettings } from "@/components/PushSettings";
 import { ButtonLink, Card, PageHeader } from "@/components/ui";
 import {
@@ -19,6 +20,7 @@ import {
   isGlassLevel,
 } from "@/lib/appearance";
 import { requireUser } from "@/lib/auth";
+import { formatDateTime } from "@/lib/format";
 import { listApiTokens } from "@/lib/api-tokens";
 import { vapidKeys } from "@/lib/push";
 import { aiEnabled, keyHint } from "@/lib/services/ai-suggestions";
@@ -65,6 +67,19 @@ export default async function SettingsPage() {
         </h2>
         <Card>
           <PushSettings publicKey={vapid.publicKey} />
+        </Card>
+      </section>
+
+      <section className="mb-6">
+        <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+          Apple Health
+        </h2>
+        <Card>
+          <HealthSettings
+            endpoint={`${(process.env.APP_URL ?? "").replace(/\/$/, "")}/api/health`}
+            configured={user.healthTokenHash !== null}
+            importedAt={user.healthImportedAt ? formatDateTime(user.healthImportedAt) : null}
+          />
         </Card>
       </section>
 

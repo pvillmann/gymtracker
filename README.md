@@ -169,6 +169,11 @@ Homescreen.
   Wochen – Aufwärmsätze zählen nicht (per MCP in `training_stats`)
 - „Fakten zum Angeben": das bewegte Gewicht in Elefanten, Linienbussen oder
   Vielfachen des eigenen Körpergewichts
+- Körperwerte im Verlauf: Jede Änderung des Körpergewichts im Profil landet
+  als Punkt in der Kurve; aus Apple Health kommen Gewicht, Körperfett,
+  Magermasse, Ruhepuls, HRV, Schlaf, Schritte und aktive Energie dazu (siehe
+  [Apple Health](#apple-health)). Kacheln zeigen den letzten Wert, den
+  Schnitt der letzten sieben Tage und die Veränderung zu vier Wochen davor
 
 **Mehrere Nutzer**
 - Registrierung mit E-Mail und Passwort (scrypt-Hash), Session-Cookies
@@ -416,6 +421,34 @@ erst beim nächsten Login.
 **Trainingsdaten anderer Konten bleiben auch für Administratoren privat.** In
 der Benutzerverwaltung ist nur sichtbar, wie viele Trainings ein Konto hat –
 keine Pläne, keine Sätze, keine Gewichte.
+
+## Apple Health
+
+Apple Health hat keine Web-Schnittstelle – eine Web-App kommt an die Daten
+nur über eine App auf dem iPhone. GymTracker nimmt den JSON-Export von
+**Health Auto Export** (iOS, Funktion „REST API“ braucht das Abo der App)
+unter `POST /api/health` an:
+
+1. In GymTracker unter Einstellungen → Apple Health einen Import-Schlüssel
+   erzeugen. Er kann nur Körperwerte schreiben, nichts lesen.
+2. In Health Auto Export eine Automation „REST API“ anlegen: URL
+   `https://deine-instanz/api/health`, Format JSON, „Daten zusammenfassen“
+   an, Zeitraum täglich, unter HTTP-Header `Authorization` = `Bearer gymh_…`.
+3. Metriken wählen. Übernommen werden Gewicht, Körperfett, Magermasse,
+   Ruhepuls, HRV (SDNN), Schlaf (nur zusammengefasst), Schritte und aktive
+   Energie; kg/lb/st und kcal/kJ werden umgerechnet.
+
+Die Antwort nennt, was übernommen wurde, welche Metriken ignoriert wurden
+(`ignored`) und welche eine unbekannte Einheit hatten (`badUnits`) – die
+Doku der App nennt die JSON-Namen der Metriken nicht vollständig, deshalb
+ist das der Weg, eine Abweichung zu sehen. Ein erneuter Export desselben
+Zeitraums überschreibt, statt doppelt zu zählen. Der jüngste Gewichtswert
+wird zum Körpergewicht im Profil; bereits gespeicherte Sätze behalten ihr
+Volumen.
+
+Hinter einem Reverse Proxy mit Größenlimit (nginx: `client_max_body_size`)
+muss das Limit für `/api/health` zum Export passen – ein Tag ist klein, ein
+Jahresexport mehrere MB. GymTracker selbst nimmt bis 20 MB an.
 
 ## Anbindung an Claude (MCP)
 

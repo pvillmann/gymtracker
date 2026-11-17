@@ -41,6 +41,10 @@ export const users = sqliteTable(
     anthropicKeyEnc: text("anthropic_key_enc"),
     /** Progressionsvorschläge zusätzlich von Claude Haiku. */
     aiSuggestions: integer("ai_suggestions", { mode: "boolean" }).notNull().default(false),
+    /** SHA-256 des Schlüssels für den Apple-Health-Import (nur dieser Endpunkt). */
+    healthTokenHash: text("health_token_hash"),
+    /** Wann zuletzt Daten aus Apple Health ankamen. */
+    healthImportedAt: integer("health_imported_at"),
     /** null = noch nicht bestätigt. Login ist erst danach möglich. */
     emailVerifiedAt: integer("email_verified_at"),
     /**
@@ -681,4 +685,36 @@ export const workoutAiSuggestions = sqliteTable(
     createdAt: integer("created_at").notNull().default(now),
   },
   (t) => [primaryKey({ columns: [t.workoutId, t.exerciseId] })],
+);
+
+/**
+ * Körperwerte im Verlauf: Gewicht von Hand oder aus Apple Health, dazu was
+ * der Health-Import sonst mitbringt (Körperfett, Ruhepuls, HRV, Schlaf …).
+ * Ein Wert je Konto, Art und Zeitpunkt – ein erneuter Export überschreibt.
+ */
+export type BodyMetric =
+  | "weight"
+  | "body_fat"
+  | "lean_mass"
+  | "resting_hr"
+  | "hrv"
+  | "sleep"
+  | "steps"
+  | "active_energy";
+
+export const bodyMetrics = sqliteTable(
+  "body_metrics",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    metric: text("metric").notNull().$type<BodyMetric>(),
+    /** Unix-Sekunden. */
+    measuredAt: integer("measured_at").notNull(),
+    /** Normiert: kg, %, Schläge/min, ms, Stunden, Schritte, kcal. */
+    value: real("value").notNull(),
+    /** „manuell“ oder die Quelle aus Apple Health (z. B. die Waage). */
+    source: text("source"),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.metric, t.measuredAt] })],
 );
