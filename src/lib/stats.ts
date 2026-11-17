@@ -118,3 +118,40 @@ export function totals(summaries: WorkoutSummary[]): TotalStats {
     averageSeconds: count > 0 ? seconds / count : 0,
   };
 }
+
+export type MuscleWeek = {
+  group: string;
+  /** Arbeitssätze in der laufenden Woche. */
+  thisWeek: number;
+  /** Schnitt der vier abgeschlossenen Wochen davor. */
+  average: number;
+};
+
+/** Beginn des Zeitraums, den weeklySetsByMuscle braucht: vier Wochen vor dieser. */
+export function muscleWeeksSince(now = new Date()): number {
+  return Math.floor((startOfWeek(now).getTime() - 4 * 7 * DAY) / 1000);
+}
+
+/**
+ * Arbeitssätze pro Muskelgruppe: diese Woche und der Schnitt der vier
+ * Wochen davor. Ein Satz zählt für genau eine Muskelgruppe – die der Übung.
+ */
+export function weeklySetsByMuscle(
+  sets: Array<{ muscleGroup: string | null; completedAt: number }>,
+  now = new Date(),
+): MuscleWeek[] {
+  const weekStart = Math.floor(startOfWeek(now).getTime() / 1000);
+  const since = muscleWeeksSince(now);
+  const groups = new Map<string, { thisWeek: number; before: number }>();
+  for (const set of sets) {
+    if (set.completedAt < since) continue;
+    const key = set.muscleGroup ?? "Ohne Muskelgruppe";
+    const entry = groups.get(key) ?? { thisWeek: 0, before: 0 };
+    if (set.completedAt >= weekStart) entry.thisWeek += 1;
+    else entry.before += 1;
+    groups.set(key, entry);
+  }
+  return [...groups.entries()]
+    .map(([group, e]) => ({ group, thisWeek: e.thisWeek, average: e.before / 4 }))
+    .sort((a, b) => b.thisWeek - a.thisWeek || b.average - a.average);
+}

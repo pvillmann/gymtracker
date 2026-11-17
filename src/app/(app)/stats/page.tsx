@@ -13,8 +13,8 @@ import {
   workoutCount,
 } from "@/lib/format";
 import { buildFunFacts } from "@/lib/funfacts";
-import { getVolumeByExercise, listWorkoutSummaries } from "@/lib/queries";
-import { bucketByWeek, totals, weekStreak } from "@/lib/stats";
+import { getVolumeByExercise, listWorkingSetsSince, listWorkoutSummaries } from "@/lib/queries";
+import { bucketByWeek, muscleWeeksSince, totals, weekStreak, weeklySetsByMuscle } from "@/lib/stats";
 
 export const metadata: Metadata = { title: "Statistik · GymTracker" };
 
@@ -25,10 +25,12 @@ const shortDate = new Intl.DateTimeFormat("de-DE", {
 
 export default async function StatsPage() {
   const user = await requireUser();
-  const [summaries, volumeByExercise] = await Promise.all([
+  const [summaries, volumeByExercise, recentSets] = await Promise.all([
     listWorkoutSummaries(user.id),
     getVolumeByExercise(user.id),
+    listWorkingSetsSince(user.id, muscleWeeksSince()),
   ]);
+  const muscleWeeks = weeklySetsByMuscle(recentSets);
 
   if (summaries.length === 0) {
     return (
@@ -180,6 +182,29 @@ export default async function StatsPage() {
           </h2>
           <Card>
             <RankedBars items={topExercises} valueName="bewegtes Gewicht" />
+          </Card>
+        </section>
+      ) : null}
+
+      {muscleWeeks.length > 0 ? (
+        <section className="mb-4">
+          <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+            Arbeitssätze pro Muskelgruppe
+          </h2>
+          <Card>
+            <RankedBars
+              items={muscleWeeks.map((m) => ({
+                key: m.group,
+                label: m.group,
+                value: Math.max(m.thisWeek, m.average),
+                display: `${m.thisWeek} diese Woche · Ø ${m.average.toLocaleString("de-DE", { maximumFractionDigits: 1 })}`,
+              }))}
+              valueName="Arbeitssätze"
+            />
+            <p className="mt-3 text-xs text-faint">
+              Ø = Schnitt der vier Wochen davor. Ein Satz zählt für die Muskelgruppe der
+              Übung, Hilfsmuskeln nicht mit. Aufwärmsätze zählen nicht.
+            </p>
           </Card>
         </section>
       ) : null}

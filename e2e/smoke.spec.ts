@@ -59,6 +59,10 @@ test("Training aus dem Plan: Satz speichern, Pause läuft", async ({ page }) => 
     await page.goto(path);
     await expect(page.locator("main")).toBeVisible();
   }
+  // Je drei Arbeitssätze aus den Testdaten und von heute zählen für „Beine“.
+  await page.goto("/stats");
+  await expect(page.locator("main")).toContainText("Arbeitssätze pro Muskelgruppe");
+  await expect(page.locator("main")).toContainText("6 diese Woche");
   expect(errors).toEqual([]);
 });
 

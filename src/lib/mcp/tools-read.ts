@@ -34,10 +34,11 @@ import {
   listMovements,
   listPlanItems,
   listPlans,
+  listWorkingSetsSince,
   listWorkoutSummaries,
 } from "@/lib/queries";
 import { resolvePlan, resolveVariant } from "@/lib/services/resolve";
-import { totals, weekStreak } from "@/lib/stats";
+import { muscleWeeksSince, totals, weekStreak, weeklySetsByMuscle } from "@/lib/stats";
 
 /** Lesen: Übungen, Pläne, Verlauf, Statistik. */
 export function registerReadTools(server: McpServer, user: User): void {
@@ -274,6 +275,7 @@ export function registerReadTools(server: McpServer, user: User): void {
 
         const total = totals(summaries);
         const streak = weekStreak(summaries);
+        const muscles = weeklySetsByMuscle(await listWorkingSetsSince(user.id, muscleWeeksSince()));
         return [
           `Trainings: ${total.workouts}`,
           `Sätze: ${total.sets}, Wiederholungen: ${total.reps}`,
@@ -281,6 +283,15 @@ export function registerReadTools(server: McpServer, user: User): void {
           `Schnitt pro Training: ${formatVolume(total.averageVolumeKg)}`,
           `Serie: ${streak.current} Wochen (beste: ${streak.longest})`,
           `Körpergewicht laut Profil: ${formatKg(user.bodyweightKg)} kg`,
+          ...(muscles.length
+            ? [
+                "Arbeitssätze pro Muskelgruppe (diese Woche / Ø 4 Wochen davor):",
+                ...muscles.map(
+                  (m) =>
+                    `- ${m.group}: ${m.thisWeek} / ${m.average.toLocaleString("de-DE", { maximumFractionDigits: 1 })}`,
+                ),
+              ]
+            : []),
         ].join("\n");
       }),
   );

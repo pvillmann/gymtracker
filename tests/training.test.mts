@@ -67,3 +67,24 @@ test("Fehlversuche: sperrt nach dem Limit, gibt nach dem Fenster frei", () => {
   limiter.reset("c");
   assert.equal(limiter.retryAfter("c", 1), 0);
 });
+
+import { weeklySetsByMuscle } from "@/lib/stats";
+
+test("Arbeitssätze pro Muskelgruppe: diese Woche und Schnitt der vier Wochen davor", () => {
+  const now = new Date(2026, 10, 18, 12); // Mittwoch
+  const at = (daysAgo: number) => Math.floor(now.getTime() / 1000) - daysAgo * 86_400;
+  const rows = [
+    { muscleGroup: "Brust", completedAt: at(0) },
+    { muscleGroup: "Brust", completedAt: at(1) },
+    { muscleGroup: "Brust", completedAt: at(8) },
+    { muscleGroup: "Brust", completedAt: at(15) },
+    { muscleGroup: "Rücken", completedAt: at(9) },
+    { muscleGroup: null, completedAt: at(0) },
+    { muscleGroup: "Beine", completedAt: at(60) }, // zu alt
+  ];
+  const result = weeklySetsByMuscle(rows, now);
+  assert.deepEqual(result.find((m) => m.group === "Brust"), { group: "Brust", thisWeek: 2, average: 0.5 });
+  assert.deepEqual(result.find((m) => m.group === "Rücken"), { group: "Rücken", thisWeek: 0, average: 0.25 });
+  assert.equal(result.find((m) => m.group === "Ohne Muskelgruppe")?.thisWeek, 1);
+  assert.equal(result.some((m) => m.group === "Beine"), false);
+});
