@@ -216,10 +216,15 @@ export function ScaleRecorder() {
       setStatus("connected");
       await save();
     } catch (error) {
-      log("error", { text: String(error) });
-      // „Abgebrochen“ im Auswahldialog ist kein Fehler.
-      const text = String(error);
-      setMessage(text.includes("cancel") || text.includes("NotFoundError") ? "Keine Waage gewählt." : `Fehler: ${text}`);
+      const text = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+      log("error", { text });
+      // Immer den rohen Fehler zeigen – „Keine Waage gewählt“ allein verschleierte,
+      // dass Bluefy die Anfrage sofort ablehnte, ohne eine Liste zu zeigen.
+      setMessage(
+        error instanceof Error && error.name === "NotFoundError"
+          ? `Keine Waage gewählt oder keine gefunden (${text}). Waage aufwecken und sofort verbinden.`
+          : `Fehler: ${text}`,
+      );
       setStatus("error");
       await save();
     }
