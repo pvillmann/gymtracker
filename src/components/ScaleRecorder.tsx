@@ -41,7 +41,10 @@ type Bluetooth = { requestDevice(options: object): Promise<BtDevice> };
  * die Bluetooth-Standards für Körperwaagen) – Web Bluetooth zeigt nur
  * Dienste, die hier vorab genannt sind.
  */
-const SERVICES = [0xffe0, 0xfff0, 0xffb0, 0x1a10, 0x181b, 0x181d, 0x180a, 0x180f, 0x1800, 0x1801];
+const SERVICES = [0xffe0, 0xfff0, 0xffb0, 0x1a10, 0x181b, 0x181d, 0x180a, 0x180f, 0x1800, 0x1801].map(
+  // Volle UUIDs statt Kurzform: Nachbauten wie Bluefy wandeln Zahlen nicht immer um.
+  (short) => `0000${short.toString(16).padStart(4, "0")}-0000-1000-8000-00805f9b34fb`,
+);
 
 const MAX_EVENTS = 3000;
 
@@ -72,6 +75,20 @@ export function ScaleRecorder() {
   const device = useRef<BtDevice | null>(null);
   const savedCount = useRef(0);
   const start = useRef(0);
+
+  // Fehler außerhalb von connect() (z. B. in Ereignissen) sichtbar machen.
+  useEffect(() => {
+    const onError = (event: ErrorEvent | PromiseRejectionEvent) => {
+      const text = "reason" in event ? String(event.reason) : event.message;
+      setMessage(`Fehler: ${text}`);
+    };
+    window.addEventListener("error", onError);
+    window.addEventListener("unhandledrejection", onError);
+    return () => {
+      window.removeEventListener("error", onError);
+      window.removeEventListener("unhandledrejection", onError);
+    };
+  }, []);
 
   const log = (type: string, data: Record<string, unknown> = {}) => {
     if (events.current.length >= MAX_EVENTS) return;
@@ -122,7 +139,12 @@ export function ScaleRecorder() {
 
   const connect = async () => {
     const bluetooth = (navigator as Navigator & { bluetooth?: Bluetooth }).bluetooth;
-    if (!bluetooth) return;
+    if (!bluetooth) {
+      // Nie still abbrechen – sonst „passiert nichts“.
+      setMessage("Dieser Browser bietet kein Bluetooth an. Seite in Bluefy öffnen (nicht Safari, nicht vom Home-Bildschirm).");
+      setStatus("error");
+      return;
+    }
     events.current = [];
     captureId.current = null;
     savedCount.current = 0;
@@ -251,6 +273,21 @@ export function ScaleRecorder() {
         ) : null}
         {status !== "error" && message ? <p className="mt-2 text-down">{message}</p> : null}
       </div>
+      <Diagnostics />
     </div>
   );
+}
+
+/** Was der Browser kann – hilft, wenn „nichts passiert“. */
+function Diagnostics() {
+  const info = useSyncExternalStore(
+    () => () => {},
+    () => {
+      const nav = navigator as Navigator & { bluetooth?: Bluetooth; standalone?: boolean };
+      const browser = /Bluefy/i.test(nav.userAgent) ? "Bluefy" : /CriOS|Chrome/i.test(nav.userAgent) ? "Chrome" : /Safari/i.test(nav.userAgent) ? "Safari" : "anderer Browser";
+      return `${browser}${nav.standalone ? " (Home-Bildschirm)" : ""} · Bluetooth: ${nav.bluetooth ? "ja" : "nein"} · ${window.isSecureContext ? "https" : "kein https!"}`;
+    },
+    () => "",
+  );
+  return info ? <p className="text-xs text-faint">{info}</p> : null;
 }
