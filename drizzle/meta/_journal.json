@@ -148,6 +148,13 @@
       "when": 1794954216215,
       "tag": "0020_gym_plates",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1794954501181,
+      "tag": "0021_push",
+      "breakpoints": true
     }
   ]
 }

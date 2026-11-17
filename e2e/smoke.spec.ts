@@ -119,3 +119,18 @@ test("Darstellung: Standard Blau und deckend, pro Konto umstellbar", async ({ pa
   expect(await page.locator("nav ul").evaluate((el) => getComputedStyle(el).backdropFilter)).toContain("blur");
   expect(errors).toEqual([]);
 });
+
+test("Benachrichtigungen: Abschnitt in den Einstellungen, Service Worker erreichbar", async ({ page, request }) => {
+  const errors = watchErrors(page);
+  await page.goto("/login");
+  await login(page, "ben@e2e.local");
+  await page.goto("/settings");
+  await expect(page.getByRole("heading", { name: "Benachrichtigungen" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Auf diesem Gerät einschalten" })).toBeVisible();
+
+  const sw = await request.get("/sw.js");
+  expect(sw.status()).toBe(200);
+  expect(sw.headers()["content-type"]).toContain("javascript");
+  expect(await sw.text()).toContain("showNotification");
+  expect(errors).toEqual([]);
+});

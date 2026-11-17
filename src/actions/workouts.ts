@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import type { SetEffort } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
+import { scheduleRestNotification } from "@/lib/push";
 import { parseDurationInput } from "@/lib/format";
 import { optionalText, text } from "@/lib/formdata";
 import { fail, type FormState } from "@/lib/result";
@@ -143,11 +144,23 @@ export async function logSetAction(
 
   const exerciseId = text(formData, "exerciseId");
 
+  let exerciseName = "";
   const result = await guarded(async () => {
-    await logSet(user, workoutId, exerciseId, parsed.data as SetValues);
+    exerciseName = (await logSet(user, workoutId, exerciseId, parsed.data as SetValues)).exerciseName;
   });
 
-  if (result.ok) revalidatePath(`/workout/${workoutId}`);
+  if (result.ok) {
+    // „Pause vorbei“ aufs Handy, auch wenn es gesperrt ist – sofern das
+    // Konto ein Gerät angemeldet hat. Ein neuer Satz ersetzt die alte Meldung.
+    const rest = Math.min(900, Math.max(0, Number(text(formData, "restSeconds", "0")) || 0));
+    await scheduleRestNotification(user.id, rest, {
+      title: "Pause vorbei",
+      body: `Weiter mit ${exerciseName}.`,
+      url: `/workout/${workoutId}`,
+      tag: "rest",
+    });
+    revalidatePath(`/workout/${workoutId}`);
+  }
   return result;
 }
 

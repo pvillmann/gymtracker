@@ -26,6 +26,8 @@ export function proxy(request: NextRequest) {
     "img-src 'self' blob: data:",
     "font-src 'self'",
     "connect-src 'self'",
+    // Service Worker für Benachrichtigungen (public/sw.js).
+    "worker-src 'self'",
     "manifest-src 'self'",
     "object-src 'none'",
     "base-uri 'self'",

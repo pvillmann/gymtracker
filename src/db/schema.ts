@@ -628,3 +628,30 @@ export const catalogChanges = sqliteTable(
   },
   (t) => [index("catalog_changes_entity_idx").on(t.entity, t.entityId, t.createdAt)],
 );
+
+/**
+ * Schlüssel, die die Instanz selbst erzeugt und behält (VAPID für Web Push,
+ * Schlüssel zum Verschlüsseln von API-Keys). Nie an Clients ausgeliefert –
+ * außer dem öffentlichen VAPID-Schlüssel.
+ */
+export const appSecrets = sqliteTable("app_secrets", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  createdAt: integer("created_at").notNull().default(now),
+});
+
+/** Ein Gerät, das Benachrichtigungen bekommt (Web Push), je Konto beliebig viele. */
+export const pushSubscriptions = sqliteTable(
+  "push_subscriptions",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    endpoint: text("endpoint").notNull(),
+    p256dh: text("p256dh").notNull(),
+    auth: text("auth").notNull(),
+    createdAt: integer("created_at").notNull().default(now),
+  },
+  (t) => [uniqueIndex("push_subscriptions_endpoint_unique").on(t.endpoint)],
+);

@@ -9,6 +9,7 @@ import {
   logSetAction,
   rateSetAction,
 } from "@/actions/workouts";
+import { cancelRestAction } from "@/actions/push";
 import { RestTimer } from "@/components/RestTimer";
 import { SubmitButton } from "@/components/SubmitButton";
 import { TrendBadge } from "@/components/TrendBadge";
@@ -621,6 +622,7 @@ export function ExerciseLogger({
         className="mt-4"
       >
         <input type="hidden" name="exerciseId" value={exercise.id} />
+        <input type="hidden" name="restSeconds" value={restSeconds} />
 
         {isTimed ? (
           // Eigene Zeile für die Dauer: "20:00" oder "1:05:30" braucht mehr
@@ -712,7 +714,14 @@ export function ExerciseLogger({
       </form>
 
       {restEndsAt !== null ? (
-        <RestTimer endsAt={restEndsAt} onDismiss={() => setRestEndsAt(null)} />
+        <RestTimer
+          endsAt={restEndsAt}
+          onDismiss={() => {
+            setRestEndsAt(null);
+            // Übersprungen: die Benachrichtigung aufs Handy entfällt auch.
+            void cancelRestAction();
+          }}
+        />
       ) : null}
 
       {workingVolume > 0 ? (

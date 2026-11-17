@@ -9,6 +9,7 @@ import {
   ProfileForm,
 } from "@/components/SettingsForms";
 import { ApiTokenManager } from "@/components/ApiTokenManager";
+import { PushSettings } from "@/components/PushSettings";
 import { ButtonLink, Card, PageHeader } from "@/components/ui";
 import {
   DEFAULT_ACCENT,
@@ -18,6 +19,7 @@ import {
 } from "@/lib/appearance";
 import { requireUser } from "@/lib/auth";
 import { listApiTokens } from "@/lib/api-tokens";
+import { vapidKeys } from "@/lib/push";
 import { isAdmin } from "@/lib/groups";
 
 export const metadata: Metadata = { title: "Einstellungen · GymTracker" };
@@ -25,7 +27,7 @@ export const metadata: Metadata = { title: "Einstellungen · GymTracker" };
 export default async function SettingsPage() {
   const user = await requireUser();
   const userIsAdmin = await isAdmin(user.id);
-  const tokens = await listApiTokens(user.id);
+  const [tokens, vapid] = await Promise.all([listApiTokens(user.id), vapidKeys()]);
   // APP_URL ist für den Mailversand ohnehin gesetzt; fehlt sie, zeigen wir
   // nur den Pfad statt einer erfundenen Adresse.
   const mcpUrl = `${(process.env.APP_URL ?? "").replace(/\/$/, "")}/api/mcp`;
@@ -52,6 +54,15 @@ export default async function SettingsPage() {
             accent={isAccent(user.accentColor) ? user.accentColor : DEFAULT_ACCENT}
             glass={isGlassLevel(user.glass) ? user.glass : DEFAULT_GLASS}
           />
+        </Card>
+      </section>
+
+      <section className="mb-6">
+        <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+          Benachrichtigungen
+        </h2>
+        <Card>
+          <PushSettings publicKey={vapid.publicKey} />
         </Card>
       </section>
 
