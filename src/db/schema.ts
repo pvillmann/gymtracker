@@ -208,6 +208,12 @@ export const equipment = sqliteTable(
     /** Kleinster Gewichtssprung – steuert die +/- Tasten; pro Studio überschreibbar. */
     weightStepKg: real("weight_step_kg").notNull().default(2.5),
     /**
+     * Kleinster sinnvoller Sprung für den Progressionsvorschlag, in der
+     * Einheit der Maschine (kg, kg je Seite oder Stufen). Leer: Standard nach
+     * Geräteart, siehe lib/progression.ts.
+     */
+    progressionStep: real("progression_step"),
+    /**
      * Getrennte Arme mit eigenen Scheiben (Iso-Lateral Row): eingetragen wird
      * das Gewicht einer Seite, bewegt wird das Doppelte.
      */

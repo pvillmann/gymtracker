@@ -4,7 +4,14 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import type { User } from "@/db/schema";
-import { describeSets, effortLabel, lastEffort, trackingModeLabel } from "@/lib/describe";
+import {
+  describeSets,
+  describeWeight,
+  effortLabel,
+  lastEffort,
+  setsOfKind,
+  trackingModeLabel,
+} from "@/lib/describe";
 import {
   formatDate,
   formatDuration,
@@ -16,6 +23,7 @@ import {
   sets as setsLabel,
 } from "@/lib/format";
 import { machineSchema, run, unitOf } from "@/lib/mcp/shared";
+import { defaultStep, suggestNext } from "@/lib/progression";
 import {
   getActiveWorkout,
   getExerciseSessions,
@@ -156,14 +164,29 @@ export function registerReadTools(server: McpServer, user: User): void {
     },
     async ({ exercise, machine }) =>
       run(async () => {
-        const found = await resolveVariant(user, exercise, {
-          machine,
-          workout: await getActiveWorkout(user.id),
-        });
+        const workout = await getActiveWorkout(user.id);
+        const found = await resolveVariant(user, exercise, { machine, workout });
         const previous = await getPreviousPerformances(user.id, [found.id]);
         const last = previous.get(found.id);
         if (!last) return `„${found.name}“ wurde noch nie trainiert.`;
         const effort = lastEffort(last.sets);
+
+        // Derselbe Vorschlag wie in der App – mit Zielbereich, wenn die Übung
+        // im Plan des laufenden Trainings steht.
+        const planItem = workout?.planId
+          ? (await listPlanItems(workout.planId)).find((i) => i.movementId === found.movementId)
+          : undefined;
+        const device = found.equipmentId
+          ? (await listEquipment()).find((e) => e.id === found.equipmentId)
+          : undefined;
+        const suggestion = suggestNext({
+          mode: found.trackingMode,
+          previous: setsOfKind(last.sets, false),
+          lastEffort: effort,
+          target: planItem ? { repsMin: planItem.targetRepsMin, repsMax: planItem.targetRepsMax } : null,
+          step: defaultStep(device ?? null),
+          level: device?.loadUnit === "level",
+        });
 
         return [
           `${found.name}, ${formatRelativeDay(last.performedAt)} (${formatDate(last.performedAt)}):`,
@@ -171,6 +194,11 @@ export function registerReadTools(server: McpServer, user: User): void {
           // Stufen sind keine kg – dann gibt es kein bewegtes Gewicht.
           ...(last.totalVolumeKg > 0 ? [`Bewegt: ${formatVolume(last.totalVolumeKg)}`] : []),
           ...(effort ? [`Letzter Satz: ${effortLabel(effort)}`] : []),
+          ...(suggestion
+            ? [
+                `Vorschlag heute: ${describeWeight(suggestion.weight, await unitOf(found.equipmentId))} × ${suggestion.reps.join("/")} – ${suggestion.reason}`,
+              ]
+            : []),
         ].join("\n");
       }),
   );

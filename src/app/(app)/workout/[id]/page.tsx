@@ -10,7 +10,8 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { Card, EmptyState } from "@/components/ui";
 import { WorkoutClock } from "@/components/WorkoutClock";
 import { requireUser } from "@/lib/auth";
-import { describeSets, loadUnitOf } from "@/lib/describe";
+import { describeSets, lastEffort, loadUnitOf, setsOfKind } from "@/lib/describe";
+import { defaultStep, suggestNext } from "@/lib/progression";
 import {
   formatDateTime,
   formatDurationLong,
@@ -334,6 +335,22 @@ export default async function WorkoutPage({
                       }
                     : null
                 }
+                suggestion={(() => {
+                  if (!last) return null;
+                  const device = exercise.equipmentId
+                    ? equipmentById.get(exercise.equipmentId)
+                    : undefined;
+                  return suggestNext({
+                    mode: exercise.trackingMode,
+                    previous: setsOfKind(last.sets, false),
+                    lastEffort: lastEffort(last.sets),
+                    target: target
+                      ? { repsMin: target.targetRepsMin, repsMax: target.targetRepsMax }
+                      : null,
+                    step: defaultStep(device ?? null),
+                    level: device?.loadUnit === "level",
+                  });
+                })()}
                 loggedSets={setsByExercise.get(exerciseId) ?? []}
                 previous={
                   last

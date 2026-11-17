@@ -26,6 +26,7 @@ import {
   setsOfKind,
 } from "@/lib/describe";
 import { formatDuration, formatKg } from "@/lib/format";
+import type { Suggestion } from "@/lib/progression";
 import type { FormState } from "@/lib/result";
 import {
   compareSets,
@@ -139,6 +140,7 @@ export function ExerciseLogger({
   machines = [],
   activeMachine = "none",
   elsewhere = null,
+  suggestion = null,
 }: {
   workoutId: string;
   exercise: LoggerExercise;
@@ -152,6 +154,8 @@ export function ExerciseLogger({
   machines?: LoggerMachine[];
   activeMachine?: string;
   elsewhere?: LoggerElsewhere | null;
+  /** Progressionsvorschlag fürs heutige Training, siehe lib/progression.ts. */
+  suggestion?: Suggestion | null;
 }) {
   const [restEndsAt, setRestEndsAt] = useState<number | null>(null);
   const restSeconds = target?.restSeconds ?? 0;
@@ -179,7 +183,11 @@ export function ExerciseLogger({
   const defaultWarmup = workingToday === 0 && warmupsToday < previousWarmups;
   const [isWarmup, setIsWarmup] = useState(defaultWarmup);
 
-  const prefillFor = (warmup: boolean) => {
+  // Vorschlag oder bewusst „wie letztes Mal“ – die Wahl gilt fürs ganze Training.
+  const [followSuggestion, setFollowSuggestion] = useState(true);
+  const activeSuggestion = followSuggestion ? suggestion : null;
+
+  const prefillFor = (warmup: boolean, useSuggestion = activeSuggestion) => {
     // Aufwärm- und Arbeitssätze getrennt: sonst landet nach dem Aufwärmen das
     // Aufwärmgewicht im ersten Arbeitssatz und der erste Arbeitssatz wird mit
     // dem zweiten Satz vom letzten Mal verglichen.
@@ -188,11 +196,15 @@ export function ExerciseLogger({
     const previousSameSet =
       previousOfKind[ordinal - 1] ?? previousOfKind.at(-1) ?? null;
     const lastThisSession = setsOfKind(loggedSets, warmup).at(-1) ?? null;
+    // Der Vorschlag gilt nur für Arbeitssätze.
+    const proposal = warmup ? null : useSuggestion;
+    const proposedReps = proposal ? (proposal.reps[ordinal - 1] ?? proposal.reps.at(-1)) : undefined;
 
     return {
       // Gewicht: was du heute zuletzt aufgelegt hast, bleibt meist liegen.
       weight: formatValue(
         lastThisSession?.weightKg ??
+          proposal?.weight ??
           previousSameSet?.weightKg ??
           loggedSets.at(-1)?.weightKg ??
           0,
@@ -200,7 +212,8 @@ export function ExerciseLogger({
       // Wiederholungen: der Wert vom letzten Mal ist die Marke, die es zu
       // schlagen gilt.
       reps: String(
-        previousSameSet?.reps ??
+        proposedReps ??
+          previousSameSet?.reps ??
           lastThisSession?.reps ??
           target?.targetRepsMin ??
           10,
@@ -222,8 +235,8 @@ export function ExerciseLogger({
   // Aufwärm-Hakens stehen.
   const [touched, setTouched] = useState(false);
 
-  const applyPrefill = (warmup: boolean) => {
-    const next = prefillFor(warmup);
+  const applyPrefill = (warmup: boolean, useSuggestion = activeSuggestion) => {
+    const next = prefillFor(warmup, useSuggestion);
     setWeight(next.weight);
     setReps(next.reps);
     setDuration(next.duration);
@@ -507,6 +520,28 @@ export function ExerciseLogger({
               );
             })}
           </div>
+        </div>
+      ) : null}
+
+      {suggestion && !isWarmup && !done ? (
+        <div className="mt-3 flex items-start gap-2 rounded-lg border border-accent/30 bg-accent/8 px-3 py-2 text-sm">
+          <span aria-hidden="true" className="text-accent">
+            {suggestion.kind === "increase" ? "▲" : suggestion.kind === "hold" ? "=" : "+"}
+          </span>
+          <p className="min-w-0 flex-1 text-muted">
+            {followSuggestion ? suggestion.reason : "Wie letztes Mal vorbelegt."}
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              const next = !followSuggestion;
+              setFollowSuggestion(next);
+              applyPrefill(false, next ? suggestion : null);
+            }}
+            className="shrink-0 text-xs font-semibold text-accent"
+          >
+            {followSuggestion ? "Wie letztes Mal" : "Vorschlag"}
+          </button>
         </div>
       ) : null}
 

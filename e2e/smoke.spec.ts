@@ -31,6 +31,15 @@ test("Training aus dem Plan: Satz speichern, Pause läuft", async ({ page }) => 
 
   const card = page.locator("[id^=uebung-]").first();
   await expect(card).toContainText("Kniebeuge E2E");
+
+  // Letztes Mal 3 × 10 bei Ziel 8–10: heute +2,5 kg mit 8 Wdh. vorbelegt.
+  await expect(card).toContainText("Alle Sätze mit 10 Wdh. geschafft");
+  await expect(card.locator("input[name=weightKg]")).toHaveValue("102,5");
+  await expect(card.locator("input[name=reps]")).toHaveValue("8");
+  await card.getByRole("button", { name: "Wie letztes Mal" }).click();
+  await expect(card.locator("input[name=weightKg]")).toHaveValue("100");
+  await card.getByRole("button", { name: "Vorschlag" }).click();
+  await expect(card.locator("input[name=weightKg]")).toHaveValue("102,5");
   await card.getByRole("button", { name: /speichern/i }).first().click();
   await expect(page.getByRole("status").filter({ hasText: "Pause" })).toBeVisible();
   await expect(card).toContainText("× ");
