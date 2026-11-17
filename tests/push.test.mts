@@ -12,6 +12,7 @@ import { makeUser, setupDb } from "./helpers/db";
 // Lokaler HTTPS-Empfänger statt Apple/Google: selbst signiert, nur für diesen
 // Testprozess vertraut.
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+process.env.PUSH_EXTRA_HOSTS = "127.0.0.1";
 const dir = mkdtempSync(join(tmpdir(), "push-"));
 execFileSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-subj", "/CN=localhost",
   "-keyout", join(dir, "key.pem"), "-out", join(dir, "cert.pem"), "-days", "1"], { stdio: "ignore" });
@@ -38,6 +39,7 @@ after(() => server.close());
 
 const { db, schema } = await setupDb();
 const push = await import("@/lib/push");
+const { eq } = await import("drizzle-orm");
 
 const subscription = (path: string) => ({
   endpoint: `https://127.0.0.1:${port}${path}`,
@@ -86,4 +88,40 @@ test("Pause planen: ersetzt die vorige, Abbrechen verhindert das Senden", async 
   await new Promise((r) => setTimeout(r, 1500));
   assert.equal(received.filter((r) => r.path === "/timer").length, 1);
   assert.ok(db && schema);
+});
+
+test("Endpunkte: nur bekannte Push-Dienste, höchstens zehn Geräte", async () => {
+  delete process.env.PUSH_EXTRA_HOSTS;
+  try {
+    for (const ok of [
+      "https://fcm.googleapis.com/fcm/send/abc",
+      "https://updates.push.services.mozilla.com/wpush/v2/abc",
+      "https://web.push.apple.com/abc",
+      "https://wns2-par02p.notify.windows.com/w/?token=abc",
+    ]) assert.equal(push.isAllowedPushEndpoint(ok), true, ok);
+    for (const bad of [
+      "https://127.0.0.1/x",
+      "https://169.254.169.254/latest",
+      "https://intranet.local/x",
+      "http://fcm.googleapis.com/x",
+      "https://fcm.googleapis.com:8443/x",
+      "https://evilgoogleapis.com/x",
+      "https://user:pw@fcm.googleapis.com/x",
+      "kaputt",
+    ]) assert.equal(push.isAllowedPushEndpoint(bad), false, bad);
+
+    const user = await makeUser("Viele");
+    await assert.rejects(push.saveSubscription(user, subscription("/intern")), /Ungültige/);
+    const keys = subscription("/x").keys;
+    for (let i = 0; i < 12; i++) {
+      await push.saveSubscription(user, { endpoint: `https://fcm.googleapis.com/fcm/send/${i}`, keys });
+    }
+    const rows = await db.select().from(schema.pushSubscriptions).where(eq(schema.pushSubscriptions.userId, user.id));
+    assert.equal(rows.length, push.MAX_DEVICES);
+    // Die ältesten zwei sind raus, das neueste ist da.
+    assert.ok(rows.some((r) => r.endpoint.endsWith("/11")));
+    assert.ok(!rows.some((r) => r.endpoint.endsWith("/0") || r.endpoint.endsWith("/1")));
+  } finally {
+    process.env.PUSH_EXTRA_HOSTS = "127.0.0.1";
+  }
 });

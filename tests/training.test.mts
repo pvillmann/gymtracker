@@ -121,3 +121,20 @@ test("Vergleich: Sprung im Zielbereich ist kein Rückschritt (#50)", async () =>
   // Deutlich mehr im Zielbereich bleibt grün.
   assert.equal(compareSets(set(45, 9), set(40, 9), "weight_reps", 80, null, target).trend, "up");
 });
+
+test("Body-Limit: auch ohne Content-Length (chunked) wird abgebrochen", async () => {
+  const { readBodyLimited } = await import("@/lib/http-body");
+  const stream = (n: number) =>
+    new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (let i = 0; i < n; i++) controller.enqueue(new Uint8Array(1024));
+        controller.close();
+      },
+    });
+  const request = (n: number) =>
+    new Request("http://x/", { method: "POST", body: stream(n), duplex: "half" } as RequestInit);
+  assert.equal(await readBodyLimited(request(10), 4096), null);
+  assert.equal((await readBodyLimited(request(4), 4096))?.byteLength, 4096);
+  const declared = new Request("http://x/", { method: "POST", body: "x", headers: { "content-length": "99999" } });
+  assert.equal(await readBodyLimited(declared, 4096), null);
+});

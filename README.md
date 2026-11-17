@@ -661,6 +661,11 @@ Was GymTracker selbst mitbringt:
 - **Web Push** läuft über VAPID; die Schlüssel erzeugt die Instanz selbst und
   legt sie in der Datenbank ab. Benachrichtigungen enthalten nur „Pause
   vorbei“ und den Übungsnamen.
+  Als Endpunkt nimmt der Server nur Adressen der bekannten Push-Dienste an
+  (sonst könnte ein Konto ihn Anfragen an interne Dienste schicken lassen),
+  höchstens zehn Geräte je Konto.
+- **Uploads und Importe** werden als Stream mit Obergrenze gelesen (Foto
+  15 MB, Health-Export 20 MB) – auch ohne `Content-Length`.
 
 Was du selbst tun solltest:
 
@@ -710,6 +715,7 @@ Nützliche Skripte:
 | `DB_BACKUP_BEFORE_MIGRATION` | `true` | Vor ausstehenden Migrationen eine Kopie nach `backups/` neben der Datenbank schreiben |
 | `TZ` | Systemzeitzone | Bestimmt, wann eine Trainingswoche beginnt |
 | `PORT` | `3000` | Port des Servers |
+| `PUSH_EXTRA_HOSTS` | — | Weitere erlaubte Hosts für Push-Endpunkte, kommagetrennt (z. B. ein eigener Push-Dienst). Standard sind nur die Dienste von Google, Mozilla, Microsoft und Apple |
 | `SECRET_KEY` | Datei `secret.key` neben der Datenbank | Schlüssel für gespeicherte API-Schlüssel, mindestens 32 Zeichen (z. B. `openssl rand -base64 32`). Nachträglich ändern macht gespeicherte Schlüssel unlesbar |
 
 ## Technik

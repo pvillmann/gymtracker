@@ -20,7 +20,9 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const url = (event.notification.data && event.notification.data.url) || "/";
+  // Nur Pfade dieser Seite – nie eine fremde Adresse aus der Nachricht öffnen.
+  const raw = (event.notification.data && event.notification.data.url) || "/";
+  const url = typeof raw === "string" && raw.startsWith("/") && !raw.startsWith("//") && !raw.startsWith("/\\") ? raw : "/";
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((windows) => {
       for (const win of windows) {
