@@ -26,6 +26,7 @@ import {
   setsOfKind,
 } from "@/lib/describe";
 import { formatDuration, formatKg } from "@/lib/format";
+import { platesFor } from "@/lib/plates";
 import type { Suggestion } from "@/lib/progression";
 import type { FormState } from "@/lib/result";
 import {
@@ -81,6 +82,38 @@ export type LoggerPrevious = {
   summary: string;
   sets: LoggerSet[];
 };
+
+/**
+ * Bonus-Satz: verdient, wenn der letzte Arbeitssatz „Leicht“ war oder über
+ * dem Zielbereich lag. Ohne Plan zählt nur die Einschätzung.
+ */
+function bonusEarned(
+  set: { reps: number; effort: SetEffort | null },
+  target: { targetRepsMax: number } | null,
+): boolean {
+  return set.effort === "easy" || (target !== null && set.reps > target.targetRepsMax);
+}
+
+/** Einen Sprung schwerer – bei Gegengewicht einen Sprung weniger Hilfe. */
+function bonusWeight(weight: number, step: number, mode: TrackingMode): number {
+  const next = mode === "assisted_reps" ? weight - step : weight + step;
+  return Math.max(0, Math.round(next * 100) / 100);
+}
+
+/** „je Seite: 20 + 10 + 2,5“ unter dem Gewichtsfeld. */
+function PlateHint({ weight, plates, perSide }: { weight: string; plates: number[]; perSide?: boolean }) {
+  const value = Number(weight.replace(",", "."));
+  if (!Number.isFinite(value) || value <= 0) return null;
+  // Ohne „je Seite“ steht das Gesamtgewicht im Feld – auf zwei Seiten verteilt.
+  const { plates: onSide, rest } = platesFor(perSide ? value : value / 2, plates);
+  if (onSide.length === 0) return null;
+  return (
+    <p className="mt-2 text-center text-xs text-muted tnum">
+      je Seite: {onSide.map((p) => formatKg(p)).join(" + ")}
+      {rest > 0 ? <span className="text-faint"> (+{formatKg(rest)} kg passt nicht)</span> : null}
+    </p>
+  );
+}
 
 function formatValue(value: number): string {
   return formatKg(value);
@@ -141,6 +174,9 @@ export function ExerciseLogger({
   activeMachine = "none",
   elsewhere = null,
   suggestion = null,
+  plates = null,
+  step = 2.5,
+  superset = null,
 }: {
   workoutId: string;
   exercise: LoggerExercise;
@@ -156,6 +192,12 @@ export function ExerciseLogger({
   elsewhere?: LoggerElsewhere | null;
   /** Progressionsvorschlag fürs heutige Training, siehe lib/progression.ts. */
   suggestion?: Suggestion | null;
+  /** Scheiben im Studio – nur bei Maschinen mit Scheiben gesetzt. */
+  plates?: number[] | null;
+  /** Kleinster Sprung der Maschine, für den Bonus-Satz. */
+  step?: number;
+  /** Übung für den Gegenspieler im Plan, noch offen – Supersatz-Tipp. */
+  superset?: string | null;
 }) {
   const [restEndsAt, setRestEndsAt] = useState<number | null>(null);
   const restSeconds = target?.restSeconds ?? 0;
@@ -523,6 +565,30 @@ export function ExerciseLogger({
         </div>
       ) : null}
 
+      {done && lastWorking && !isTimed && bonusEarned(lastWorking, target) ? (
+        <div className="mt-3 rounded-lg border border-accent/30 bg-accent/8 px-3 py-2.5 text-sm">
+          <p className="font-medium text-fg">
+            Da ging noch was 💪 – noch einen mit{" "}
+            {describeWeight(bonusWeight(lastWorking.weightKg, step, exercise.trackingMode), exercise.transfer)}?
+          </p>
+          {superset ? (
+            <p className="mt-1 text-muted">Oder {superset} direkt als Supersatz.</p>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => {
+              setIsWarmup(false);
+              setWeight(formatValue(bonusWeight(lastWorking.weightKg, step, exercise.trackingMode)));
+              setReps(String(target?.targetRepsMin ?? lastWorking.reps));
+              setTouched(true);
+            }}
+            className="mt-2 text-xs font-semibold text-accent"
+          >
+            Bonus-Satz vorbelegen
+          </button>
+        </div>
+      ) : null}
+
       {suggestion && !isWarmup && !done ? (
         <div className="mt-3 flex items-start gap-2 rounded-lg border border-accent/30 bg-accent/8 px-3 py-2 text-sm">
           <span aria-hidden="true" className="text-accent">
@@ -614,6 +680,8 @@ export function ExerciseLogger({
             />
           </div>
         )}
+
+        {plates && !isTimed ? <PlateHint weight={weight} plates={plates} perSide={exercise.transfer?.perSide} /> : null}
 
         {isTimed ? null : <input type="hidden" name="durationSeconds" value="" />}
 

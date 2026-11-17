@@ -44,6 +44,17 @@ test("Training aus dem Plan: Satz speichern, Pause läuft", async ({ page }) => 
   await expect(page.getByRole("status").filter({ hasText: "Pause" })).toBeVisible();
   await expect(card).toContainText("× ");
 
+  // Zwei weitere Sätze, den letzten als „Leicht“ bewerten: Bonus-Satz.
+  for (const n of [2, 3]) {
+    await card.getByRole("button", { name: `Satz ${n} speichern` }).click();
+    await expect(card.getByRole("button", { name: `Satz ${n + 1} speichern` })).toBeVisible();
+  }
+  await card.getByRole("button", { name: /Leicht/ }).click();
+  await expect(card).toContainText("Da ging noch was");
+  await expect(card).toContainText("105 kg");
+  await card.getByRole("button", { name: "Bonus-Satz vorbelegen" }).click();
+  await expect(card.locator("input[name=weightKg]")).toHaveValue("105");
+
   for (const path of ["/", "/plans", "/exercises", "/equipment", "/history", "/stats", "/settings"]) {
     await page.goto(path);
     await expect(page.locator("main")).toBeVisible();

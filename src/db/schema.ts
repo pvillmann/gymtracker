@@ -385,6 +385,8 @@ export const gyms = sqliteTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
+    /** Verfügbare Scheiben in kg, z. B. "25, 20, 10, 5, 2,5" – leer: Standard. */
+    plates: text("plates"),
     createdAt: integer("created_at").notNull().default(now),
   },
   (t) => [uniqueIndex("gyms_name_unique").on(t.name)],

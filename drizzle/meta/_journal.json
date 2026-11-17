@@ -141,6 +141,13 @@
       "when": 1794953867174,
       "tag": "0019_progression_step",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1794954216215,
+      "tag": "0020_gym_plates",
+      "breakpoints": true
     }
   ]
 }

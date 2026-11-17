@@ -11,6 +11,7 @@ import { Card, EmptyState } from "@/components/ui";
 import { WorkoutClock } from "@/components/WorkoutClock";
 import { requireUser } from "@/lib/auth";
 import { describeSets, lastEffort, loadUnitOf, setsOfKind } from "@/lib/describe";
+import { DEFAULT_PLATES, parsePlates } from "@/lib/plates";
 import { defaultStep, suggestNext } from "@/lib/progression";
 import {
   formatDateTime,
@@ -169,6 +170,32 @@ export default async function WorkoutPage({
   // Das Ziel aus dem Plan gilt für jede Maschine der Übung.
   const targetByMovement = new Map(planItems.map((item) => [item.movementId, item]));
   const slotMovements = new Set(slotMovementIds);
+
+  // Supersatz-Tipp: eine noch offene Übung im Plan für den Gegenspieler.
+  const ANTAGONIST: Record<string, string> = {
+    Bizeps: "Trizeps",
+    Trizeps: "Bizeps",
+    Brust: "Rücken",
+    Rücken: "Brust",
+  };
+  const doneMovements = new Set(
+    loggedSets
+      .filter((set) => !set.isWarmup)
+      .map((set) => exerciseById.get(set.exerciseId)?.movementId)
+      .filter(Boolean),
+  );
+  const supersetFor = (movementId: string): string | null => {
+    const group = movementById.get(movementId)?.muscleGroup;
+    const partner = group ? ANTAGONIST[group] : undefined;
+    if (!partner) return null;
+    const open = planItems.find(
+      (item) =>
+        item.movementId !== movementId &&
+        !doneMovements.has(item.movementId) &&
+        movementById.get(item.movementId)?.muscleGroup === partner,
+    );
+    return open ? (movementById.get(open.movementId)?.name ?? null) : null;
+  };
 
   /** Die Maschinen zum Umschalten – "none" steht für "ohne Gerät". */
   const machineOptions = (movementId: string, currentEquipmentId: string | null) => {
@@ -351,6 +378,17 @@ export default async function WorkoutPage({
                     level: device?.loadUnit === "level",
                   });
                 })()}
+                plates={(() => {
+                  const device = exercise.equipmentId
+                    ? equipmentById.get(exercise.equipmentId)
+                    : undefined;
+                  if (device?.kind !== "plates" || device.loadUnit === "level") return null;
+                  return parsePlates(gym?.plates) ?? DEFAULT_PLATES;
+                })()}
+                step={defaultStep(
+                  (exercise.equipmentId ? equipmentById.get(exercise.equipmentId) : undefined) ?? null,
+                )}
+                superset={supersetFor(movementId)}
                 loggedSets={setsByExercise.get(exerciseId) ?? []}
                 previous={
                   last

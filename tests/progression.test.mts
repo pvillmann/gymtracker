@@ -75,3 +75,20 @@ test("Standard-Sprung nach Geräteart", () => {
   assert.equal(defaultStep({ kind: "stack", progressionStep: 2.5 }), 2.5);
   assert.equal(defaultStep(null), 2.5);
 });
+
+import { parsePlates, platesFor } from "@/lib/plates";
+
+test("Scheiben: gierig je Seite, Rest bleibt sichtbar", () => {
+  assert.deepEqual(platesFor(32.5), { plates: [25, 5, 2.5], rest: 0 });
+  assert.deepEqual(platesFor(41.25), { plates: [25, 15, 1.25], rest: 0 });
+  assert.deepEqual(platesFor(3, [20, 10, 5, 2.5]), { plates: [2.5], rest: 0.5 });
+  assert.deepEqual(platesFor(0), { plates: [], rest: 0 });
+});
+
+test("Scheiben-Liste einlesen: Komma als Dezimal- und Trennzeichen", () => {
+  assert.deepEqual(parsePlates("20, 10, 2,5, 1,25"), [20, 10, 2.5, 1.25]);
+  assert.deepEqual(parsePlates("20 10 5"), [20, 10, 5]);
+  assert.deepEqual(parsePlates("20; 15; 15"), [20, 15]);
+  assert.equal(parsePlates("quatsch"), null);
+  assert.equal(parsePlates(""), null);
+});
