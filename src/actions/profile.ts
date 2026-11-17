@@ -17,7 +17,9 @@ import {
 import { isAccent, isGlassLevel } from "@/lib/appearance";
 import { text } from "@/lib/formdata";
 import { fail, type FormState } from "@/lib/result";
+import { setAiSuggestions, setAnthropicKey } from "@/lib/services/ai-suggestions";
 import { handOverCatalog } from "@/lib/services/catalog";
+import { isServiceError } from "@/lib/services/errors";
 
 const profileInput = z.object({
   name: z.string().trim().min(1, "Bitte einen Namen angeben.").max(60),
@@ -128,4 +130,42 @@ export async function deleteAccountAction(
   await destroySession();
 
   redirect("/login?deleted=1");
+}
+
+/**
+ * Eigener Anthropic-Schlüssel für KI-Vorschläge. Leeres Feld löscht ihn.
+ * Der Schlüssel wird vor dem Speichern bei Anthropic geprüft und nur
+ * verschlüsselt abgelegt.
+ */
+export async function saveAnthropicKeyAction(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const user = await requireUser();
+  const key = text(formData, "anthropicKey");
+  if (key.length > 300) return fail("Das sieht nicht nach einem API-Schlüssel aus.");
+  try {
+    await setAnthropicKey(user, key || null);
+  } catch (error) {
+    if (isServiceError(error)) return fail(error.message);
+    throw error;
+  }
+  revalidatePath("/settings");
+  return { ok: true };
+}
+
+export async function deleteAnthropicKeyAction(): Promise<void> {
+  const user = await requireUser();
+  await setAnthropicKey(user, null);
+  revalidatePath("/settings");
+}
+
+export async function toggleAiSuggestionsAction(enabled: boolean): Promise<void> {
+  const user = await requireUser();
+  try {
+    await setAiSuggestions(user, enabled);
+  } catch (error) {
+    if (!isServiceError(error)) throw error;
+  }
+  revalidatePath("/settings");
 }

@@ -148,3 +148,38 @@ export function suggestNext(input: ProgressionInput): Suggestion | null {
       : `Gleiches Gewicht, eine Wiederholung mehr – bis ${repsMax} Wdh., dann wird gesteigert.`,
   };
 }
+
+/**
+ * Hält einen KI-Vorschlag in Grenzen: Gewicht nur auf dem Raster der
+ * Sprünge, höchstens einen Sprung über der Regel und höchstens zwei unter
+ * dem letzten Mal (Deload); Wiederholungen ganzzahlig und plausibel.
+ * Passt etwas nicht, gilt die Regel.
+ */
+export function clampAiSuggestion(
+  ai: { weight: number; reps: number[]; reason: string },
+  rule: Suggestion,
+  previousWeight: number,
+  step: number,
+  mode: TrackingMode,
+): Suggestion {
+  if (!Number.isFinite(ai.weight) || step <= 0) return rule;
+  const direction = mode === "assisted_reps" ? -1 : 1;
+  // Auf das Raster um das letzte Gewicht runden.
+  const snapped = round(previousWeight + Math.round((ai.weight - previousWeight) / step) * step);
+  const upper = direction > 0 ? Math.max(rule.weight, previousWeight) + step : previousWeight + 2 * step;
+  const lower = direction > 0 ? previousWeight - 2 * step : Math.min(rule.weight, previousWeight) - step;
+  const weight = Math.max(0, Math.min(upper, Math.max(lower, snapped)));
+
+  const reps =
+    ai.reps.length > 0 && ai.reps.length <= 10 && ai.reps.every((r) => Number.isInteger(r) && r >= 1 && r <= 50)
+      ? ai.reps
+      : rule.reps;
+  const reason = ai.reason.trim().slice(0, 160) || rule.reason;
+  const delta = direction * (weight - previousWeight);
+  return {
+    kind: delta > 0 ? "increase" : delta < 0 ? "hold" : reps.some((r, i) => r > (rule.reps[i] ?? r)) ? "reps" : rule.kind,
+    weight,
+    reps,
+    reason,
+  };
+}

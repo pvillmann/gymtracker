@@ -92,3 +92,19 @@ test("Scheiben-Liste einlesen: Komma als Dezimal- und Trennzeichen", () => {
   assert.equal(parsePlates("quatsch"), null);
   assert.equal(parsePlates(""), null);
 });
+
+import { clampAiSuggestion } from "@/lib/progression";
+
+test("KI-Vorschlag: aufs Raster, höchstens ein Sprung über der Regel", () => {
+  const rule = suggestNext({ mode: "weight_reps", previous: sets(60, 12, 12, 12), lastEffort: "ok", target, step: 2.5 })!;
+  const wild = clampAiSuggestion({ weight: 80, reps: [8, 8, 8], reason: "mehr!" }, rule, 60, 2.5, "weight_reps");
+  assert.equal(wild.weight, 65); // Regel 62,5 + ein Sprung
+  const odd = clampAiSuggestion({ weight: 61, reps: [10, 10], reason: "x" }, rule, 60, 2.5, "weight_reps");
+  assert.equal(odd.weight, 60);
+  const deload = clampAiSuggestion({ weight: 40, reps: [10, 10, 10], reason: "Deload" }, rule, 60, 2.5, "weight_reps");
+  assert.equal(deload.weight, 55); // höchstens zwei Sprünge runter
+  assert.equal(deload.kind, "hold");
+  const badReps = clampAiSuggestion({ weight: 62.5, reps: [0, 999], reason: "" }, rule, 60, 2.5, "weight_reps");
+  assert.deepEqual(badReps.reps, rule.reps);
+  assert.equal(badReps.reason, rule.reason);
+});

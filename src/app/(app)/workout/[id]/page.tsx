@@ -12,7 +12,9 @@ import { WorkoutClock } from "@/components/WorkoutClock";
 import { requireUser } from "@/lib/auth";
 import { describeSets, lastEffort, loadUnitOf, setsOfKind } from "@/lib/describe";
 import { DEFAULT_PLATES, parsePlates } from "@/lib/plates";
-import { defaultStep, suggestNext } from "@/lib/progression";
+import { clampAiSuggestion, defaultStep, suggestNext } from "@/lib/progression";
+import { aiEnabled, cachedAiSuggestions, requestAiSuggestions } from "@/lib/services/ai-suggestions";
+import { AiRefresh } from "@/components/AiRefresh";
 import {
   formatDateTime,
   formatDurationLong,
@@ -170,6 +172,11 @@ export default async function WorkoutPage({
   // Das Ziel aus dem Plan gilt für jede Maschine der Übung.
   const targetByMovement = new Map(planItems.map((item) => [item.movementId, item]));
   const slotMovements = new Set(slotMovementIds);
+
+  // Optionale KI-Vorschläge: was schon berechnet ist, und ob noch etwas läuft.
+  const aiOn = aiEnabled(user);
+  const aiCache = aiOn ? await cachedAiSuggestions(workout.id) : new Map();
+  let aiPending = false;
 
   // Supersatz-Tipp: eine noch offene Übung im Plan für den Gegenspieler.
   const ANTAGONIST: Record<string, string> = {
@@ -367,16 +374,55 @@ export default async function WorkoutPage({
                   const device = exercise.equipmentId
                     ? equipmentById.get(exercise.equipmentId)
                     : undefined;
-                  return suggestNext({
+                  const step = defaultStep(device ?? null);
+                  const previousWorking = setsOfKind(last.sets, false);
+                  const rule = suggestNext({
                     mode: exercise.trackingMode,
-                    previous: setsOfKind(last.sets, false),
+                    previous: previousWorking,
                     lastEffort: lastEffort(last.sets),
                     target: target
                       ? { repsMin: target.targetRepsMin, repsMax: target.targetRepsMax }
                       : null,
-                    step: defaultStep(device ?? null),
+                    step,
                     level: device?.loadUnit === "level",
                   });
+                  if (!rule || !aiOn) return rule;
+
+                  // Mit eigenem API-Schlüssel: Claude Haiku verfeinert den
+                  // Regelvorschlag – im Hintergrund, bis dahin gilt die Regel.
+                  // Das maßgebliche Gewicht vom letzten Mal (bei Gegengewicht das kleinste).
+                  const weights = previousWorking.map((s) => s.weightKg);
+                  const previousWeight =
+                    exercise.trackingMode === "assisted_reps" ? Math.min(...weights) : Math.max(...weights);
+                  const cached = aiCache.get(exerciseId);
+                  if (!cached) {
+                    aiPending = true;
+                    requestAiSuggestions(user, workout.id, [
+                      {
+                        exerciseId,
+                        name: movementById.get(movementId)?.name ?? exercise.name,
+                        mode: exercise.trackingMode,
+                        unit: device?.loadUnit === "level" ? "Stufen" : device?.perSide ? "kg je Seite" : "kg",
+                        step,
+                        target: target
+                          ? { sets: target.targetSets, repsMin: target.targetRepsMin, repsMax: target.targetRepsMax }
+                          : null,
+                        notes: target?.notes ?? null,
+                        rule,
+                        previousWeight,
+                      },
+                    ]);
+                    return rule;
+                  }
+                  if (cached.status !== "ok" || cached.weight === null) return rule;
+                  const ai = clampAiSuggestion(
+                    { weight: cached.weight, reps: cached.reps, reason: cached.reason ?? "" },
+                    rule,
+                    previousWeight,
+                    step,
+                    exercise.trackingMode,
+                  );
+                  return { ...ai, reason: `Claude: ${ai.reason}` };
                 })()}
                 plates={(() => {
                   const device = exercise.equipmentId
@@ -410,6 +456,9 @@ export default async function WorkoutPage({
           })}
         </div>
       )}
+
+      {/* Steht ein KI-Vorschlag noch aus, einmal nachladen. */}
+      {aiPending ? <AiRefresh /> : null}
 
       <section className="mt-6">
         <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">

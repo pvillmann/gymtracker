@@ -9,6 +9,7 @@ import {
   ProfileForm,
 } from "@/components/SettingsForms";
 import { ApiTokenManager } from "@/components/ApiTokenManager";
+import { AiSettings } from "@/components/AiSettings";
 import { PushSettings } from "@/components/PushSettings";
 import { ButtonLink, Card, PageHeader } from "@/components/ui";
 import {
@@ -20,6 +21,7 @@ import {
 import { requireUser } from "@/lib/auth";
 import { listApiTokens } from "@/lib/api-tokens";
 import { vapidKeys } from "@/lib/push";
+import { aiEnabled, keyHint } from "@/lib/services/ai-suggestions";
 import { isAdmin } from "@/lib/groups";
 
 export const metadata: Metadata = { title: "Einstellungen · GymTracker" };
@@ -63,6 +65,15 @@ export default async function SettingsPage() {
         </h2>
         <Card>
           <PushSettings publicKey={vapid.publicKey} />
+        </Card>
+      </section>
+
+      <section className="mb-6">
+        <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+          KI-Vorschläge (Claude Haiku)
+        </h2>
+        <Card>
+          <AiSettings hint={keyHint(user)} enabled={aiEnabled(user)} />
         </Card>
       </section>
 

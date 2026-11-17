@@ -155,6 +155,13 @@
       "when": 1794954501181,
       "tag": "0021_push",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "6",
+      "when": 1794954663989,
+      "tag": "0022_ai_suggestions",
+      "breakpoints": true
     }
   ]
 }

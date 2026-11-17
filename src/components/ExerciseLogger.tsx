@@ -298,6 +298,19 @@ export function ExerciseLogger({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- siehe oben
   }, [loggedSets.length, defaultWarmup]);
 
+  // Kommt der KI-Vorschlag erst nach dem ersten Rendern, die Felder einmal
+  // nachziehen – aber nur, solange noch nichts eingetippt oder gespeichert ist.
+  const suggestionKey = suggestion ? `${suggestion.weight}|${suggestion.reps.join(",")}` : "";
+  const [seenSuggestion, setSeenSuggestion] = useState(suggestionKey);
+  if (seenSuggestion !== suggestionKey) {
+    setSeenSuggestion(suggestionKey);
+    if (!touched && !isWarmup && workingToday === 0 && followSuggestion) {
+      const next = prefillFor(false);
+      setWeight(next.weight);
+      setReps(next.reps);
+    }
+  }
+
   const edit = (setter: (value: string) => void) => (value: string) => {
     setter(value);
     setTouched(true);

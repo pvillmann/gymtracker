@@ -64,6 +64,35 @@ Homescreen.
   und werden nur mit den Aufwärmsätzen vom letzten Mal verglichen
 - Übungen lassen sich spontan ergänzen, auch wenn sie nicht im Plan stehen
 
+**Vorschläge im Training**
+- Progressionsvorschlag nach doppelter Progression: erst Wiederholungen bis ans
+  obere Ende des Zielbereichs, dann ein Gewichtssprung. Die Felder sind direkt
+  damit vorbelegt, ein Knopf schaltet auf „wie letztes Mal“ zurück. „Am Limit“
+  hält das Gewicht, „Leicht“ steigert schon knapp unter dem Ziel. Ist der
+  Sprung größer als 10 % des Gewichts, kommen erst zwei Wiederholungen über
+  das Ziel hinzu
+- Der Sprung steht pro Maschine (Feld „Gewichtssprung“), sonst gilt ein
+  Standard nach Gerätetyp: Steckgewicht/Kabel 5 kg, Scheiben 2,5 kg (je Seite
+  1,25), Kurzhanteln 2 kg, Stufen 1
+- Optional mit **Claude Haiku**: Wer in den Einstellungen einen eigenen
+  Anthropic-API-Schlüssel hinterlegt, bekommt den Regelvorschlag von Haiku
+  verfeinert (etwa ein Deload nach Stillstand). Der Vorschlag entsteht im
+  Hintergrund, bis dahin gilt die Regel; er bleibt höchstens einen Sprung über
+  der Regel und zwei unter dem letzten Mal. Gesendet werden je Übung Name,
+  Zielbereich, Plannotiz und die letzten drei Trainings daran – keine Namen
+  oder E-Mail. Der Schlüssel wird vor dem Speichern geprüft, liegt nur
+  verschlüsselt in der Datenbank (AES-256-GCM, siehe `SECRET_KEY`) und die
+  Kosten laufen über das eigene Anthropic-Konto
+- Scheiben-Rechner: An Scheiben-Maschinen steht unter dem Gewicht, was pro
+  Seite aufzulegen ist. Die vorhandenen Scheiben lassen sich je Studio
+  einstellen
+- „Da ging noch was“: War der letzte Satz „Leicht“, schlägt die App einen
+  Bonus-Satz mit einem Sprung mehr vor – und, wenn im Plan noch eine Übung für
+  den Gegenspieler offen ist, diese als Supersatz
+- „Pause vorbei“ als Benachrichtigung auch bei gesperrtem Bildschirm (Web
+  Push, in den Einstellungen pro Gerät einschalten; auf dem iPhone nur als
+  Web-App vom Home-Bildschirm, ab iOS 16.4)
+
 **Pläne und Übungen**
 - Mehrere Trainingspläne mit sortierter Übungsreihenfolge und Zielvorgaben
   (Sätze, Wiederholungsbereich, Pausenlänge)
@@ -136,6 +165,8 @@ Homescreen.
 - Neue persönliche Rekorde werden nach dem Training markiert
 - Statistik: bewegtes Gesamtgewicht, Wochenverlauf, Trainingsserie in Wochen,
   Top-Übungen und Verteilung nach Muskelgruppe
+- Arbeitssätze pro Muskelgruppe und Woche mit Durchschnitt der letzten vier
+  Wochen – Aufwärmsätze zählen nicht (per MCP in `training_stats`)
 - „Fakten zum Angeben": das bewegte Gewicht in Elefanten, Linienbussen oder
   Vielfachen des eigenen Körpergewichts
 
@@ -517,6 +548,12 @@ nehmen und die Kopie zurück an `/data/gym.db` legen. Abschalten lässt sich das
 mit `DB_BACKUP_BEFORE_MIGRATION=false`. Es ersetzt kein Backup außerhalb des
 Servers.
 
+**Der Schlüssel für gespeicherte API-Schlüssel:** Ohne `SECRET_KEY` legt
+GymTracker beim ersten Bedarf `secret.key` neben der Datenbank an (im
+Container also `/data/secret.key`). Sichere ihn mit – getrennt vom
+Datenbank-Backup, sonst ist die Verschlüsselung wertlos. Geht er verloren,
+müssen die Nutzer ihre Anthropic-Schlüssel neu eintragen; sonst fehlt nichts.
+
 ## Update
 
 Zwei Wege, je nachdem ob du das fertige Image aus der GitHub Container
@@ -584,6 +621,13 @@ Was GymTracker selbst mitbringt:
 - **Rechte:** Trainings, Pläne und Einstellungen sieht nur ihr Besitzer – auch
   kein Administrator. Den Katalog (Übungen, Maschinen, Studios) darf jeder
   bearbeiten; jede Änderung steht im Änderungsprotokoll.
+- **Fremde API-Schlüssel** (Anthropic, pro Konto) liegen AES-256-GCM-
+  verschlüsselt in der Datenbank und werden nie wieder angezeigt, nur die
+  letzten vier Zeichen. Eine gestohlene `gym.db` allein reicht nicht – mit
+  `secret.key` bzw. `SECRET_KEY` zusammen schon.
+- **Web Push** läuft über VAPID; die Schlüssel erzeugt die Instanz selbst und
+  legt sie in der Datenbank ab. Benachrichtigungen enthalten nur „Pause
+  vorbei“ und den Übungsnamen.
 
 Was du selbst tun solltest:
 
@@ -633,6 +677,7 @@ Nützliche Skripte:
 | `DB_BACKUP_BEFORE_MIGRATION` | `true` | Vor ausstehenden Migrationen eine Kopie nach `backups/` neben der Datenbank schreiben |
 | `TZ` | Systemzeitzone | Bestimmt, wann eine Trainingswoche beginnt |
 | `PORT` | `3000` | Port des Servers |
+| `SECRET_KEY` | Datei `secret.key` neben der Datenbank | Schlüssel für gespeicherte API-Schlüssel, mindestens 32 Zeichen (z. B. `openssl rand -base64 32`). Nachträglich ändern macht gespeicherte Schlüssel unlesbar |
 
 ## Technik
 

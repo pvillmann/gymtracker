@@ -37,6 +37,10 @@ export const users = sqliteTable(
     accentColor: text("accent_color").notNull().default("blue"),
     /** Wie durchsichtig Kopfleiste und Navigation sind: solid, medium, clear. */
     glass: text("glass").notNull().default("solid"),
+    /** Eigener Anthropic-API-Schlüssel, verschlüsselt (lib/secret-box.ts). */
+    anthropicKeyEnc: text("anthropic_key_enc"),
+    /** Progressionsvorschläge zusätzlich von Claude Haiku. */
+    aiSuggestions: integer("ai_suggestions", { mode: "boolean" }).notNull().default(false),
     /** null = noch nicht bestätigt. Login ist erst danach möglich. */
     emailVerifiedAt: integer("email_verified_at"),
     /**
@@ -654,4 +658,27 @@ export const pushSubscriptions = sqliteTable(
     createdAt: integer("created_at").notNull().default(now),
   },
   (t) => [uniqueIndex("push_subscriptions_endpoint_unique").on(t.endpoint)],
+);
+
+/**
+ * Vorschläge von Claude Haiku für ein Training, je Variante einmal
+ * berechnet. „failed“ merkt sich Fehlschläge, damit nicht jeder Seitenaufruf
+ * eine neue Anfrage auslöst.
+ */
+export const workoutAiSuggestions = sqliteTable(
+  "workout_ai_suggestions",
+  {
+    workoutId: text("workout_id")
+      .notNull()
+      .references(() => workouts.id, { onDelete: "cascade" }),
+    exerciseId: text("exercise_id")
+      .notNull()
+      .references(() => exercises.id, { onDelete: "cascade" }),
+    status: text("status").notNull().$type<"ok" | "failed">(),
+    weight: real("weight"),
+    reps: text("reps"),
+    reason: text("reason"),
+    createdAt: integer("created_at").notNull().default(now),
+  },
+  (t) => [primaryKey({ columns: [t.workoutId, t.exerciseId] })],
 );

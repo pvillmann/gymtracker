@@ -127,6 +127,8 @@ test("Benachrichtigungen: Abschnitt in den Einstellungen, Service Worker erreich
   await page.goto("/settings");
   await expect(page.getByRole("heading", { name: "Benachrichtigungen" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Auf diesem Gerät einschalten" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "KI-Vorschläge (Claude Haiku)" })).toBeVisible();
+  await expect(page.getByLabel("Anthropic-API-Schlüssel")).toHaveAttribute("type", "password");
 
   const sw = await request.get("/sw.js");
   expect(sw.status()).toBe(200);
