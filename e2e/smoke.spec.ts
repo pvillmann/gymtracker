@@ -263,10 +263,93 @@ test("Wiegen: sofortige Ablehnung wie in Bluefy – Fehler sichtbar, Varianten a
   await page.goto("/wiegen");
   await page.getByRole("button", { name: "Waage verbinden" }).click();
   await expect(page.getByRole("status")).toContainText("Fehler: 2");
-  await page.getByRole("button", { name: /Variante C/ }).click();
+  await page.getByRole("button", { name: /Variante A/ }).click();
   await expect(page.getByRole("status")).toContainText("Fehler: 2");
   const calls = await page.evaluate(() => (window as unknown as { __calls: Array<Record<string, unknown>> }).__calls);
-  expect(calls[0]).toMatchObject({ acceptAllDevices: true });
-  expect((calls[0].optionalServices as string[])[0]).toBe("0000ffe0-0000-1000-8000-00805f9b34fb");
-  expect(calls[1]).toHaveProperty("filters");
+  // Standard ist die Suche mit Filtern (bei Bluefy die einzige, die klappte).
+  expect(calls[0]).toHaveProperty("filters");
+  expect(calls[1]).toMatchObject({ acceptAllDevices: true });
+  expect((calls[1].optionalServices as string[])[0]).toBe("0000ffe0-0000-1000-8000-00805f9b34fb");
+});
+
+test("Wiegen: simulierte QN-Waage – Handshake, Live-Gewicht, Ergebnis", async ({ page }) => {
+  const errors = watchErrors(page);
+  await page.addInitScript(() => {
+    const sum = (b: number[]) => b.reduce((a, x) => a + x, 0) & 0xff;
+    const frame = (b: number[]) => new DataView(new Uint8Array([...b, sum(b)]).buffer);
+    const writes: string[] = [];
+    (window as unknown as { __writes: string[] }).__writes = writes;
+    const props = (p: Partial<Record<string, boolean>>) => ({
+      read: false, write: false, writeWithoutResponse: false, notify: false, indicate: false, ...p,
+    });
+    // Wie die echte Waage: Info-Frame alle 100 ms, bis die Konfiguration kommt.
+    const ffe1 = Object.assign(new EventTarget(), {
+      uuid: "FFE1",
+      properties: props({ notify: true }),
+      value: undefined as DataView | undefined,
+      async readValue() {
+        return new DataView(new ArrayBuffer(0));
+      },
+      async startNotifications() {
+        const info = setInterval(() => emit([0x12, 0x0f, 0x15, 0x0c, 0x77, 0xc7, 0x38, 0xc1, 0xa4, 0x38, 0x01, 0x38, 0x00, 0x00]), 100);
+        (ffe1 as unknown as { stopInfo: () => void }).stopInfo = () => clearInterval(info);
+        return ffe1;
+      },
+    });
+    const emit = (bytes: number[]) => {
+      ffe1.value = frame(bytes);
+      ffe1.dispatchEvent(new Event("characteristicvaluechanged"));
+    };
+    const writable = (uuid: string) => ({
+      uuid,
+      properties: props({ write: true, writeWithoutResponse: true }),
+      addEventListener() {},
+      async readValue() {
+        return new DataView(new ArrayBuffer(0));
+      },
+      async startNotifications() {
+        return this;
+      },
+      async writeValueWithResponse(value: ArrayBuffer) {
+        const bytes = Array.from(new Uint8Array(value));
+        writes.push(`${uuid}:${bytes.map((b) => b.toString(16).padStart(2, "0")).join(" ")}`);
+        if (uuid === "FFE3" && bytes[0] === 0x13) {
+          (ffe1 as unknown as { stopInfo: () => void }).stopInfo();
+          setTimeout(() => emit([0x14, 0x05, 0x15, 0x00]), 20);
+          // Live-Gewicht 79,70 → 79,80 stabil.
+          setTimeout(() => emit([0x10, 0x0b, 0x15, 0x1f, 0x22, 0x00, 0x00, 0x00, 0x00, 0x00]), 60);
+          setTimeout(() => emit([0x10, 0x0b, 0x15, 0x1f, 0x2c, 0x01, 0x01, 0xf4, 0x02, 0x58]), 120);
+        }
+      },
+    });
+    const device = Object.assign(new EventTarget(), {
+      id: "qn",
+      name: "QN-Scale",
+      gatt: {
+        connected: true,
+        async connect() {
+          return device.gatt;
+        },
+        disconnect() {
+          device.dispatchEvent(new Event("gattserverdisconnected"));
+        },
+        async getPrimaryServices() {
+          return [{ uuid: "FFE0", getCharacteristics: async () => [ffe1, writable("FFE3"), writable("FFE4")] }];
+        },
+      },
+    });
+    Object.defineProperty(navigator, "bluetooth", { value: { requestDevice: async () => device }, configurable: true });
+  });
+
+  await page.goto("/login");
+  await login(page, "ben@e2e.local");
+  await page.goto("/wiegen");
+  await page.getByRole("button", { name: "Waage verbinden" }).click();
+  await expect(page.getByRole("status")).toContainText("79,8 kg");
+  await expect(page.getByRole("status")).toContainText("gemessen");
+  const writes = await page.evaluate(() => (window as unknown as { __writes: string[] }).__writes);
+  expect(writes[0]).toBe("FFE3:13 09 15 01 10 00 00 00 42");
+  expect(writes[1]).toMatch(/^FFE4:02( [0-9a-f]{2}){4}$/);
+  expect(writes.some((w) => w.startsWith("FFE3:20 08 15"))).toBe(true);
+  expect(errors).toEqual([]);
 });

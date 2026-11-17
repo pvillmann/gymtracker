@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { saveScaleCaptureAction } from "@/actions/scale";
 import { Button } from "@/components/ui";
+import { configFrame, parseFrame, timeFrameFfe4, timeSyncFrame, toHex } from "@/lib/qn-scale";
 
 /*
  * Testseite für die Bluetooth-Waage: verbindet sich, abonniert alles, was
@@ -20,6 +21,9 @@ type BtCharacteristic = EventTarget & {
   value?: DataView;
   readValue(): Promise<DataView>;
   startNotifications(): Promise<BtCharacteristic>;
+  writeValue?(value: BufferSource): Promise<void>;
+  writeValueWithResponse?(value: BufferSource): Promise<void>;
+  writeValueWithoutResponse?(value: BufferSource): Promise<void>;
 };
 type BtService = { uuid: string; getCharacteristics(): Promise<BtCharacteristic[]> };
 type BtServer = { connected: boolean; connect(): Promise<BtServer>; disconnect(): void; getPrimaryServices(): Promise<BtService[]> };
@@ -73,6 +77,18 @@ export function ScaleRecorder() {
   const [lines, setLines] = useState<string[]>([]);
   const [saved, setSaved] = useState<string | null>(null);
   const [deviceLabel, setDeviceLabel] = useState<string | null>(null);
+  // Live-Gewicht aus dem QN-Protokoll und das stabile Endergebnis.
+  const [liveKg, setLiveKg] = useState<number | null>(null);
+  const [finalKg, setFinalKg] = useState<number | null>(null);
+  const chars = useRef(new Map<string, BtCharacteristic>());
+  const qn = useRef<{ protocol: number; divisor: 10 | 100; configSentAt: number; tries: number; acked: boolean; done: boolean }>({
+    protocol: 0,
+    divisor: 100,
+    configSentAt: 0,
+    tries: 0,
+    acked: false,
+    done: false,
+  });
   // Erst im Browser prüfen – auf dem Server gibt es kein navigator.
   const supported = useSyncExternalStore(
     () => () => {},
@@ -148,7 +164,64 @@ export function ScaleRecorder() {
     return () => clearInterval(timer);
   }, [status]);
 
-  const connect = async (variant: Variant = "A") => {
+  const write = async (uuid: string, bytes: Uint8Array) => {
+    const characteristic = chars.current.get(uuid);
+    if (!characteristic) {
+      log("error", { text: `kein Merkmal ${uuid} zum Schreiben` });
+      return;
+    }
+    const value = bytes.slice().buffer;
+    try {
+      if (characteristic.properties.write && characteristic.writeValueWithResponse) {
+        await characteristic.writeValueWithResponse(value);
+      } else if (characteristic.writeValueWithoutResponse) {
+        await characteristic.writeValueWithoutResponse(value);
+      } else {
+        await characteristic.writeValue!(value);
+      }
+      log("write", { c: uuid, hex: toHex(bytes) });
+    } catch (error) {
+      log("error", { c: uuid, text: `write: ${String(error)}` });
+    }
+  };
+
+  /**
+   * QN-Handshake: Die Waage wiederholt ihren Info-Frame (0x12), bis die App
+   * mit Konfiguration (FFE3) und Uhrzeit (FFE4) antwortet; nach der
+   * Bestätigung (0x14) folgt die Zeit-Synchronisation. Erst dann kommen
+   * Gewichtsframes (0x10).
+   */
+  const onQnFrame = async (view: DataView) => {
+    const frame = parseFrame(new Uint8Array(view.buffer, view.byteOffset, view.byteLength), qn.current.divisor);
+    const state = qn.current;
+    if (frame.kind === "info") {
+      state.protocol = frame.protocol;
+      state.divisor = frame.divisor;
+      // Höchstens alle 2 s und 5-mal – falls die erste Antwort nicht ankam.
+      if (state.acked || state.tries >= 5 || Date.now() - state.configSentAt < 2000) return;
+      if (!chars.current.has("FFE3")) return;
+      state.tries += 1;
+      state.configSentAt = Date.now();
+      log("info", { text: `Handshake ${state.tries}: Protokoll ${frame.protocol.toString(16)}, Teiler ${frame.divisor}` });
+      await write("FFE3", configFrame(frame.protocol));
+      if (chars.current.has("FFE4")) await write("FFE4", timeFrameFfe4());
+    } else if (frame.kind === "configAck") {
+      state.acked = true;
+      await write("FFE3", timeSyncFrame(state.protocol));
+    } else if (frame.kind === "weight") {
+      setLiveKg(frame.kg);
+      if (frame.stable && !state.done) {
+        state.done = true;
+        setFinalKg(frame.kg);
+        log("measurement", { kg: frame.kg, r1: frame.resistance1, r2: frame.resistance2 });
+        void save();
+      }
+    } else if (frame.kind === "invalid") {
+      log("info", { text: `Frame nicht lesbar: ${frame.reason}` });
+    }
+  };
+
+  const connect = async (variant: Variant = "C") => {
     const bluetooth = (navigator as Navigator & { bluetooth?: Bluetooth }).bluetooth;
     if (!bluetooth) {
       // Nie still abbrechen – sonst „passiert nichts“.
@@ -162,6 +235,10 @@ export function ScaleRecorder() {
     start.current = Date.now();
     setLines([]);
     setCount(0);
+    setLiveKg(null);
+    setFinalKg(null);
+    chars.current.clear();
+    qn.current = { protocol: 0, divisor: 100, configSentAt: 0, tries: 0, acked: false, done: false };
     setSaved(null);
     setMessage(null);
     setStatus("connecting");
@@ -223,9 +300,12 @@ export function ScaleRecorder() {
           const p = characteristic.properties;
           const props = Object.entries(p).filter(([, on]) => on === true).map(([name]) => name);
           log("char", { s: service.uuid, c: characteristic.uuid, props });
+          chars.current.set(shortUuid(characteristic.uuid), characteristic);
           if (p.notify || p.indicate) {
             characteristic.addEventListener("characteristicvaluechanged", () => {
-              if (characteristic.value) log("notify", { c: characteristic.uuid, hex: hex(characteristic.value) });
+              if (!characteristic.value) return;
+              log("notify", { c: characteristic.uuid, hex: hex(characteristic.value) });
+              if (shortUuid(characteristic.uuid) === "FFE1") void onQnFrame(characteristic.value);
             });
             try {
               await characteristic.startNotifications();
@@ -294,12 +374,12 @@ export function ScaleRecorder() {
         </Button>
       ) : (
         <>
-          <Button className="w-full" disabled={status === "connecting"} onClick={() => void connect("A")}>
+          <Button className="w-full" disabled={status === "connecting"} onClick={() => void connect("C")}>
             {status === "connecting" ? "Verbinde …" : status === "done" ? "Noch mal verbinden" : "Waage verbinden"}
           </Button>
           {status === "error" ? (
             <div className="flex gap-2">
-              {(["B", "C"] as const).map((variant) => (
+              {(["A", "B"] as const).map((variant) => (
                 <Button
                   key={variant}
                   size="sm"
@@ -323,6 +403,12 @@ export function ScaleRecorder() {
           {status === "done" && "Fertig. Danke! Die Seite kann zu."}
           {status === "error" && (message ?? "Fehler.")}
         </p>
+        {liveKg !== null ? (
+          <p className="my-2 text-center text-4xl font-bold tnum">
+            {(finalKg ?? liveKg).toLocaleString("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 2 })} kg
+            <span className="block text-sm font-medium text-muted">{finalKg !== null ? "gemessen ✓" : "misst …"}</span>
+          </p>
+        ) : null}
         <p className="mt-1 text-faint tnum">
           {count} Ereignisse{saved ? ` · gespeichert ${saved}` : ""}
           {deviceLabel ? ` · ${deviceLabel}` : ""}
@@ -353,4 +439,10 @@ function Diagnostics() {
     () => "",
   );
   return info ? <p className="text-xs text-faint">{info}</p> : null;
+}
+
+/** „FFE1“ aus „0000ffe1-0000-1000-8000-00805f9b34fb“ oder „FFE1“. */
+function shortUuid(uuid: string): string {
+  const value = uuid.toUpperCase();
+  return value.length > 8 ? value.slice(4, 8) : value.padStart(4, "0");
 }
