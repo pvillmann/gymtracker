@@ -34,7 +34,18 @@ type BtAdvertisement = Event & {
   manufacturerData?: Map<number, DataView>;
   serviceData?: Map<string, DataView>;
 };
-type Bluetooth = { requestDevice(options: object): Promise<BtDevice> };
+type Bluetooth = { requestDevice(options: object): Promise<BtDevice>; getAvailability?: () => Promise<boolean> };
+
+/**
+ * Drei Arten zu fragen. Bluefy lehnte die erste sofort mit „2“ ab – welche
+ * Form es annimmt, ist nicht dokumentiert. Also ausprobieren und mitschreiben.
+ */
+type Variant = "A" | "B" | "C";
+const VARIANT_LABEL: Record<Variant, string> = {
+  A: "alle Geräte + Dienste",
+  B: "alle Geräte, ohne Dienste",
+  C: "nur Waagen (Filter)",
+};
 
 /**
  * Dienste, die Waagen dieser Art üblicherweise anbieten (QN/Yolanda, Renpho,
@@ -137,7 +148,7 @@ export function ScaleRecorder() {
     return () => clearInterval(timer);
   }, [status]);
 
-  const connect = async () => {
+  const connect = async (variant: Variant = "A") => {
     const bluetooth = (navigator as Navigator & { bluetooth?: Bluetooth }).bluetooth;
     if (!bluetooth) {
       // Nie still abbrechen – sonst „passiert nichts“.
@@ -154,10 +165,27 @@ export function ScaleRecorder() {
     setSaved(null);
     setMessage(null);
     setStatus("connecting");
-    log("start", { at: new Date().toISOString() });
+    log("start", { at: new Date().toISOString(), variant });
+    // Nicht abwarten – requestDevice muss direkt im Tipp passieren.
+    bluetooth.getAvailability?.().then(
+      (available) => log("info", { text: `Bluetooth verfügbar: ${available}` }),
+      (error) => log("info", { text: `getAvailability: ${String(error)}` }),
+    );
 
     try {
-      const picked = await bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: SERVICES });
+      const options =
+        variant === "A"
+          ? { acceptAllDevices: true, optionalServices: SERVICES }
+          : variant === "B"
+            ? { acceptAllDevices: true }
+            : {
+                filters: [
+                  ...["QN", "Yolanda", "Feel", "Scale", "Renpho"].map((namePrefix) => ({ namePrefix })),
+                  ...SERVICES.slice(0, 6).map((service) => ({ services: [service] })),
+                ],
+                optionalServices: SERVICES,
+              };
+      const picked = await bluetooth.requestDevice(options);
       device.current = picked;
       deviceName.current = picked.name ?? null;
       setDeviceLabel(picked.name ?? "ohne Namen");
@@ -217,7 +245,20 @@ export function ScaleRecorder() {
       await save();
     } catch (error) {
       const text = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
-      log("error", { text });
+      // Alles mitschreiben, was der Fehler hergibt – Bluefy lieferte nur „2“.
+      let json = "";
+      try {
+        json = JSON.stringify(error);
+      } catch {
+        json = "(nicht serialisierbar)";
+      }
+      log("error", {
+        text,
+        kind: typeof error,
+        name: error instanceof Error ? error.name : "",
+        json: json ?? "",
+        variant,
+      });
       // Immer den rohen Fehler zeigen – „Keine Waage gewählt“ allein verschleierte,
       // dass Bluefy die Anfrage sofort ablehnte, ohne eine Liste zu zeigen.
       setMessage(
@@ -252,9 +293,26 @@ export function ScaleRecorder() {
           Fertig
         </Button>
       ) : (
-        <Button className="w-full" disabled={status === "connecting"} onClick={() => void connect()}>
-          {status === "connecting" ? "Verbinde …" : status === "done" ? "Noch mal verbinden" : "Waage verbinden"}
-        </Button>
+        <>
+          <Button className="w-full" disabled={status === "connecting"} onClick={() => void connect("A")}>
+            {status === "connecting" ? "Verbinde …" : status === "done" ? "Noch mal verbinden" : "Waage verbinden"}
+          </Button>
+          {status === "error" ? (
+            <div className="flex gap-2">
+              {(["B", "C"] as const).map((variant) => (
+                <Button
+                  key={variant}
+                  size="sm"
+                  variant="secondary"
+                  className="flex-1"
+                  onClick={() => void connect(variant)}
+                >
+                  Variante {variant}: {VARIANT_LABEL[variant]}
+                </Button>
+              ))}
+            </div>
+          ) : null}
+        </>
       )}
 
       <div className="rounded-xl border border-line bg-surface-2 p-3 text-sm" role="status">

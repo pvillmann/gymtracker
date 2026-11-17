@@ -243,3 +243,30 @@ test("Wiegen: simulierte Waage – Pakete landen in der Datenbank", async ({ pag
   await expect(page.locator("main")).toContainText("5 Messpakete");
   expect(errors).toEqual([]);
 });
+
+test("Wiegen: sofortige Ablehnung wie in Bluefy – Fehler sichtbar, Varianten angeboten", async ({ page }) => {
+  await page.addInitScript(() => {
+    const calls: unknown[] = [];
+    (window as unknown as { __calls: unknown[] }).__calls = calls;
+    Object.defineProperty(navigator, "bluetooth", {
+      value: {
+        requestDevice: async (options: unknown) => {
+          calls.push(options);
+          throw 2;
+        },
+      },
+      configurable: true,
+    });
+  });
+  await page.goto("/login");
+  await login(page, "ben@e2e.local");
+  await page.goto("/wiegen");
+  await page.getByRole("button", { name: "Waage verbinden" }).click();
+  await expect(page.getByRole("status")).toContainText("Fehler: 2");
+  await page.getByRole("button", { name: /Variante C/ }).click();
+  await expect(page.getByRole("status")).toContainText("Fehler: 2");
+  const calls = await page.evaluate(() => (window as unknown as { __calls: Array<Record<string, unknown>> }).__calls);
+  expect(calls[0]).toMatchObject({ acceptAllDevices: true });
+  expect((calls[0].optionalServices as string[])[0]).toBe("0000ffe0-0000-1000-8000-00805f9b34fb");
+  expect(calls[1]).toHaveProperty("filters");
+});
