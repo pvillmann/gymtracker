@@ -450,6 +450,14 @@ Hinter einem Reverse Proxy mit Größenlimit (nginx: `client_max_body_size`)
 muss das Limit für `/api/health` zum Export passen – ein Tag ist klein, ein
 Jahresexport mehrere MB. GymTracker selbst nimmt bis 20 MB an.
 
+### Bluetooth-Waage (Test)
+
+`/wiegen` verbindet sich per Web Bluetooth direkt mit einer Körperwaage und
+schreibt roh mit, was sie sendet (Tabelle `scale_captures`, per MCP
+`scale_captures`). Noch ohne Auswertung – erst sehen, was ankommt. Auf dem
+iPhone kann Safari kein Web Bluetooth; dort im Browser Bluefy öffnen.
+Getestet ist die Seite nur gegen eine simulierte Waage.
+
 ## Anbindung an Claude (MCP)
 
 GymTracker stellt unter `/api/mcp` einen

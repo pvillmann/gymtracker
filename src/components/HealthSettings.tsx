@@ -83,6 +83,13 @@ export function HealthSettings({
       <p className="text-xs text-faint">
         Der Schlüssel kann nur Körperwerte schreiben, nichts lesen. Ein neuer macht den alten ungültig.
       </p>
+      <p className="border-t border-line pt-3 text-muted">
+        Bluetooth-Waage direkt (Test):{" "}
+        <a href="/wiegen" className="font-semibold text-accent">
+          Wiegen
+        </a>{" "}
+        – in Bluefy öffnen.
+      </p>
     </div>
   );
 }

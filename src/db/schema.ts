@@ -718,3 +718,27 @@ export const bodyMetrics = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.userId, t.metric, t.measuredAt] })],
 );
+
+/**
+ * Rohe Mitschnitte einer Bluetooth-Waage (Testseite /wiegen). Bewusst
+ * unausgewertet: erst sehen, was die Waage sendet, dann entscheiden, was
+ * davon in body_metrics gehört.
+ */
+export const scaleCaptures = sqliteTable(
+  "scale_captures",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** Name, den die Waage beim Verbinden meldet. */
+    deviceName: text("device_name"),
+    /** Browser (User-Agent) – Bluefy, Chrome … */
+    client: text("client"),
+    /** JSON: Liste der Ereignisse { t, type, … } in Reihenfolge. */
+    events: text("events").notNull(),
+    createdAt: integer("created_at").notNull().default(now),
+    updatedAt: integer("updated_at").notNull().default(now),
+  },
+  (t) => [index("scale_captures_user_idx").on(t.userId, t.createdAt)],
+);

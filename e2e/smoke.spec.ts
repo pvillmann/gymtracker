@@ -171,3 +171,75 @@ test("Apple Health: Schlüssel erzeugen, Export senden, Verlauf in der Statistik
   await expect(page.locator("main")).toContainText("54 /min");
   expect(errors).toEqual([]);
 });
+
+test("Wiegen: Testseite mit Anleitung", async ({ page }) => {
+  const errors = watchErrors(page);
+  await page.goto("/login");
+  await login(page, "ben@e2e.local");
+  await page.goto("/wiegen");
+  await expect(page.getByRole("heading", { name: "Wiegen (Test)" })).toBeVisible();
+  await expect(page.locator("main")).toContainText("Feelfit-App schließen");
+  // Chromium kann Web Bluetooth: dann gibt es den Knopf, sonst den Hinweis auf Bluefy.
+  await expect(page.getByRole("button", { name: "Waage verbinden" }).or(page.getByText("Dieser Browser kann kein Bluetooth"))).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test("Wiegen: simulierte Waage – Pakete landen in der Datenbank", async ({ page }) => {
+  const errors = watchErrors(page);
+  // Eine Waage im Browser vortäuschen: ein Dienst, ein Merkmal mit Benachrichtigungen.
+  await page.addInitScript(() => {
+    const listeners: Array<() => void> = [];
+    const characteristic = Object.assign(new EventTarget(), {
+      uuid: "0000fff1-0000-1000-8000-00805f9b34fb",
+      properties: { read: false, write: false, writeWithoutResponse: false, notify: true, indicate: false },
+      value: undefined as DataView | undefined,
+      async readValue() {
+        return new DataView(new ArrayBuffer(0));
+      },
+      async startNotifications() {
+        let n = 0;
+        const timer = setInterval(() => {
+          characteristic.value = new DataView(new Uint8Array([0x10, 0x0b, 0x15, n++]).buffer);
+          characteristic.dispatchEvent(new Event("characteristicvaluechanged"));
+          if (n >= 5) clearInterval(timer);
+        }, 50);
+        return characteristic;
+      },
+    });
+    const device = Object.assign(new EventTarget(), {
+      id: "fake",
+      name: "QN-Scale",
+      gatt: {
+        connected: true,
+        async connect() {
+          return device.gatt;
+        },
+        disconnect() {
+          device.dispatchEvent(new Event("gattserverdisconnected"));
+        },
+        async getPrimaryServices() {
+          return [{ uuid: "0000fff0-0000-1000-8000-00805f9b34fb", getCharacteristics: async () => [characteristic] }];
+        },
+      },
+    });
+    void listeners;
+    Object.defineProperty(navigator, "bluetooth", {
+      value: { requestDevice: async () => device },
+      configurable: true,
+    });
+  });
+
+  await page.goto("/login");
+  await login(page, "ben@e2e.local");
+  await page.goto("/wiegen");
+  await page.getByRole("button", { name: "Waage verbinden" }).click();
+  await expect(page.getByRole("status")).toContainText("Verbunden");
+  await expect(page.getByRole("status")).toContainText("10 0b 15 04");
+  await page.getByRole("button", { name: "Fertig" }).click();
+  await expect(page.getByRole("status")).toContainText("gespeichert");
+
+  await page.reload();
+  await expect(page.locator("main")).toContainText("QN-Scale");
+  await expect(page.locator("main")).toContainText("5 Messpakete");
+  expect(errors).toEqual([]);
+});
