@@ -92,3 +92,32 @@ test("Arbeitssätze pro Muskelgruppe: diese Woche und Schnitt der vier Wochen da
   assert.equal(result.find((m) => m.group === "Ohne Muskelgruppe")?.thisWeek, 1);
   assert.equal(result.some((m) => m.group === "Beine"), false);
 });
+
+test("Vergleich: Sprung im Zielbereich ist kein Rückschritt (#50)", async () => {
+  const { compareSets } = await import("@/lib/training");
+  const set = (weightKg: number, reps: number) => ({ weightKg, reps, durationSeconds: null });
+  const target = { repsMin: 8, repsMax: 10 };
+  const perSide = { perSide: true };
+
+  // Der geplante Sprung: 40 × 10 → 41,25 × 8 ist im 1RM −2 % – jetzt neutral.
+  assert.deepEqual(compareSets(set(41.25, 8), set(40, 10), "weight_reps", 80, perSide, target), {
+    trend: "flat",
+    label: "+1,25 kg · −2 Wdh.",
+  });
+  // Ohne Plan bleibt es beim 1RM-Vergleich.
+  assert.equal(compareSets(set(41.25, 8), set(40, 10), "weight_reps", 80, perSide).trend, "down");
+  // Unter dem Zielbereich: zu schwer, auch wenn das 1RM steigt.
+  assert.deepEqual(compareSets(set(50, 7), set(40, 10), "weight_reps", 80, null, target), {
+    trend: "down",
+    label: "+10 kg · −3 Wdh. · unter Ziel (8)",
+  });
+  // Gleiches Gewicht, mehr Wiederholungen: immer besser – auch unter dem Ziel.
+  assert.equal(compareSets(set(40, 7), set(40, 6), "weight_reps", 80, null, target).trend, "up");
+  // Über dem Zielbereich: Hinweis zum Steigern.
+  assert.deepEqual(compareSets(set(40, 11), set(40, 11), "weight_reps", 80, null, target), {
+    trend: "flat",
+    label: "über Ziel – steigern",
+  });
+  // Deutlich mehr im Zielbereich bleibt grün.
+  assert.equal(compareSets(set(45, 9), set(40, 9), "weight_reps", 80, null, target).trend, "up");
+});

@@ -32,6 +32,7 @@ import {
   getWorkout,
   getWorkoutDetail,
   listGyms,
+  listPlanItems,
 } from "@/lib/queries";
 import {
   compareSets,
@@ -62,6 +63,13 @@ export default async function WorkoutDetailPage({
 
   const entries = await getWorkoutDetail(user.id, workout.id);
   const exerciseIds = entries.map((entry) => entry.exerciseId);
+
+  // Zielbereich aus dem Plan, sofern es ihn noch gibt. Hinweis: das sind die
+  // heutigen Zielwerte – wurde der Plan seitdem geändert, gilt der neue Stand.
+  const planTargets = new Map(
+    (workout.planId ? await listPlanItems(workout.planId) : [])
+      .map((item) => [item.movementId, { repsMin: item.targetRepsMin, repsMax: item.targetRepsMax }]),
+  );
 
   const [previous, bests] = await Promise.all([
     getPreviousPerformances(user.id, exerciseIds, {
@@ -200,6 +208,7 @@ export default async function WorkoutDetailPage({
                     entry.trackingMode,
                     user.bodyweightKg,
                     entry.unit,
+                    set.isWarmup ? null : (planTargets.get(entry.movementId) ?? null),
                   );
 
                   return (
