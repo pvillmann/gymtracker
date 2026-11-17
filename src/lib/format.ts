@@ -1,7 +1,9 @@
-/** kg mit höchstens einer Nachkommastelle: 42.5 → "42,5", 40 → "40". */
+/** kg mit höchstens zwei Nachkommastellen: 41.25 → "41,25", 40 → "40". */
 export function formatKg(value: number): string {
-  const rounded = Math.round(value * 10) / 10;
-  return rounded.toLocaleString("de-DE", { maximumFractionDigits: 1 });
+  // Zwei Stellen: 1,25-kg-Scheiben und Sprünge je Seite gibt es wirklich.
+  // Eine Stelle machte aus 41,25 „41,3“ – und das Vorbelegen speicherte es so.
+  const rounded = Math.round(value * 100) / 100;
+  return rounded.toLocaleString("de-DE", { maximumFractionDigits: 2 });
 }
 
 /** Große Volumenzahlen kompakt: 12750 → "12,8 t". */

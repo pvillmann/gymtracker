@@ -232,7 +232,8 @@ export default async function StatsPage() {
               items={muscleWeeks.map((m) => ({
                 key: m.group,
                 label: m.group,
-                value: Math.max(m.thisWeek, m.average),
+                // Der Balken zeigt diese Woche – sonst sähe eine ausgelassene Gruppe voll aus.
+                value: m.thisWeek,
                 display: `${m.thisWeek} diese Woche · Ø ${m.average.toLocaleString("de-DE", { maximumFractionDigits: 1 })}`,
               }))}
               valueName="Arbeitssätze"

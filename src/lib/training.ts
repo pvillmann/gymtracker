@@ -140,8 +140,8 @@ export function compareSets(
   const parts: string[] = [];
 
   if (Math.abs(weightDiff) >= 0.05) {
-    const rounded = Math.round(Math.abs(weightDiff) * 10) / 10;
-    const value = rounded.toLocaleString("de-DE", { maximumFractionDigits: 1 });
+    const rounded = Math.round(Math.abs(weightDiff) * 100) / 100;
+    const value = rounded.toLocaleString("de-DE", { maximumFractionDigits: 2 });
     // Beim Gegengewicht benennt das Label die Hilfe, der Pfeil die Leistung:
     // "▲ −5 kg Hilfe" heißt fünf Kilo weniger Unterstützung.
     const suffix =

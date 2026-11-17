@@ -42,7 +42,11 @@ test("Anzeige: Stufen und je Seite", () => {
 });
 
 test("Format: kg und Dauer", () => {
-  assert.equal(formatKg(42.54), "42,5");
+  assert.equal(formatKg(42.5), "42,5");
+  // Sprünge von 1,25 kg dürfen nicht auf 41,3 gerundet werden – das Feld
+  // wird damit vorbelegt und so gespeichert.
+  assert.equal(formatKg(41.25), "41,25");
+  assert.equal(formatKg(42.504), "42,5");
   assert.equal(formatDuration(630), "10:30");
   assert.equal(formatDuration(3725), "1:02:05");
   assert.equal(parseDurationInput("10:30"), 630);
