@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { generateVAPIDKeys, sendNotification, WebPushError } from "web-push";
 
 import { db } from "@/db";
@@ -33,8 +33,50 @@ function vapidSubject(): string {
 
 export type SubscriptionInput = { endpoint: string; keys: { p256dh: string; auth: string } };
 
+/**
+ * Push-Dienste der Browser. Eine offizielle Liste gibt es nicht; das sind die
+ * Domains, unter denen Chrome/Android (Google), Firefox (Mozilla), Edge
+ * (Windows) und Safari (Apple) ihre Endpunkte vergeben.
+ */
+const PUSH_DOMAINS = ["googleapis.com", "mozilla.com", "mozaws.net", "notify.windows.com", "push.apple.com"];
+
+/** Höchstens so viele Geräte je Konto – jedes kostet bei jedem Satz eine Anfrage. */
+export const MAX_DEVICES = 10;
+
+/**
+ * Der Server schickt an den Endpunkt signierte POST-Anfragen. Ohne Prüfung
+ * könnte jedes Konto ihn so auf interne Dienste richten (SSRF) oder auf ein
+ * fremdes Ziel vervielfachen. PUSH_EXTRA_HOSTS erlaubt weitere Hosts, etwa
+ * einen eigenen Push-Dienst oder in Tests.
+ */
+export function isAllowedPushEndpoint(endpoint: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(endpoint);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== "https:" || url.username || url.password) return false;
+  const host = url.hostname.toLowerCase();
+  const extra = (process.env.PUSH_EXTRA_HOSTS ?? "")
+    .split(",")
+    .map((h) => h.trim().toLowerCase())
+    .filter(Boolean);
+  if (extra.includes(host)) return true;
+  if (url.port && url.port !== "443") return false;
+  return PUSH_DOMAINS.some((domain) => host === domain || host.endsWith(`.${domain}`));
+}
+
 export async function saveSubscription(user: User, input: SubscriptionInput): Promise<void> {
-  if (!/^https:\/\//.test(input.endpoint) || !input.keys?.p256dh || !input.keys?.auth) {
+  if (
+    typeof input?.endpoint !== "string" ||
+    input.endpoint.length > 1000 ||
+    !isAllowedPushEndpoint(input.endpoint) ||
+    typeof input.keys?.p256dh !== "string" ||
+    typeof input.keys?.auth !== "string" ||
+    input.keys.p256dh.length > 200 ||
+    input.keys.auth.length > 100
+  ) {
     throw new ServiceError("Ungültige Push-Anmeldung.");
   }
   await db
@@ -50,6 +92,15 @@ export async function saveSubscription(user: User, input: SubscriptionInput): Pr
       target: pushSubscriptions.endpoint,
       set: { userId: user.id, p256dh: input.keys.p256dh, auth: input.keys.auth },
     });
+  // Über dem Limit fliegen die ältesten Geräte raus.
+  const all = await db
+    .select({ id: pushSubscriptions.id })
+    .from(pushSubscriptions)
+    .where(eq(pushSubscriptions.userId, user.id))
+    // rowid statt created_at: Sekunden reichen bei schnellen Anmeldungen nicht.
+    .orderBy(desc(sql`rowid`));
+  const stale = all.slice(MAX_DEVICES).map((row) => row.id);
+  if (stale.length) await db.delete(pushSubscriptions).where(inArray(pushSubscriptions.id, stale));
 }
 
 export async function removeSubscription(user: User, endpoint: string): Promise<void> {

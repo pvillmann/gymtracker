@@ -113,6 +113,8 @@ export function compareSets(
   bodyweightKg: number,
   /** Stufen statt kg bzw. Gewicht je Seite – nur für den Text. */
   unit?: { perSide?: boolean; level?: boolean } | null,
+  /** Zielbereich aus dem Plan, nur für Arbeitssätze. */
+  target?: { repsMin: number; repsMax: number } | null,
 ): SetComparison {
   if (!previous) return { trend: "new", label: "neu" };
 
@@ -132,14 +134,27 @@ export function compareSets(
   // Die Richtung kommt aus der effektiven Last, nicht aus dem eingestellten
   // Gewicht. Nur so zeigt eine Maschine mit Gegengewicht nach oben, wenn du
   // die Hilfe reduzierst.
-  const trend = trendOf(
-    estimateOneRepMax(effectiveLoad(mode, current.weightKg, bodyweightKg), current.reps),
-    estimateOneRepMax(effectiveLoad(mode, previous.weightKg, bodyweightKg), previous.reps),
-  );
+  const currentMax = estimateOneRepMax(effectiveLoad(mode, current.weightKg, bodyweightKg), current.reps);
+  const previousMax = estimateOneRepMax(effectiveLoad(mode, previous.weightKg, bodyweightKg), previous.reps);
+  const weightChanged = Math.abs(weightDiff) >= 0.05;
+  const inTarget = target ? current.reps >= target.repsMin && current.reps <= target.repsMax : false;
+
+  // Was „besser“ heißt, in dieser Reihenfolge:
+  // 1. Gleiches Gewicht, mehr Wiederholungen ist immer Fortschritt.
+  // 2. Unter dem Zielbereich war das Gewicht zu schwer – egal was das 1RM sagt.
+  // 3. Gewicht geändert, aber im Zielbereich: Epley ist zwischen 8 und 10
+  //    Wiederholungen nicht genauer als ein paar Prozent. 40 × 10 gegen
+  //    41,25 × 8 (−2 %) ist der geplante Sprung, kein Rückschritt.
+  // 4. Sonst entscheidet das 1RM wie bisher.
+  let trend: Trend;
+  if (!weightChanged && repsDiff > 0) trend = "up";
+  else if (target && current.reps < target.repsMin) trend = "down";
+  else if (weightChanged && inTarget) trend = trendOf(currentMax, previousMax, 0.025);
+  else trend = trendOf(currentMax, previousMax);
 
   const parts: string[] = [];
 
-  if (Math.abs(weightDiff) >= 0.05) {
+  if (weightChanged) {
     const rounded = Math.round(Math.abs(weightDiff) * 100) / 100;
     const value = rounded.toLocaleString("de-DE", { maximumFractionDigits: 2 });
     // Beim Gegengewicht benennt das Label die Hilfe, der Pfeil die Leistung:
@@ -151,9 +166,7 @@ export function compareSets(
           ? rounded === 1
             ? " Stufe"
             : " Stufen"
-          : unit?.perSide
-            ? " kg/Seite"
-            : " kg";
+          : " kg"; // „/Seite“ steht schon am Satz – im Schild kostet es die Zeile.
     parts.push(`${weightDiff > 0 ? "+" : "−"}${value}${suffix}`);
   }
 
@@ -163,6 +176,9 @@ export function compareSets(
   if (repsDiff !== 0) {
     parts.push(`${repsDiff > 0 ? "+" : "−"}${Math.abs(repsDiff)} Wdh.`);
   }
+
+  if (target && current.reps < target.repsMin) parts.push(`unter Ziel (${target.repsMin})`);
+  else if (target && current.reps > target.repsMax) parts.push("über Ziel – steigern");
 
   if (parts.length === 0) return { trend: "flat", label: "gleich" };
   return { trend, label: parts.join(" · ") };

@@ -14,6 +14,7 @@ import {
   trackingModeLabel,
 } from "@/lib/describe";
 import { bodyMetricSeries } from "@/lib/services/body-metrics";
+import { listScaleCaptures } from "@/lib/services/scale";
 import {
   formatDate,
   formatDuration,
@@ -260,6 +261,31 @@ export function registerReadTools(server: McpServer, user: User): void {
               )}${w.finishedAt ? `, ${formatDurationLong(w.finishedAt - w.startedAt)}` : ""}`,
           )
           .join("\n");
+      }),
+  );
+
+  server.registerTool(
+    "scale_captures",
+    {
+      title: "Waagen-Mitschnitte",
+      description:
+        "Rohe Bluetooth-Mitschnitte der Testseite /wiegen (neueste zuerst): Dienste, Merkmale und jedes Paket der Waage als Hex. Zum Auswerten des Protokolls.",
+      inputSchema: { limit: z.number().int().min(1).max(10).optional().describe("Anzahl Mitschnitte, Standard 3") },
+    },
+    async ({ limit }) =>
+      run(async () => {
+        const captures = await listScaleCaptures(user.id, limit ?? 3);
+        if (captures.length === 0) return "Noch keine Mitschnitte.";
+        return captures
+          .map((capture) =>
+            [
+              `## ${new Date(capture.createdAt * 1000).toISOString()} · ${capture.deviceName ?? "unbekannt"} · ${capture.events.length} Ereignisse`,
+              `Browser: ${capture.client ?? "?"}`,
+              ...capture.events.slice(0, 600).map((event) => JSON.stringify(event)),
+              capture.events.length > 600 ? `… ${capture.events.length - 600} weitere` : "",
+            ].join("\n"),
+          )
+          .join("\n\n");
       }),
   );
 

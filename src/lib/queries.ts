@@ -666,6 +666,8 @@ export type WorkoutDetailEntry = {
   name: string;
   muscleGroup: string | null;
   trackingMode: TrackingMode;
+  /** Die Übung (Bewegung) – für den Zielbereich aus dem Plan. */
+  movementId: string;
   /** Gewicht je Seite bzw. Stufen statt kg – von der Maschine. */
   unit: { perSide: boolean; level: boolean } | null;
   sets: LoggedSet[];
@@ -692,6 +694,7 @@ export async function getWorkoutDetail(
       name: exercises.name,
       muscleGroup: exercises.muscleGroup,
       trackingMode: exercises.trackingMode,
+      movementId: sql<string>`coalesce(${exercises.movementId}, ${exercises.id})`,
       perSide: equipment.perSide,
       loadUnit: equipment.loadUnit,
     })
@@ -713,6 +716,7 @@ export async function getWorkoutDetail(
         name: row.name,
         muscleGroup: row.muscleGroup,
         trackingMode: row.trackingMode,
+        movementId: row.movementId,
         unit:
           row.perSide === null || row.loadUnit === null
             ? null

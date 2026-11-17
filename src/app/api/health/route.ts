@@ -1,3 +1,4 @@
+import { readBodyLimited } from "@/lib/http-body";
 import { authenticateHealthToken, importHealthExport } from "@/lib/services/body-metrics";
 
 export const runtime = "nodejs";
@@ -27,14 +28,12 @@ export async function POST(request: Request): Promise<Response> {
     return json(401, { error: "Ungültiger oder fehlender Schlüssel." }, { "www-authenticate": 'Bearer realm="GymTracker"' });
   }
 
-  const declared = Number(request.headers.get("content-length") ?? 0);
-  if (declared > MAX_BYTES) return json(413, { error: "Export zu groß – kürzeren Zeitraum wählen oder in Teilen senden." });
-  const body = await request.text();
-  if (body.length > MAX_BYTES) return json(413, { error: "Export zu groß – kürzeren Zeitraum wählen oder in Teilen senden." });
+  const bytes = await readBodyLimited(request, MAX_BYTES);
+  if (!bytes) return json(413, { error: "Export zu groß – kürzeren Zeitraum wählen oder in Teilen senden." });
 
   let payload: unknown;
   try {
-    payload = JSON.parse(body);
+    payload = JSON.parse(new TextDecoder().decode(bytes));
   } catch {
     return json(400, { error: "Kein gültiges JSON. In der Automation das Format JSON wählen." });
   }

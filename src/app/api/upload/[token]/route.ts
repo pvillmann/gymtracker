@@ -1,3 +1,5 @@
+import { readBodyLimited } from "@/lib/http-body";
+import { MAX_UPLOAD_BYTES } from "@/lib/images";
 import { isServiceError } from "@/lib/services/errors";
 import { inspectPhotoUploadLink, uploadPhotoWithLink } from "@/lib/services/photo-upload";
 
@@ -26,9 +28,18 @@ export async function POST(
     return json({ error: "Dieser Link ist abgelaufen.", code: "expired", renewable: link.renewable }, 410);
   }
 
+  // Etwas Luft über der Fotogrenze für die Formular-Hülle; alles darüber wird
+  // gar nicht erst vollständig gelesen.
+  const bytes = await readBodyLimited(request, MAX_UPLOAD_BYTES + 64 * 1024);
+  if (!bytes) {
+    return json({ error: "Das Foto ist zu groß (höchstens 15 MB).", code: "too_large" }, 413);
+  }
   let file: FormDataEntryValue | null;
   try {
-    file = (await request.formData()).get("photo");
+    const form = await new Response(bytes, {
+      headers: { "content-type": request.headers.get("content-type") ?? "" },
+    }).formData();
+    file = form.get("photo");
   } catch {
     return json({ error: "Das Foto kam nicht vollständig an. Bitte noch einmal versuchen.", code: "body" }, 400);
   }

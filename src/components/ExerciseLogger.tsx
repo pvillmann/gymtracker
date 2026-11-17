@@ -489,6 +489,9 @@ export function ExerciseLogger({
               exercise.trackingMode,
               bodyweightKg,
               exercise.transfer,
+              !set.isWarmup && target
+                ? { repsMin: target.targetRepsMin, repsMax: target.targetRepsMax }
+                : null,
             );
 
             return (
@@ -742,14 +745,14 @@ export function ExerciseLogger({
           <span>Bewegt: {formatKg(workingVolume)} kg</span>
           {volumeChange !== null ? (
             <>
-              <TrendBadge
-                trend={trendOf(workingVolume, previousVolume)}
-                label={
-                  trendOf(workingVolume, previousVolume) === "flat"
-                    ? "gleich"
-                    : `${volumeChange > 0 ? "+" : "−"}${Math.round(Math.abs(volumeChange))} %`
-                }
-              />
+              {/* Ohne Farbe und Pfeil: Gewicht × Wiederholungen bestraft jeden
+                  Gewichtssprung und belohnt viele leichte Wiederholungen – als
+                  Info brauchbar, als Urteil nicht. Das steht an den Sätzen. */}
+              <span className="font-semibold text-fg tnum">
+                {trendOf(workingVolume, previousVolume) === "flat"
+                  ? "gleich"
+                  : `${volumeChange > 0 ? "+" : "−"}${Math.round(Math.abs(volumeChange))} %`}
+              </span>
               <span>
                 {previousCompared.length < previousWorking.length
                   ? `ggü. Satz ${
