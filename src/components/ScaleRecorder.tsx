@@ -34,14 +34,28 @@ type BtAdvertisement = Event & {
   manufacturerData?: Map<number, DataView>;
   serviceData?: Map<string, DataView>;
 };
-type Bluetooth = { requestDevice(options: object): Promise<BtDevice> };
+type Bluetooth = { requestDevice(options: object): Promise<BtDevice>; getAvailability?: () => Promise<boolean> };
+
+/**
+ * Drei Arten zu fragen. Bluefy lehnte die erste sofort mit „2“ ab – welche
+ * Form es annimmt, ist nicht dokumentiert. Also ausprobieren und mitschreiben.
+ */
+type Variant = "A" | "B" | "C";
+const VARIANT_LABEL: Record<Variant, string> = {
+  A: "alle Geräte + Dienste",
+  B: "alle Geräte, ohne Dienste",
+  C: "nur Waagen (Filter)",
+};
 
 /**
  * Dienste, die Waagen dieser Art üblicherweise anbieten (QN/Yolanda, Renpho,
  * die Bluetooth-Standards für Körperwaagen) – Web Bluetooth zeigt nur
  * Dienste, die hier vorab genannt sind.
  */
-const SERVICES = [0xffe0, 0xfff0, 0xffb0, 0x1a10, 0x181b, 0x181d, 0x180a, 0x180f, 0x1800, 0x1801];
+const SERVICES = [0xffe0, 0xfff0, 0xffb0, 0x1a10, 0x181b, 0x181d, 0x180a, 0x180f, 0x1800, 0x1801].map(
+  // Volle UUIDs statt Kurzform: Nachbauten wie Bluefy wandeln Zahlen nicht immer um.
+  (short) => `0000${short.toString(16).padStart(4, "0")}-0000-1000-8000-00805f9b34fb`,
+);
 
 const MAX_EVENTS = 3000;
 
@@ -72,6 +86,20 @@ export function ScaleRecorder() {
   const device = useRef<BtDevice | null>(null);
   const savedCount = useRef(0);
   const start = useRef(0);
+
+  // Fehler außerhalb von connect() (z. B. in Ereignissen) sichtbar machen.
+  useEffect(() => {
+    const onError = (event: ErrorEvent | PromiseRejectionEvent) => {
+      const text = "reason" in event ? String(event.reason) : event.message;
+      setMessage(`Fehler: ${text}`);
+    };
+    window.addEventListener("error", onError);
+    window.addEventListener("unhandledrejection", onError);
+    return () => {
+      window.removeEventListener("error", onError);
+      window.removeEventListener("unhandledrejection", onError);
+    };
+  }, []);
 
   const log = (type: string, data: Record<string, unknown> = {}) => {
     if (events.current.length >= MAX_EVENTS) return;
@@ -120,9 +148,14 @@ export function ScaleRecorder() {
     return () => clearInterval(timer);
   }, [status]);
 
-  const connect = async () => {
+  const connect = async (variant: Variant = "A") => {
     const bluetooth = (navigator as Navigator & { bluetooth?: Bluetooth }).bluetooth;
-    if (!bluetooth) return;
+    if (!bluetooth) {
+      // Nie still abbrechen – sonst „passiert nichts“.
+      setMessage("Dieser Browser bietet kein Bluetooth an. Seite in Bluefy öffnen (nicht Safari, nicht vom Home-Bildschirm).");
+      setStatus("error");
+      return;
+    }
     events.current = [];
     captureId.current = null;
     savedCount.current = 0;
@@ -132,10 +165,27 @@ export function ScaleRecorder() {
     setSaved(null);
     setMessage(null);
     setStatus("connecting");
-    log("start", { at: new Date().toISOString() });
+    log("start", { at: new Date().toISOString(), variant });
+    // Nicht abwarten – requestDevice muss direkt im Tipp passieren.
+    bluetooth.getAvailability?.().then(
+      (available) => log("info", { text: `Bluetooth verfügbar: ${available}` }),
+      (error) => log("info", { text: `getAvailability: ${String(error)}` }),
+    );
 
     try {
-      const picked = await bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: SERVICES });
+      const options =
+        variant === "A"
+          ? { acceptAllDevices: true, optionalServices: SERVICES }
+          : variant === "B"
+            ? { acceptAllDevices: true }
+            : {
+                filters: [
+                  ...["QN", "Yolanda", "Feel", "Scale", "Renpho"].map((namePrefix) => ({ namePrefix })),
+                  ...SERVICES.slice(0, 6).map((service) => ({ services: [service] })),
+                ],
+                optionalServices: SERVICES,
+              };
+      const picked = await bluetooth.requestDevice(options);
       device.current = picked;
       deviceName.current = picked.name ?? null;
       setDeviceLabel(picked.name ?? "ohne Namen");
@@ -194,10 +244,28 @@ export function ScaleRecorder() {
       setStatus("connected");
       await save();
     } catch (error) {
-      log("error", { text: String(error) });
-      // „Abgebrochen“ im Auswahldialog ist kein Fehler.
-      const text = String(error);
-      setMessage(text.includes("cancel") || text.includes("NotFoundError") ? "Keine Waage gewählt." : `Fehler: ${text}`);
+      const text = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+      // Alles mitschreiben, was der Fehler hergibt – Bluefy lieferte nur „2“.
+      let json = "";
+      try {
+        json = JSON.stringify(error);
+      } catch {
+        json = "(nicht serialisierbar)";
+      }
+      log("error", {
+        text,
+        kind: typeof error,
+        name: error instanceof Error ? error.name : "",
+        json: json ?? "",
+        variant,
+      });
+      // Immer den rohen Fehler zeigen – „Keine Waage gewählt“ allein verschleierte,
+      // dass Bluefy die Anfrage sofort ablehnte, ohne eine Liste zu zeigen.
+      setMessage(
+        error instanceof Error && error.name === "NotFoundError"
+          ? `Keine Waage gewählt oder keine gefunden (${text}). Waage aufwecken und sofort verbinden.`
+          : `Fehler: ${text}`,
+      );
       setStatus("error");
       await save();
     }
@@ -225,9 +293,26 @@ export function ScaleRecorder() {
           Fertig
         </Button>
       ) : (
-        <Button className="w-full" disabled={status === "connecting"} onClick={() => void connect()}>
-          {status === "connecting" ? "Verbinde …" : status === "done" ? "Noch mal verbinden" : "Waage verbinden"}
-        </Button>
+        <>
+          <Button className="w-full" disabled={status === "connecting"} onClick={() => void connect("A")}>
+            {status === "connecting" ? "Verbinde …" : status === "done" ? "Noch mal verbinden" : "Waage verbinden"}
+          </Button>
+          {status === "error" ? (
+            <div className="flex gap-2">
+              {(["B", "C"] as const).map((variant) => (
+                <Button
+                  key={variant}
+                  size="sm"
+                  variant="secondary"
+                  className="flex-1"
+                  onClick={() => void connect(variant)}
+                >
+                  Variante {variant}: {VARIANT_LABEL[variant]}
+                </Button>
+              ))}
+            </div>
+          ) : null}
+        </>
       )}
 
       <div className="rounded-xl border border-line bg-surface-2 p-3 text-sm" role="status">
@@ -251,6 +336,21 @@ export function ScaleRecorder() {
         ) : null}
         {status !== "error" && message ? <p className="mt-2 text-down">{message}</p> : null}
       </div>
+      <Diagnostics />
     </div>
   );
+}
+
+/** Was der Browser kann – hilft, wenn „nichts passiert“. */
+function Diagnostics() {
+  const info = useSyncExternalStore(
+    () => () => {},
+    () => {
+      const nav = navigator as Navigator & { bluetooth?: Bluetooth; standalone?: boolean };
+      const browser = /Bluefy/i.test(nav.userAgent) ? "Bluefy" : /CriOS|Chrome/i.test(nav.userAgent) ? "Chrome" : /Safari/i.test(nav.userAgent) ? "Safari" : "anderer Browser";
+      return `${browser}${nav.standalone ? " (Home-Bildschirm)" : ""} · Bluetooth: ${nav.bluetooth ? "ja" : "nein"} · ${window.isSecureContext ? "https" : "kein https!"}`;
+    },
+    () => "",
+  );
+  return info ? <p className="text-xs text-faint">{info}</p> : null;
 }
