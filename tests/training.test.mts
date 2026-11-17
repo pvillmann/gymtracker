@@ -42,7 +42,11 @@ test("Anzeige: Stufen und je Seite", () => {
 });
 
 test("Format: kg und Dauer", () => {
-  assert.equal(formatKg(42.54), "42,5");
+  assert.equal(formatKg(42.5), "42,5");
+  // Sprünge von 1,25 kg dürfen nicht auf 41,3 gerundet werden – das Feld
+  // wird damit vorbelegt und so gespeichert.
+  assert.equal(formatKg(41.25), "41,25");
+  assert.equal(formatKg(42.504), "42,5");
   assert.equal(formatDuration(630), "10:30");
   assert.equal(formatDuration(3725), "1:02:05");
   assert.equal(parseDurationInput("10:30"), 630);
@@ -66,4 +70,25 @@ test("Fehlversuche: sperrt nach dem Limit, gibt nach dem Fenster frei", () => {
   limiter.fail("c", 0);
   limiter.reset("c");
   assert.equal(limiter.retryAfter("c", 1), 0);
+});
+
+import { weeklySetsByMuscle } from "@/lib/stats";
+
+test("Arbeitssätze pro Muskelgruppe: diese Woche und Schnitt der vier Wochen davor", () => {
+  const now = new Date(2026, 10, 18, 12); // Mittwoch
+  const at = (daysAgo: number) => Math.floor(now.getTime() / 1000) - daysAgo * 86_400;
+  const rows = [
+    { muscleGroup: "Brust", completedAt: at(0) },
+    { muscleGroup: "Brust", completedAt: at(1) },
+    { muscleGroup: "Brust", completedAt: at(8) },
+    { muscleGroup: "Brust", completedAt: at(15) },
+    { muscleGroup: "Rücken", completedAt: at(9) },
+    { muscleGroup: null, completedAt: at(0) },
+    { muscleGroup: "Beine", completedAt: at(60) }, // zu alt
+  ];
+  const result = weeklySetsByMuscle(rows, now);
+  assert.deepEqual(result.find((m) => m.group === "Brust"), { group: "Brust", thisWeek: 2, average: 0.5 });
+  assert.deepEqual(result.find((m) => m.group === "Rücken"), { group: "Rücken", thisWeek: 0, average: 0.25 });
+  assert.equal(result.find((m) => m.group === "Ohne Muskelgruppe")?.thisWeek, 1);
+  assert.equal(result.some((m) => m.group === "Beine"), false);
 });

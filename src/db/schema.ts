@@ -37,6 +37,14 @@ export const users = sqliteTable(
     accentColor: text("accent_color").notNull().default("blue"),
     /** Wie durchsichtig Kopfleiste und Navigation sind: solid, medium, clear. */
     glass: text("glass").notNull().default("solid"),
+    /** Eigener Anthropic-API-Schlüssel, verschlüsselt (lib/secret-box.ts). */
+    anthropicKeyEnc: text("anthropic_key_enc"),
+    /** Progressionsvorschläge zusätzlich von Claude Haiku. */
+    aiSuggestions: integer("ai_suggestions", { mode: "boolean" }).notNull().default(false),
+    /** SHA-256 des Schlüssels für den Apple-Health-Import (nur dieser Endpunkt). */
+    healthTokenHash: text("health_token_hash"),
+    /** Wann zuletzt Daten aus Apple Health ankamen. */
+    healthImportedAt: integer("health_imported_at"),
     /** null = noch nicht bestätigt. Login ist erst danach möglich. */
     emailVerifiedAt: integer("email_verified_at"),
     /**
@@ -207,6 +215,12 @@ export const equipment = sqliteTable(
     baseLoadKg: real("base_load_kg").notNull().default(0),
     /** Kleinster Gewichtssprung – steuert die +/- Tasten; pro Studio überschreibbar. */
     weightStepKg: real("weight_step_kg").notNull().default(2.5),
+    /**
+     * Kleinster sinnvoller Sprung für den Progressionsvorschlag, in der
+     * Einheit der Maschine (kg, kg je Seite oder Stufen). Leer: Standard nach
+     * Geräteart, siehe lib/progression.ts.
+     */
+    progressionStep: real("progression_step"),
     /**
      * Getrennte Arme mit eigenen Scheiben (Iso-Lateral Row): eingetragen wird
      * das Gewicht einer Seite, bewegt wird das Doppelte.
@@ -379,6 +393,8 @@ export const gyms = sqliteTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
+    /** Verfügbare Scheiben in kg, z. B. "25, 20, 10, 5, 2,5" – leer: Standard. */
+    plates: text("plates"),
     createdAt: integer("created_at").notNull().default(now),
   },
   (t) => [uniqueIndex("gyms_name_unique").on(t.name)],
@@ -619,4 +635,86 @@ export const catalogChanges = sqliteTable(
     createdAt: integer("created_at").notNull().default(now),
   },
   (t) => [index("catalog_changes_entity_idx").on(t.entity, t.entityId, t.createdAt)],
+);
+
+/**
+ * Schlüssel, die die Instanz selbst erzeugt und behält (VAPID für Web Push,
+ * Schlüssel zum Verschlüsseln von API-Keys). Nie an Clients ausgeliefert –
+ * außer dem öffentlichen VAPID-Schlüssel.
+ */
+export const appSecrets = sqliteTable("app_secrets", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  createdAt: integer("created_at").notNull().default(now),
+});
+
+/** Ein Gerät, das Benachrichtigungen bekommt (Web Push), je Konto beliebig viele. */
+export const pushSubscriptions = sqliteTable(
+  "push_subscriptions",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    endpoint: text("endpoint").notNull(),
+    p256dh: text("p256dh").notNull(),
+    auth: text("auth").notNull(),
+    createdAt: integer("created_at").notNull().default(now),
+  },
+  (t) => [uniqueIndex("push_subscriptions_endpoint_unique").on(t.endpoint)],
+);
+
+/**
+ * Vorschläge von Claude Haiku für ein Training, je Variante einmal
+ * berechnet. „failed“ merkt sich Fehlschläge, damit nicht jeder Seitenaufruf
+ * eine neue Anfrage auslöst.
+ */
+export const workoutAiSuggestions = sqliteTable(
+  "workout_ai_suggestions",
+  {
+    workoutId: text("workout_id")
+      .notNull()
+      .references(() => workouts.id, { onDelete: "cascade" }),
+    exerciseId: text("exercise_id")
+      .notNull()
+      .references(() => exercises.id, { onDelete: "cascade" }),
+    status: text("status").notNull().$type<"ok" | "failed">(),
+    weight: real("weight"),
+    reps: text("reps"),
+    reason: text("reason"),
+    createdAt: integer("created_at").notNull().default(now),
+  },
+  (t) => [primaryKey({ columns: [t.workoutId, t.exerciseId] })],
+);
+
+/**
+ * Körperwerte im Verlauf: Gewicht von Hand oder aus Apple Health, dazu was
+ * der Health-Import sonst mitbringt (Körperfett, Ruhepuls, HRV, Schlaf …).
+ * Ein Wert je Konto, Art und Zeitpunkt – ein erneuter Export überschreibt.
+ */
+export type BodyMetric =
+  | "weight"
+  | "body_fat"
+  | "lean_mass"
+  | "resting_hr"
+  | "hrv"
+  | "sleep"
+  | "steps"
+  | "active_energy";
+
+export const bodyMetrics = sqliteTable(
+  "body_metrics",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    metric: text("metric").notNull().$type<BodyMetric>(),
+    /** Unix-Sekunden. */
+    measuredAt: integer("measured_at").notNull(),
+    /** Normiert: kg, %, Schläge/min, ms, Stunden, Schritte, kcal. */
+    value: real("value").notNull(),
+    /** „manuell“ oder die Quelle aus Apple Health (z. B. die Waage). */
+    source: text("source"),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.metric, t.measuredAt] })],
 );

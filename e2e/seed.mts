@@ -40,4 +40,18 @@ await db.insert(s.planExercises).values({
   restSeconds: 90,
   notes: "tief runter",
 });
+// Ein vergangenes Training: 3 × 10 mit 100 kg, oberes Ende des Plans (8–10)
+// geschafft – heute schlägt die App +2,5 kg vor. Über die echten Services,
+// damit Varianten, Volumen und Satznummern stimmen.
+const { eq } = await import("drizzle-orm");
+const { getOrCreateVariant } = await import("../src/lib/services/machines");
+const workouts = await import("../src/lib/services/workouts");
+const [anna] = await db.select().from(s.users).where(eq(s.users.id, "u-anna"));
+const variant = await getOrCreateVariant(anna, "m-squat", null);
+const { workoutId } = await workouts.startWorkout(anna, "p-beine");
+for (let i = 0; i < 3; i++) {
+  await workouts.logSet(anna, workoutId, variant, { weightKg: 100, reps: 10, effort: i === 2 ? "ok" : null });
+}
+await workouts.finishWorkout(anna, workoutId);
+
 console.log(`[e2e] Testdatenbank angelegt: ${path}`);

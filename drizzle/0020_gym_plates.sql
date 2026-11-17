@@ -1,0 +1,1 @@
+ALTER TABLE `gyms` ADD `plates` text;

@@ -4,7 +4,16 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import type { User } from "@/db/schema";
-import { describeSets, effortLabel, lastEffort, trackingModeLabel } from "@/lib/describe";
+import { BODY_METRICS, bodyMetricSummary } from "@/lib/body-metrics-view";
+import {
+  describeSets,
+  describeWeight,
+  effortLabel,
+  lastEffort,
+  setsOfKind,
+  trackingModeLabel,
+} from "@/lib/describe";
+import { bodyMetricSeries } from "@/lib/services/body-metrics";
 import {
   formatDate,
   formatDuration,
@@ -16,6 +25,7 @@ import {
   sets as setsLabel,
 } from "@/lib/format";
 import { machineSchema, run, unitOf } from "@/lib/mcp/shared";
+import { defaultStep, suggestNext } from "@/lib/progression";
 import {
   getActiveWorkout,
   getExerciseSessions,
@@ -26,10 +36,11 @@ import {
   listMovements,
   listPlanItems,
   listPlans,
+  listWorkingSetsSince,
   listWorkoutSummaries,
 } from "@/lib/queries";
 import { resolvePlan, resolveVariant } from "@/lib/services/resolve";
-import { totals, weekStreak } from "@/lib/stats";
+import { muscleWeeksSince, totals, weekStreak, weeklySetsByMuscle } from "@/lib/stats";
 
 /** Lesen: Übungen, Pläne, Verlauf, Statistik. */
 export function registerReadTools(server: McpServer, user: User): void {
@@ -156,14 +167,29 @@ export function registerReadTools(server: McpServer, user: User): void {
     },
     async ({ exercise, machine }) =>
       run(async () => {
-        const found = await resolveVariant(user, exercise, {
-          machine,
-          workout: await getActiveWorkout(user.id),
-        });
+        const workout = await getActiveWorkout(user.id);
+        const found = await resolveVariant(user, exercise, { machine, workout });
         const previous = await getPreviousPerformances(user.id, [found.id]);
         const last = previous.get(found.id);
         if (!last) return `„${found.name}“ wurde noch nie trainiert.`;
         const effort = lastEffort(last.sets);
+
+        // Derselbe Vorschlag wie in der App – mit Zielbereich, wenn die Übung
+        // im Plan des laufenden Trainings steht.
+        const planItem = workout?.planId
+          ? (await listPlanItems(workout.planId)).find((i) => i.movementId === found.movementId)
+          : undefined;
+        const device = found.equipmentId
+          ? (await listEquipment()).find((e) => e.id === found.equipmentId)
+          : undefined;
+        const suggestion = suggestNext({
+          mode: found.trackingMode,
+          previous: setsOfKind(last.sets, false),
+          lastEffort: effort,
+          target: planItem ? { repsMin: planItem.targetRepsMin, repsMax: planItem.targetRepsMax } : null,
+          step: defaultStep(device ?? null),
+          level: device?.loadUnit === "level",
+        });
 
         return [
           `${found.name}, ${formatRelativeDay(last.performedAt)} (${formatDate(last.performedAt)}):`,
@@ -171,6 +197,11 @@ export function registerReadTools(server: McpServer, user: User): void {
           // Stufen sind keine kg – dann gibt es kein bewegtes Gewicht.
           ...(last.totalVolumeKg > 0 ? [`Bewegt: ${formatVolume(last.totalVolumeKg)}`] : []),
           ...(effort ? [`Letzter Satz: ${effortLabel(effort)}`] : []),
+          ...(suggestion
+            ? [
+                `Vorschlag heute: ${describeWeight(suggestion.weight, await unitOf(found.equipmentId))} × ${suggestion.reps.join("/")} – ${suggestion.reason}`,
+              ]
+            : []),
         ].join("\n");
       }),
   );
@@ -236,7 +267,7 @@ export function registerReadTools(server: McpServer, user: User): void {
     "training_stats",
     {
       title: "Statistik",
-      description: "Gesamtzahlen und aktuelle Trainingsserie.",
+      description: "Gesamtzahlen, Trainingsserie, Sätze pro Muskelgruppe und Körperwerte (Gewicht, aus Apple Health auch Ruhepuls, HRV, Schlaf …).",
       inputSchema: {},
     },
     async () =>
@@ -246,6 +277,10 @@ export function registerReadTools(server: McpServer, user: User): void {
 
         const total = totals(summaries);
         const streak = weekStreak(summaries);
+        const muscles = weeklySetsByMuscle(await listWorkingSetsSince(user.id, muscleWeeksSince()));
+        const body = bodyMetricSummary(
+          await bodyMetricSeries(user.id, Math.floor(Date.now() / 1000) - 60 * 86_400),
+        );
         return [
           `Trainings: ${total.workouts}`,
           `Sätze: ${total.sets}, Wiederholungen: ${total.reps}`,
@@ -253,6 +288,18 @@ export function registerReadTools(server: McpServer, user: User): void {
           `Schnitt pro Training: ${formatVolume(total.averageVolumeKg)}`,
           `Serie: ${streak.current} Wochen (beste: ${streak.longest})`,
           `Körpergewicht laut Profil: ${formatKg(user.bodyweightKg)} kg`,
+          ...(muscles.length
+            ? [
+                "Arbeitssätze pro Muskelgruppe (diese Woche / Ø 4 Wochen davor):",
+                ...muscles.map(
+                  (m) =>
+                    `- ${m.group}: ${m.thisWeek} / ${m.average.toLocaleString("de-DE", { maximumFractionDigits: 1 })}`,
+                ),
+              ]
+            : []),
+          ...(body.length
+            ? ["Körperwerte (letzter Wert):", ...body.map((b) => `- ${BODY_METRICS[b.metric].label}: ${b.value}${b.detail ? ` (${b.detail})` : ""}`)]
+            : []),
         ].join("\n");
       }),
   );

@@ -9,6 +9,9 @@ import {
   ProfileForm,
 } from "@/components/SettingsForms";
 import { ApiTokenManager } from "@/components/ApiTokenManager";
+import { AiSettings } from "@/components/AiSettings";
+import { HealthSettings } from "@/components/HealthSettings";
+import { PushSettings } from "@/components/PushSettings";
 import { ButtonLink, Card, PageHeader } from "@/components/ui";
 import {
   DEFAULT_ACCENT,
@@ -17,7 +20,10 @@ import {
   isGlassLevel,
 } from "@/lib/appearance";
 import { requireUser } from "@/lib/auth";
+import { formatDateTime } from "@/lib/format";
 import { listApiTokens } from "@/lib/api-tokens";
+import { vapidKeys } from "@/lib/push";
+import { aiEnabled, keyHint } from "@/lib/services/ai-suggestions";
 import { isAdmin } from "@/lib/groups";
 
 export const metadata: Metadata = { title: "Einstellungen · GymTracker" };
@@ -25,7 +31,7 @@ export const metadata: Metadata = { title: "Einstellungen · GymTracker" };
 export default async function SettingsPage() {
   const user = await requireUser();
   const userIsAdmin = await isAdmin(user.id);
-  const tokens = await listApiTokens(user.id);
+  const [tokens, vapid] = await Promise.all([listApiTokens(user.id), vapidKeys()]);
   // APP_URL ist für den Mailversand ohnehin gesetzt; fehlt sie, zeigen wir
   // nur den Pfad statt einer erfundenen Adresse.
   const mcpUrl = `${(process.env.APP_URL ?? "").replace(/\/$/, "")}/api/mcp`;
@@ -52,6 +58,37 @@ export default async function SettingsPage() {
             accent={isAccent(user.accentColor) ? user.accentColor : DEFAULT_ACCENT}
             glass={isGlassLevel(user.glass) ? user.glass : DEFAULT_GLASS}
           />
+        </Card>
+      </section>
+
+      <section className="mb-6">
+        <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+          Benachrichtigungen
+        </h2>
+        <Card>
+          <PushSettings publicKey={vapid.publicKey} />
+        </Card>
+      </section>
+
+      <section className="mb-6">
+        <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+          Apple Health
+        </h2>
+        <Card>
+          <HealthSettings
+            endpoint={`${(process.env.APP_URL ?? "").replace(/\/$/, "")}/api/health`}
+            configured={user.healthTokenHash !== null}
+            importedAt={user.healthImportedAt ? formatDateTime(user.healthImportedAt) : null}
+          />
+        </Card>
+      </section>
+
+      <section className="mb-6">
+        <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+          KI-Vorschläge (Claude Haiku)
+        </h2>
+        <Card>
+          <AiSettings hint={keyHint(user)} enabled={aiEnabled(user)} />
         </Card>
       </section>
 

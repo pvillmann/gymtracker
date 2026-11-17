@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { BarChart, RankedBars, type BarDatum } from "@/components/charts";
+import { BarChart, LineChart, RankedBars, type BarDatum, type LinePoint } from "@/components/charts";
 import { Card, EmptyState, PageHeader } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
 import {
@@ -13,8 +13,10 @@ import {
   workoutCount,
 } from "@/lib/format";
 import { buildFunFacts } from "@/lib/funfacts";
-import { getVolumeByExercise, listWorkoutSummaries } from "@/lib/queries";
-import { bucketByWeek, totals, weekStreak } from "@/lib/stats";
+import { getVolumeByExercise, listWorkingSetsSince, listWorkoutSummaries } from "@/lib/queries";
+import { bodyMetricSeries } from "@/lib/services/body-metrics";
+import { BODY_METRICS, bodyMetricSummary } from "@/lib/body-metrics-view";
+import { bucketByWeek, muscleWeeksSince, totals, weekStreak, weeklySetsByMuscle } from "@/lib/stats";
 
 export const metadata: Metadata = { title: "Statistik · GymTracker" };
 
@@ -25,10 +27,24 @@ const shortDate = new Intl.DateTimeFormat("de-DE", {
 
 export default async function StatsPage() {
   const user = await requireUser();
-  const [summaries, volumeByExercise] = await Promise.all([
+  // Server-Komponente: wird pro Anfrage gerendert, die Uhrzeit ist gewollt.
+  // eslint-disable-next-line react-hooks/purity
+  const halfYearAgo = Math.floor(Date.now() / 1000) - 183 * 86_400;
+  const [summaries, volumeByExercise, recentSets, bodySeries] = await Promise.all([
     listWorkoutSummaries(user.id),
     getVolumeByExercise(user.id),
+    listWorkingSetsSince(user.id, muscleWeeksSince()),
+    bodyMetricSeries(user.id, halfYearAgo),
   ]);
+  const weightPoints: LinePoint[] = (bodySeries.find((s) => s.metric === "weight")?.points ?? []).map((p) => ({
+    t: p.t,
+    value: p.value,
+    label: `${formatKg(p.value)} kg`,
+    caption: formatDate(p.t),
+    axisLabel: shortDate.format(new Date(p.t * 1000)),
+  }));
+  const bodyTiles = bodyMetricSummary(bodySeries);
+  const muscleWeeks = weeklySetsByMuscle(recentSets);
 
   if (summaries.length === 0) {
     return (
@@ -180,6 +196,52 @@ export default async function StatsPage() {
           </h2>
           <Card>
             <RankedBars items={topExercises} valueName="bewegtes Gewicht" />
+          </Card>
+        </section>
+      ) : null}
+
+      {weightPoints.length >= 2 || bodyTiles.length > 0 ? (
+        <section className="mb-4">
+          <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">Körper</h2>
+          {weightPoints.length >= 2 ? (
+            <Card className="mb-2">
+              <LineChart points={weightPoints} title="Körpergewicht (kg)" valueName="Gewicht" />
+            </Card>
+          ) : null}
+          {bodyTiles.length > 0 ? (
+            <ul className="grid grid-cols-2 gap-2">
+              {bodyTiles.map((tile) => (
+                <Card as="li" key={tile.metric}>
+                  <p className="text-xs text-muted">{BODY_METRICS[tile.metric].label}</p>
+                  <p className="mt-0.5 font-bold tnum">{tile.value}</p>
+                  {tile.detail ? <p className="text-xs text-faint tnum">{tile.detail}</p> : null}
+                </Card>
+              ))}
+            </ul>
+          ) : null}
+        </section>
+      ) : null}
+
+      {muscleWeeks.length > 0 ? (
+        <section className="mb-4">
+          <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+            Arbeitssätze pro Muskelgruppe
+          </h2>
+          <Card>
+            <RankedBars
+              items={muscleWeeks.map((m) => ({
+                key: m.group,
+                label: m.group,
+                // Der Balken zeigt diese Woche – sonst sähe eine ausgelassene Gruppe voll aus.
+                value: m.thisWeek,
+                display: `${m.thisWeek} diese Woche · Ø ${m.average.toLocaleString("de-DE", { maximumFractionDigits: 1 })}`,
+              }))}
+              valueName="Arbeitssätze"
+            />
+            <p className="mt-3 text-xs text-faint">
+              Ø = Schnitt der vier Wochen davor. Ein Satz zählt für die Muskelgruppe der
+              Übung, Hilfsmuskeln nicht mit. Aufwärmsätze zählen nicht.
+            </p>
           </Card>
         </section>
       ) : null}

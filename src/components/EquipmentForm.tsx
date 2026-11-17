@@ -97,6 +97,17 @@ export function EquipmentForm({
             <option value="level">Stufen</option>
           </Select>
         </Field>
+        <Field
+          label="Kleinster Sprung"
+          hint="Um wie viel es beim Steigern hochgeht – in kg (je Seite, falls angehakt) oder Stufen. Leer: Scheiben 2,5 kg (je Seite 1,25), Steckgewicht und Kabel 5 kg, Hanteln 2 kg, Stufen 1."
+        >
+          <Input
+            name="progressionStep"
+            inputMode="decimal"
+            placeholder="Standard"
+            defaultValue={equipment?.progressionStep != null ? formatKg(equipment.progressionStep) : ""}
+          />
+        </Field>
         <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-line px-4 py-3 text-sm">
           <input
             type="checkbox"

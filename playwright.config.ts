@@ -27,7 +27,7 @@ export default defineConfig({
     },
   },
   webServer: {
-    command: "npx tsx e2e/seed.mts && npm start",
+    command: "npx tsx --conditions=react-server e2e/seed.mts && npm start",
     url: `${BASE}/login`,
     reuseExistingServer: false,
     timeout: 60_000,

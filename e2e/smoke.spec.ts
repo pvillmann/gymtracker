@@ -31,14 +31,38 @@ test("Training aus dem Plan: Satz speichern, Pause läuft", async ({ page }) => 
 
   const card = page.locator("[id^=uebung-]").first();
   await expect(card).toContainText("Kniebeuge E2E");
+
+  // Letztes Mal 3 × 10 bei Ziel 8–10: heute +2,5 kg mit 8 Wdh. vorbelegt.
+  await expect(card).toContainText("Alle Sätze mit 10 Wdh. geschafft");
+  await expect(card.locator("input[name=weightKg]")).toHaveValue("102,5");
+  await expect(card.locator("input[name=reps]")).toHaveValue("8");
+  await card.getByRole("button", { name: "Wie letztes Mal" }).click();
+  await expect(card.locator("input[name=weightKg]")).toHaveValue("100");
+  await card.getByRole("button", { name: "Vorschlag" }).click();
+  await expect(card.locator("input[name=weightKg]")).toHaveValue("102,5");
   await card.getByRole("button", { name: /speichern/i }).first().click();
   await expect(page.getByRole("status").filter({ hasText: "Pause" })).toBeVisible();
   await expect(card).toContainText("× ");
+
+  // Zwei weitere Sätze, den letzten als „Leicht“ bewerten: Bonus-Satz.
+  for (const n of [2, 3]) {
+    await card.getByRole("button", { name: `Satz ${n} speichern` }).click();
+    await expect(card.getByRole("button", { name: `Satz ${n + 1} speichern` })).toBeVisible();
+  }
+  await card.getByRole("button", { name: /Leicht/ }).click();
+  await expect(card).toContainText("Da ging noch was");
+  await expect(card).toContainText("105 kg");
+  await card.getByRole("button", { name: "Bonus-Satz vorbelegen" }).click();
+  await expect(card.locator("input[name=weightKg]")).toHaveValue("105");
 
   for (const path of ["/", "/plans", "/exercises", "/equipment", "/history", "/stats", "/settings"]) {
     await page.goto(path);
     await expect(page.locator("main")).toBeVisible();
   }
+  // Je drei Arbeitssätze aus den Testdaten und von heute zählen für „Beine“.
+  await page.goto("/stats");
+  await expect(page.locator("main")).toContainText("Arbeitssätze pro Muskelgruppe");
+  await expect(page.locator("main")).toContainText("6 diese Woche");
   expect(errors).toEqual([]);
 });
 
@@ -93,5 +117,57 @@ test("Darstellung: Standard Blau und deckend, pro Konto umstellbar", async ({ pa
   await expect(app).toHaveAttribute("data-glass", "medium");
   expect(await app.evaluate((el) => getComputedStyle(el).getPropertyValue("--color-accent").trim())).toBe("#a78bfa");
   expect(await page.locator("nav ul").evaluate((el) => getComputedStyle(el).backdropFilter)).toContain("blur");
+  expect(errors).toEqual([]);
+});
+
+test("Benachrichtigungen: Abschnitt in den Einstellungen, Service Worker erreichbar", async ({ page, request }) => {
+  const errors = watchErrors(page);
+  await page.goto("/login");
+  await login(page, "ben@e2e.local");
+  await page.goto("/settings");
+  await expect(page.getByRole("heading", { name: "Benachrichtigungen" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Auf diesem Gerät einschalten" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "KI-Vorschläge (Claude Haiku)" })).toBeVisible();
+  await expect(page.getByLabel("Anthropic-API-Schlüssel")).toHaveAttribute("type", "password");
+
+  const sw = await request.get("/sw.js");
+  expect(sw.status()).toBe(200);
+  expect(sw.headers()["content-type"]).toContain("javascript");
+  expect(await sw.text()).toContain("showNotification");
+  expect(errors).toEqual([]);
+});
+
+test("Apple Health: Schlüssel erzeugen, Export senden, Verlauf in der Statistik", async ({ page, request }) => {
+  const errors = watchErrors(page);
+  await page.goto("/login");
+  await login(page, "anna@e2e.local");
+  await page.goto("/settings");
+  await page.getByRole("button", { name: "Import-Schlüssel erzeugen" }).click();
+  const token = (await page.locator("code", { hasText: "gymh_" }).innerText()).trim();
+
+  const denied = await request.post("/api/health", { data: {}, headers: { authorization: "Bearer gymh_falsch" } });
+  expect(denied.status()).toBe(401);
+
+  const response = await request.post("/api/health", {
+    headers: { authorization: `Bearer ${token}` },
+    data: {
+      data: {
+        metrics: [
+          { name: "weight_body_mass", units: "kg", data: [
+            { qty: 81.2, date: "2026-10-01 07:00:00 +0200", source: "Waage" },
+            { qty: 79.8, date: "2026-11-10 07:00:00 +0100", source: "Waage" },
+          ] },
+          { name: "resting_heart_rate", units: "count/min", data: [{ qty: 54, date: "2026-11-10 00:00:00 +0100" }] },
+        ],
+      },
+    },
+  });
+  expect(response.status()).toBe(200);
+  expect(await response.json()).toMatchObject({ imported: 3, bodyweightKg: 79.8 });
+
+  await page.goto("/stats");
+  await expect(page.getByRole("heading", { name: "Körper" })).toBeVisible();
+  await expect(page.locator("main")).toContainText("Körpergewicht (kg)");
+  await expect(page.locator("main")).toContainText("54 /min");
   expect(errors).toEqual([]);
 });

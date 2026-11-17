@@ -33,6 +33,7 @@ export type EquipmentInput = {
   weightStepKg?: number;
   perSide?: boolean;
   loadUnit?: LoadUnit;
+  progressionStep?: number | null;
   notes?: string | null;
 };
 
@@ -94,6 +95,7 @@ export async function updateEquipment(
     baseLoadKg: "Eigengewicht (kg)",
     perSide: "Gewicht je Seite",
     loadUnit: "Einheit",
+    progressionStep: "Kleinster Sprung",
     notes: "Notiz",
   });
   if (Object.keys(changes).length > 0) {

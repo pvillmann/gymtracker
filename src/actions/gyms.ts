@@ -7,7 +7,7 @@ import { requireUser } from "@/lib/auth";
 import { text } from "@/lib/formdata";
 import { fail, type FormState } from "@/lib/result";
 import { isServiceError } from "@/lib/services/errors";
-import { deleteGym, findOrCreateGym, renameGym } from "@/lib/services/gyms";
+import { deleteGym, findOrCreateGym, renameGym, setGymPlates } from "@/lib/services/gyms";
 
 /** Studios sind gemeinsamer Katalog: anlegen und umbenennen darf jeder. */
 export async function createGymAction(_prev: FormState, formData: FormData): Promise<FormState> {
@@ -36,6 +36,22 @@ export async function renameGymAction(
     throw error;
   }
   revalidatePath("/gyms");
+  revalidatePath(`/gyms/${gymId}`);
+  return { ok: true };
+}
+
+export async function setGymPlatesAction(
+  gymId: string,
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const user = await requireUser();
+  try {
+    await setGymPlates(user, gymId, text(formData, "plates"));
+  } catch (error) {
+    if (isServiceError(error)) return fail(error.message);
+    throw error;
+  }
   revalidatePath(`/gyms/${gymId}`);
   return { ok: true };
 }

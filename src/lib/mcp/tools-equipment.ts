@@ -188,6 +188,12 @@ export function registerEquipmentTools(server: McpServer, user: User): void {
           .enum(["kg", "level"])
           .optional()
           .describe("level: Steckgewicht mit Stufen (z. B. 1–12) statt kg – zählt nicht als bewegtes Gewicht"),
+        step: z
+          .number()
+          .positive()
+          .max(50)
+          .optional()
+          .describe("Kleinster Sprung beim Steigern, in kg (je Seite bei per_side) oder Stufen; leer = Standard nach Geräteart"),
         notes: z.string().max(1000).optional(),
         exercise: z.string().max(80).optional().describe("Übung, die an dem Gerät geht"),
         gym: z.string().max(60).optional().describe("Studio, in dem das Gerät steht"),
@@ -204,6 +210,7 @@ export function registerEquipmentTools(server: McpServer, user: User): void {
           baseLoadKg: args.base_load_kg ?? 0,
           perSide: args.per_side ?? false,
           loadUnit: args.load_unit ?? "kg",
+          progressionStep: args.step ?? null,
           notes: args.notes ?? null,
         });
 
@@ -252,6 +259,12 @@ export function registerEquipmentTools(server: McpServer, user: User): void {
           .enum(["kg", "level"])
           .optional()
           .describe("level: Steckgewicht mit Stufen (z. B. 1–12) statt kg – zählt nicht als bewegtes Gewicht"),
+        step: z
+          .number()
+          .positive()
+          .max(50)
+          .optional()
+          .describe("Kleinster Sprung beim Steigern, in kg (je Seite bei per_side) oder Stufen; leer = Standard nach Geräteart"),
         notes: z.string().max(1000).optional(),
       },
     },
@@ -267,6 +280,7 @@ export function registerEquipmentTools(server: McpServer, user: User): void {
           baseLoadKg: args.base_load_kg ?? found.baseLoadKg,
           perSide: args.per_side ?? found.perSide,
           loadUnit: args.load_unit ?? found.loadUnit,
+          progressionStep: args.step ?? found.progressionStep,
           notes: args.notes ?? found.notes,
         });
         return `Gerät „${args.name ?? found.name}“ gespeichert. Fotos: ${equipmentUrl(found.id)}`;

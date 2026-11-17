@@ -8,6 +8,7 @@ import { newId } from "@/lib/ids";
 import { assertCanDeleteCatalog, assertNameFree, nameKey } from "@/lib/services/catalog";
 import { logChange } from "@/lib/services/changelog";
 import { ServiceError } from "@/lib/services/errors";
+import { formatPlates, parsePlates } from "@/lib/plates";
 import { requireOwnExercise } from "@/lib/services/workouts";
 
 function isDuplicateName(error: unknown): boolean {
@@ -59,6 +60,17 @@ export async function renameGym(user: User, gymId: string, rawName: string): Pro
     }
     throw error;
   }
+}
+
+/** Scheiben, die im Studio liegen – für den Scheiben-Rechner im Training. */
+export async function setGymPlates(user: User, gymId: string, raw: string): Promise<void> {
+  const gym = await requireGym(gymId);
+  const parsed = parsePlates(raw);
+  if (raw.trim() && !parsed) throw new ServiceError("Bitte Scheiben in kg angeben, z. B. 20, 10, 5, 2,5.");
+  const plates = parsed ? formatPlates(parsed) : null;
+  if (plates === gym.plates) return;
+  await db.update(gyms).set({ plates }).where(eq(gyms.id, gymId));
+  await logChange(user, "gym", gymId, gym.name, "update", { Scheiben: [gym.plates, plates] });
 }
 
 /**

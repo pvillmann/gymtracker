@@ -134,6 +134,41 @@
       "when": 1791922481457,
       "tag": "0018_appearance",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1794953867174,
+      "tag": "0019_progression_step",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1794954216215,
+      "tag": "0020_gym_plates",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1794954501181,
+      "tag": "0021_push",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "6",
+      "when": 1794954663989,
+      "tag": "0022_ai_suggestions",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1794955150750,
+      "tag": "0023_body_metrics",
+      "breakpoints": true
     }
   ]
 }

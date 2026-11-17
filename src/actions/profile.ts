@@ -17,7 +17,10 @@ import {
 import { isAccent, isGlassLevel } from "@/lib/appearance";
 import { text } from "@/lib/formdata";
 import { fail, type FormState } from "@/lib/result";
+import { setAiSuggestions, setAnthropicKey } from "@/lib/services/ai-suggestions";
+import { createHealthToken, recordManualWeight, revokeHealthToken } from "@/lib/services/body-metrics";
 import { handOverCatalog } from "@/lib/services/catalog";
+import { isServiceError } from "@/lib/services/errors";
 
 const profileInput = z.object({
   name: z.string().trim().min(1, "Bitte einen Namen angeben.").max(60),
@@ -45,6 +48,10 @@ export async function updateProfileAction(
   }
 
   await db.update(users).set(parsed.data).where(eq(users.id, user.id));
+  // Ein geändertes Gewicht landet im Verlauf.
+  if (parsed.data.bodyweightKg !== user.bodyweightKg) {
+    await recordManualWeight(user.id, parsed.data.bodyweightKg);
+  }
 
   revalidatePath("/settings");
   revalidatePath("/stats");
@@ -128,4 +135,56 @@ export async function deleteAccountAction(
   await destroySession();
 
   redirect("/login?deleted=1");
+}
+
+/**
+ * Eigener Anthropic-Schlüssel für KI-Vorschläge. Leeres Feld löscht ihn.
+ * Der Schlüssel wird vor dem Speichern bei Anthropic geprüft und nur
+ * verschlüsselt abgelegt.
+ */
+export async function saveAnthropicKeyAction(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const user = await requireUser();
+  const key = text(formData, "anthropicKey");
+  if (key.length > 300) return fail("Das sieht nicht nach einem API-Schlüssel aus.");
+  try {
+    await setAnthropicKey(user, key || null);
+  } catch (error) {
+    if (isServiceError(error)) return fail(error.message);
+    throw error;
+  }
+  revalidatePath("/settings");
+  return { ok: true };
+}
+
+export async function deleteAnthropicKeyAction(): Promise<void> {
+  const user = await requireUser();
+  await setAnthropicKey(user, null);
+  revalidatePath("/settings");
+}
+
+export async function toggleAiSuggestionsAction(enabled: boolean): Promise<void> {
+  const user = await requireUser();
+  try {
+    await setAiSuggestions(user, enabled);
+  } catch (error) {
+    if (!isServiceError(error)) throw error;
+  }
+  revalidatePath("/settings");
+}
+
+/** Neuer Schlüssel für den Apple-Health-Import – wird genau einmal angezeigt. */
+export async function createHealthTokenAction(): Promise<{ token: string }> {
+  const user = await requireUser();
+  const token = await createHealthToken(user);
+  revalidatePath("/settings");
+  return { token };
+}
+
+export async function revokeHealthTokenAction(): Promise<void> {
+  const user = await requireUser();
+  await revokeHealthToken(user);
+  revalidatePath("/settings");
 }

@@ -2,9 +2,10 @@
 
 import { useActionState, useMemo } from "react";
 
-import { createGymAction, renameGymAction } from "@/actions/gyms";
+import { createGymAction, renameGymAction, setGymPlatesAction } from "@/actions/gyms";
 import { SubmitButton } from "@/components/SubmitButton";
 import { ErrorMessage, Input } from "@/components/ui";
+import { DEFAULT_PLATES, formatPlates } from "@/lib/plates";
 import type { FormState } from "@/lib/result";
 
 export function CreateGymForm() {
@@ -33,6 +34,37 @@ export function RenameGymForm({ gymId, name }: { gymId: string; name: string }) 
           Umbenennen
         </SubmitButton>
       </div>
+      <ErrorMessage>{state.error}</ErrorMessage>
+      {state.ok ? <p className="text-sm font-medium text-up">Gespeichert.</p> : null}
+    </form>
+  );
+}
+
+/** Scheiben im Studio – leer heißt Standard. */
+export function GymPlatesForm({ gymId, plates }: { gymId: string; plates: string | null }) {
+  const action = useMemo(() => setGymPlatesAction.bind(null, gymId), [gymId]);
+  const [state, formAction] = useActionState<FormState, FormData>(action, {});
+  return (
+    <form action={formAction} onReset={(e) => e.preventDefault()} className="space-y-2">
+      <label className="block text-sm font-medium text-muted" htmlFor={`plates-${gymId}`}>
+        Scheiben (kg)
+      </label>
+      <div className="flex gap-2">
+        <Input
+          id={`plates-${gymId}`}
+          name="plates"
+          defaultValue={plates ?? ""}
+          placeholder={formatPlates(DEFAULT_PLATES)}
+          inputMode="decimal"
+          maxLength={120}
+        />
+        <SubmitButton variant="secondary" size="sm" className="h-12 shrink-0" pendingLabel="…">
+          Speichern
+        </SubmitButton>
+      </div>
+      <p className="text-xs text-faint">
+        Für den Scheiben-Rechner im Training. Leer: {formatPlates(DEFAULT_PLATES)}.
+      </p>
       <ErrorMessage>{state.error}</ErrorMessage>
       {state.ok ? <p className="text-sm font-medium text-up">Gespeichert.</p> : null}
     </form>

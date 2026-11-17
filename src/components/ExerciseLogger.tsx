@@ -9,6 +9,7 @@ import {
   logSetAction,
   rateSetAction,
 } from "@/actions/workouts";
+import { cancelRestAction } from "@/actions/push";
 import { RestTimer } from "@/components/RestTimer";
 import { SubmitButton } from "@/components/SubmitButton";
 import { TrendBadge } from "@/components/TrendBadge";
@@ -26,6 +27,8 @@ import {
   setsOfKind,
 } from "@/lib/describe";
 import { formatDuration, formatKg } from "@/lib/format";
+import { platesFor } from "@/lib/plates";
+import type { Suggestion } from "@/lib/progression";
 import type { FormState } from "@/lib/result";
 import {
   compareSets,
@@ -80,6 +83,38 @@ export type LoggerPrevious = {
   summary: string;
   sets: LoggerSet[];
 };
+
+/**
+ * Bonus-Satz: verdient, wenn der letzte Arbeitssatz „Leicht“ war oder über
+ * dem Zielbereich lag. Ohne Plan zählt nur die Einschätzung.
+ */
+function bonusEarned(
+  set: { reps: number; effort: SetEffort | null },
+  target: { targetRepsMax: number } | null,
+): boolean {
+  return set.effort === "easy" || (target !== null && set.reps > target.targetRepsMax);
+}
+
+/** Einen Sprung schwerer – bei Gegengewicht einen Sprung weniger Hilfe. */
+function bonusWeight(weight: number, step: number, mode: TrackingMode): number {
+  const next = mode === "assisted_reps" ? weight - step : weight + step;
+  return Math.max(0, Math.round(next * 100) / 100);
+}
+
+/** „je Seite: 20 + 10 + 2,5“ unter dem Gewichtsfeld. */
+function PlateHint({ weight, plates, perSide }: { weight: string; plates: number[]; perSide?: boolean }) {
+  const value = Number(weight.replace(",", "."));
+  if (!Number.isFinite(value) || value <= 0) return null;
+  // Ohne „je Seite“ steht das Gesamtgewicht im Feld – auf zwei Seiten verteilt.
+  const { plates: onSide, rest } = platesFor(perSide ? value : value / 2, plates);
+  if (onSide.length === 0) return null;
+  return (
+    <p className="mt-2 text-center text-xs text-muted tnum">
+      je Seite: {onSide.map((p) => formatKg(p)).join(" + ")}
+      {rest > 0 ? <span className="text-faint"> (+{formatKg(rest)} kg passt nicht)</span> : null}
+    </p>
+  );
+}
 
 function formatValue(value: number): string {
   return formatKg(value);
@@ -139,6 +174,10 @@ export function ExerciseLogger({
   machines = [],
   activeMachine = "none",
   elsewhere = null,
+  suggestion = null,
+  plates = null,
+  step = 2.5,
+  superset = null,
 }: {
   workoutId: string;
   exercise: LoggerExercise;
@@ -152,6 +191,14 @@ export function ExerciseLogger({
   machines?: LoggerMachine[];
   activeMachine?: string;
   elsewhere?: LoggerElsewhere | null;
+  /** Progressionsvorschlag fürs heutige Training, siehe lib/progression.ts. */
+  suggestion?: Suggestion | null;
+  /** Scheiben im Studio – nur bei Maschinen mit Scheiben gesetzt. */
+  plates?: number[] | null;
+  /** Kleinster Sprung der Maschine, für den Bonus-Satz. */
+  step?: number;
+  /** Übung für den Gegenspieler im Plan, noch offen – Supersatz-Tipp. */
+  superset?: string | null;
 }) {
   const [restEndsAt, setRestEndsAt] = useState<number | null>(null);
   const restSeconds = target?.restSeconds ?? 0;
@@ -179,7 +226,11 @@ export function ExerciseLogger({
   const defaultWarmup = workingToday === 0 && warmupsToday < previousWarmups;
   const [isWarmup, setIsWarmup] = useState(defaultWarmup);
 
-  const prefillFor = (warmup: boolean) => {
+  // Vorschlag oder bewusst „wie letztes Mal“ – die Wahl gilt fürs ganze Training.
+  const [followSuggestion, setFollowSuggestion] = useState(true);
+  const activeSuggestion = followSuggestion ? suggestion : null;
+
+  const prefillFor = (warmup: boolean, useSuggestion = activeSuggestion) => {
     // Aufwärm- und Arbeitssätze getrennt: sonst landet nach dem Aufwärmen das
     // Aufwärmgewicht im ersten Arbeitssatz und der erste Arbeitssatz wird mit
     // dem zweiten Satz vom letzten Mal verglichen.
@@ -188,11 +239,15 @@ export function ExerciseLogger({
     const previousSameSet =
       previousOfKind[ordinal - 1] ?? previousOfKind.at(-1) ?? null;
     const lastThisSession = setsOfKind(loggedSets, warmup).at(-1) ?? null;
+    // Der Vorschlag gilt nur für Arbeitssätze.
+    const proposal = warmup ? null : useSuggestion;
+    const proposedReps = proposal ? (proposal.reps[ordinal - 1] ?? proposal.reps.at(-1)) : undefined;
 
     return {
       // Gewicht: was du heute zuletzt aufgelegt hast, bleibt meist liegen.
       weight: formatValue(
         lastThisSession?.weightKg ??
+          proposal?.weight ??
           previousSameSet?.weightKg ??
           loggedSets.at(-1)?.weightKg ??
           0,
@@ -200,7 +255,8 @@ export function ExerciseLogger({
       // Wiederholungen: der Wert vom letzten Mal ist die Marke, die es zu
       // schlagen gilt.
       reps: String(
-        previousSameSet?.reps ??
+        proposedReps ??
+          previousSameSet?.reps ??
           lastThisSession?.reps ??
           target?.targetRepsMin ??
           10,
@@ -222,8 +278,8 @@ export function ExerciseLogger({
   // Aufwärm-Hakens stehen.
   const [touched, setTouched] = useState(false);
 
-  const applyPrefill = (warmup: boolean) => {
-    const next = prefillFor(warmup);
+  const applyPrefill = (warmup: boolean, useSuggestion = activeSuggestion) => {
+    const next = prefillFor(warmup, useSuggestion);
     setWeight(next.weight);
     setReps(next.reps);
     setDuration(next.duration);
@@ -241,6 +297,19 @@ export function ExerciseLogger({
     // hier mit loggedSets.length.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- siehe oben
   }, [loggedSets.length, defaultWarmup]);
+
+  // Kommt der KI-Vorschlag erst nach dem ersten Rendern, die Felder einmal
+  // nachziehen – aber nur, solange noch nichts eingetippt oder gespeichert ist.
+  const suggestionKey = suggestion ? `${suggestion.weight}|${suggestion.reps.join(",")}` : "";
+  const [seenSuggestion, setSeenSuggestion] = useState(suggestionKey);
+  if (seenSuggestion !== suggestionKey) {
+    setSeenSuggestion(suggestionKey);
+    if (!touched && !isWarmup && workingToday === 0 && followSuggestion) {
+      const next = prefillFor(false);
+      setWeight(next.weight);
+      setReps(next.reps);
+    }
+  }
 
   const edit = (setter: (value: string) => void) => (value: string) => {
     setter(value);
@@ -510,6 +579,52 @@ export function ExerciseLogger({
         </div>
       ) : null}
 
+      {done && lastWorking && !isTimed && bonusEarned(lastWorking, target) ? (
+        <div className="mt-3 rounded-lg border border-accent/30 bg-accent/8 px-3 py-2.5 text-sm">
+          <p className="font-medium text-fg">
+            Da ging noch was 💪 – noch einen mit{" "}
+            {describeWeight(bonusWeight(lastWorking.weightKg, step, exercise.trackingMode), exercise.transfer)}?
+          </p>
+          {superset ? (
+            <p className="mt-1 text-muted">Oder {superset} direkt als Supersatz.</p>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => {
+              setIsWarmup(false);
+              setWeight(formatValue(bonusWeight(lastWorking.weightKg, step, exercise.trackingMode)));
+              setReps(String(target?.targetRepsMin ?? lastWorking.reps));
+              setTouched(true);
+            }}
+            className="mt-2 text-xs font-semibold text-accent"
+          >
+            Bonus-Satz vorbelegen
+          </button>
+        </div>
+      ) : null}
+
+      {suggestion && !isWarmup && !done ? (
+        <div className="mt-3 flex items-start gap-2 rounded-lg border border-accent/30 bg-accent/8 px-3 py-2 text-sm">
+          <span aria-hidden="true" className="text-accent">
+            {suggestion.kind === "increase" ? "▲" : suggestion.kind === "hold" ? "=" : "+"}
+          </span>
+          <p className="min-w-0 flex-1 text-muted">
+            {followSuggestion ? suggestion.reason : "Wie letztes Mal vorbelegt."}
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              const next = !followSuggestion;
+              setFollowSuggestion(next);
+              applyPrefill(false, next ? suggestion : null);
+            }}
+            className="shrink-0 text-xs font-semibold text-accent"
+          >
+            {followSuggestion ? "Wie letztes Mal" : "Vorschlag"}
+          </button>
+        </div>
+      ) : null}
+
       <form
         action={formAction}
         // React setzt ein Formular nach der Action zurück. Alle Felder hier
@@ -520,6 +635,7 @@ export function ExerciseLogger({
         className="mt-4"
       >
         <input type="hidden" name="exerciseId" value={exercise.id} />
+        <input type="hidden" name="restSeconds" value={restSeconds} />
 
         {isTimed ? (
           // Eigene Zeile für die Dauer: "20:00" oder "1:05:30" braucht mehr
@@ -580,6 +696,8 @@ export function ExerciseLogger({
           </div>
         )}
 
+        {plates && !isTimed ? <PlateHint weight={weight} plates={plates} perSide={exercise.transfer?.perSide} /> : null}
+
         {isTimed ? null : <input type="hidden" name="durationSeconds" value="" />}
 
         <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm text-muted">
@@ -609,7 +727,14 @@ export function ExerciseLogger({
       </form>
 
       {restEndsAt !== null ? (
-        <RestTimer endsAt={restEndsAt} onDismiss={() => setRestEndsAt(null)} />
+        <RestTimer
+          endsAt={restEndsAt}
+          onDismiss={() => {
+            setRestEndsAt(null);
+            // Übersprungen: die Benachrichtigung aufs Handy entfällt auch.
+            void cancelRestAction();
+          }}
+        />
       ) : null}
 
       {workingVolume > 0 ? (

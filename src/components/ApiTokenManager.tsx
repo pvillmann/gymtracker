@@ -16,7 +16,7 @@ type Token = {
   createdAt: number;
 };
 
-function NewTokenNotice({ token }: { token: string }) {
+export function NewTokenNotice({ token }: { token: string }) {
   const [copied, setCopied] = useState(false);
 
   return (

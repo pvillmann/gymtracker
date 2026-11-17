@@ -41,6 +41,12 @@ const equipmentInput = z.object({
   ),
   perSide: z.boolean(),
   loadUnit: z.enum(["kg", "level"]),
+  // Leer heißt: Standard nach Geräteart.
+  progressionStep: z.preprocess(
+    (value) =>
+      typeof value === "string" && value.trim() !== "" ? Number(value.trim().replace(",", ".")) : null,
+    z.number().positive("Der Sprung muss größer als 0 sein.").max(50).nullable(),
+  ),
   notes: z
     .string()
     .trim()
@@ -59,6 +65,7 @@ function readForm(formData: FormData) {
     baseLoadKg: text(formData, "baseLoadKg", "0"),
     perSide: formData.get("perSide") === "on",
     loadUnit: text(formData, "loadUnit", "kg"),
+    progressionStep: text(formData, "progressionStep", ""),
     notes: optionalText(formData, "notes"),
   });
 }

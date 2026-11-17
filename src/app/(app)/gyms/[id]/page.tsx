@@ -6,7 +6,7 @@ import { deleteGymAction } from "@/actions/gyms";
 import { setMachineInGymAction } from "@/actions/movements";
 import { ChangeLog } from "@/components/ChangeLog";
 import { ConfirmSubmitButton } from "@/components/ConfirmSubmitButton";
-import { RenameGymForm } from "@/components/GymForms";
+import { GymPlatesForm, RenameGymForm } from "@/components/GymForms";
 import { InlineActionForm } from "@/components/InlineActionForm";
 import { Card, PageHeader, Select } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
@@ -152,6 +152,9 @@ export default async function GymPage({ params }: { params: Promise<{ id: string
         </h2>
         <Card>
           <RenameGymForm gymId={gym.id} name={gym.name} />
+          <div className="mt-4 border-t border-line-soft pt-4">
+            <GymPlatesForm gymId={gym.id} plates={gym.plates} />
+          </div>
         </Card>
         <p className="mt-2 px-1 text-xs text-faint">
           Das Studio gehört zum gemeinsamen Katalog – Änderungen gelten für alle.

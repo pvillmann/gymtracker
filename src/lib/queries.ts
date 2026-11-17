@@ -6,6 +6,7 @@ import {
   count,
   desc,
   eq,
+  gte,
   inArray,
   isNotNull,
   isNull,
@@ -639,6 +640,25 @@ export async function getVolumeByExercise(
     .where(and(eq(workouts.userId, userId), isNotNull(workouts.finishedAt)))
     .groupBy(exercises.id)
     .orderBy(desc(sql`sum(${workoutSets.volumeKg})`));
+}
+
+/** Arbeitssätze ab einem Zeitpunkt, mit Muskelgruppe – für die Wochenstatistik. */
+export async function listWorkingSetsSince(
+  userId: string,
+  since: number,
+): Promise<Array<{ muscleGroup: string | null; completedAt: number }>> {
+  return db
+    .select({ muscleGroup: exercises.muscleGroup, completedAt: workoutSets.completedAt })
+    .from(workoutSets)
+    .innerJoin(workouts, eq(workouts.id, workoutSets.workoutId))
+    .innerJoin(exercises, eq(exercises.id, workoutSets.exerciseId))
+    .where(
+      and(
+        eq(workouts.userId, userId),
+        eq(workoutSets.isWarmup, false),
+        gte(workoutSets.completedAt, since),
+      ),
+    );
 }
 
 export type WorkoutDetailEntry = {
