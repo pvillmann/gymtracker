@@ -5,6 +5,8 @@ import { ConfirmSubmitButton } from "@/components/ConfirmSubmitButton";
 import { MealForm } from "@/components/MealForm";
 import { Card, EmptyState, PageHeader } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
+import { formatKg } from "@/lib/format";
+import { goalsOverview } from "@/lib/services/goals";
 import { averageOfLogged, dailyTotals, listMeals, startOfDay } from "@/lib/services/nutrition";
 
 export const metadata: Metadata = { title: "Ernährung · GymTracker" };
@@ -24,9 +26,10 @@ export default async function NutritionPage() {
   const today = startOfDay(now);
   const tomorrow = new Date(now);
   tomorrow.setDate(tomorrow.getDate() + 1);
-  const [meals, totals] = await Promise.all([
+  const [meals, totals, goals] = await Promise.all([
     listMeals(user.id, today, startOfDay(tomorrow)),
     dailyTotals(user.id, 8, now),
+    goalsOverview(user, now),
   ]);
   const todayTotal = totals.at(-1)!;
   const average = averageOfLogged(totals);
@@ -35,21 +38,37 @@ export default async function NutritionPage() {
     <>
       <PageHeader title="Ernährung" subtitle="Foto in den Claude-Chat – oder hier von Hand." />
 
-      <Card className="mb-4">
-        <div className="grid grid-cols-2 gap-3 text-center">
-          <div>
-            <p className="text-3xl font-bold tnum">{de(todayTotal.kcal)}</p>
-            <p className="text-xs text-muted">kcal heute</p>
-          </div>
-          <div>
-            <p className="text-3xl font-bold tnum">{de(todayTotal.proteinG)} g</p>
-            <p className="text-xs text-muted">Eiweiß heute</p>
-          </div>
-        </div>
-        <p className="mt-3 text-center text-xs text-faint">
+      <Card className="mb-4 space-y-4">
+        <Progress
+          label="kcal heute"
+          value={todayTotal.kcal}
+          target={goals.calorieTarget}
+          unit=""
+          missing={
+            goals.calorieTarget
+              ? null
+              : !goals.goal
+                ? "Ziel im Profil setzen, dann gibt es ein Kalorienziel."
+                : "missing" in goals.expenditure
+                  ? `Kalorienziel folgt: ${goals.expenditure.missing}.`
+                  : null
+          }
+        />
+        <Progress
+          label="Eiweiß heute"
+          value={todayTotal.proteinG}
+          target={goals.protein.grams}
+          unit=" g"
+          missing={null}
+          note={`Ziel ${goals.protein.grams}–${goals.protein.upper} g: 1,6–2,0 g je kg${
+            goals.protein.adjusted ? ` von ${formatKg(goals.protein.referenceKg)} kg (Gewicht bei BMI 25)` : ""
+          }.`}
+        />
+        <p className="text-center text-xs text-faint">
           {average
             ? `Ø ${de(average.kcal)} kcal · ${de(average.proteinG)} g Eiweiß über ${average.days} ${average.days === 1 ? "Tag" : "Tage"} mit Einträgen`
             : "Der Schnitt erscheint nach dem ersten vollen Tag mit Einträgen."}
+          {"kcal" in goals.expenditure ? ` · Verbrauch ~${de(goals.expenditure.kcal)} kcal` : ""}
         </p>
       </Card>
 
@@ -96,5 +115,54 @@ export default async function NutritionPage() {
         Ziele und Rückmeldung kommen in den nächsten Schritten.
       </p>
     </>
+  );
+}
+
+/** Wert gegen Ziel; ohne Ziel nur die Zahl. */
+function Progress({
+  label,
+  value,
+  target,
+  unit,
+  missing,
+  note,
+}: {
+  label: string;
+  value: number;
+  target: number | null;
+  unit: string;
+  missing: string | null;
+  note?: string;
+}) {
+  const share = target ? Math.min(1, value / target) : 0;
+  return (
+    <div>
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="text-sm text-muted">{label}</p>
+        <p className="tnum">
+          <strong className="text-2xl">
+            {de(value)}
+            {unit}
+          </strong>
+          {target ? (
+            <span className="text-sm text-faint">
+              {" "}
+              / {de(target)}
+              {unit}
+            </span>
+          ) : null}
+        </p>
+      </div>
+      {target ? (
+        <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-surface-2" role="presentation">
+          <div
+            className={value > target * 1.1 && unit === "" ? "h-full bg-down" : "h-full bg-accent"}
+            style={{ width: `${Math.round(share * 100)}%` }}
+          />
+        </div>
+      ) : null}
+      {missing ? <p className="mt-1 text-xs text-faint">{missing}</p> : null}
+      {note ? <p className="mt-1 text-xs text-faint">{note}</p> : null}
+    </div>
   );
 }

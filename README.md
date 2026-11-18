@@ -176,7 +176,20 @@ Homescreen.
   Tage mit Einträgen; Eintragen von Hand geht auch. Tage ohne Eintrag zählen
   nicht als „nichts gegessen“
 - Schätzungen aus Fotos liegen oft 20–50 % daneben – gleichbleibend schätzen
-  ist wichtiger als genau. Ziele (Eiweiß, Defizit) und Rückmeldung folgen
+  ist wichtiger als genau
+- Ziele aus Regeln (`src/lib/goals.ts`): Wochenziel im Profil (−1 bis
+  +0,25 %/Woche, Helms et al. 2014), geglätteter Gewichtstrend und Tempo,
+  Eiweiß 1,6–2,0 g/kg (Morton et al. 2018; ab BMI 30 bezogen auf das Gewicht
+  bei BMI 25 – eine Konvention), Verbrauch aus Essen und Trend ab 21 Tagen
+  mit mindestens drei von vier Tagen eingetragen, daraus das Kalorienziel
+- Wochenrückblick auf „Heute“ (montags für die Vorwoche, einmal berechnet
+  und gespeichert): Trainings und Volumen gegen die Vorwoche, Übungen ohne
+  Fortschritt seit drei Einheiten, Essen und Eiweiß gegen das Ziel,
+  Gewichtstrend gegen das Wochenziel. Die Hinweise rechnet GymTracker
+  (`src/lib/weekly-review.ts`); mit eigenem API-Schlüssel schreibt Claude
+  Haiku 3–5 Sätze Rückmeldung und höchstens zwei Korrekturen dazu. Haiku
+  bekommt nur die Zahlen, keinen Namen und keine E-Mail. Per MCP:
+  `weekly_review`
 
 **Fortschritt sehen**
 - Pro Übung: Verlaufskurve des besten Satzes, schwerstes Gewicht, bestes Training

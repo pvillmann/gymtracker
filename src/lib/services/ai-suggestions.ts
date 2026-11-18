@@ -61,6 +61,12 @@ export function keyHint(user: User): string | null {
   return key ? `…${key.slice(-4)}` : "nicht lesbar – bitte neu eintragen";
 }
 
+/** Anthropic-Client mit dem Schlüssel des Kontos – null ohne (lesbaren) Schlüssel. */
+export function anthropicFor(user: User): Anthropic | null {
+  const key = user.anthropicKeyEnc ? open(user.anthropicKeyEnc) : null;
+  return key ? client(key) : null;
+}
+
 export function aiEnabled(user: User): boolean {
   return user.aiSuggestions && Boolean(user.anthropicKeyEnc);
 }

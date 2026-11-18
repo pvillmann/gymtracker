@@ -24,6 +24,7 @@ const now = Math.floor(Date.now() / 1000);
 await db.insert(s.users).values([
   { id: "u-anna", email: "anna@e2e.local", name: "Anna", passwordHash, emailVerifiedAt: now },
   { id: "u-ben", email: "ben@e2e.local", name: "Ben", passwordHash, emailVerifiedAt: now },
+  { id: "u-cara", email: "cara@e2e.local", name: "Cara", passwordHash, emailVerifiedAt: now },
 ]);
 await db.insert(s.groups).values({ id: "g-admin", slug: "administrators", name: "Administratoren", isSystem: true });
 await db.insert(s.groupMembers).values({ groupId: "g-admin", userId: "u-anna" });
@@ -53,5 +54,13 @@ for (let i = 0; i < 3; i++) {
   await workouts.logSet(anna, workoutId, variant, { weightKg: 100, reps: 10, effort: i === 2 ? "ok" : null });
 }
 await workouts.finishWorkout(anna, workoutId);
+
+// Cara hat letzte Woche an vier Tagen gegessen, mit wenig Eiweiß – für den Wochenrückblick.
+const { logMeal } = await import("../src/lib/services/nutrition");
+const { lastWeekStart } = await import("../src/lib/services/weekly-review");
+const [cara] = await db.select().from(s.users).where(eq(s.users.id, "u-cara"));
+for (let i = 0; i < 4; i++) {
+  await logMeal(cara, { description: `Tag ${i}`, kcal: 2100, proteinG: 70, eatenAt: lastWeekStart() + i * 86_400 + 12 * 3600 });
+}
 
 console.log(`[e2e] Testdatenbank angelegt: ${path}`);

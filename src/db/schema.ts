@@ -46,6 +46,8 @@ export const users = sqliteTable(
     birthYear: integer("birth_year"),
     /** "m" oder "f" – die Formel kennt nur diese beiden; null = keine Angabe. */
     sex: text("sex").$type<"m" | "f">(),
+    /** Wochenziel fürs Gewicht, Schlüssel aus lib/goals.ts; null = keins gesetzt. */
+    goal: text("goal"),
     /** SHA-256 des Schlüssels für den Apple-Health-Import (nur dieser Endpunkt). */
     healthTokenHash: text("health_token_hash"),
     /** Wann zuletzt Daten aus Apple Health ankamen. */
@@ -777,4 +779,27 @@ export const meals = sqliteTable(
     createdAt: integer("created_at").notNull().default(now),
   },
   (t) => [index("meals_user_eaten_idx").on(t.userId, t.eatenAt)],
+);
+
+/**
+ * Wochenrückblick je Konto und Kalenderwoche: Fakten und Regel-Hinweise
+ * (gerechnet) plus optional Rückmeldung von Claude Haiku.
+ * status: empty (nichts zu sagen) · rules (ohne KI) · pending · ok · failed
+ */
+export const weeklyReviews = sqliteTable(
+  "weekly_reviews",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** Montag 00:00 der Woche, Unix-Sekunden. */
+    weekStart: integer("week_start").notNull(),
+    facts: text("facts").notNull(),
+    hints: text("hints").notNull(),
+    status: text("status").notNull().$type<"empty" | "rules" | "pending" | "ok" | "failed">(),
+    feedback: text("feedback"),
+    actions: text("actions"),
+    createdAt: integer("created_at").notNull().default(now),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.weekStart] })],
 );

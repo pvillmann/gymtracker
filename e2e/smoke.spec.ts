@@ -444,3 +444,36 @@ test("Navigation: täglich unten, Rest hinter „Mehr“", async ({ page }) => {
   await expect(page.locator("main")).not.toContainText("Administration");
   expect(errors).toEqual([]);
 });
+
+test("Ziele: Eiweißziel ohne Daten, Ziel im Profil, Hinweis auf fehlende Daten", async ({ page }) => {
+  const errors = watchErrors(page);
+  await page.goto("/login");
+  await login(page, "ben@e2e.local");
+  await page.goto("/ernaehrung");
+  // Eiweißziel gibt es sofort (aus dem Gewicht), Kalorienziel erst mit Ziel und Daten.
+  await expect(page.locator("main")).toContainText("Eiweiß heute");
+  await expect(page.locator("main")).toContainText("Ziel im Profil setzen");
+  await page.goto("/settings");
+  const profile = page.locator("form", { hasText: "Geburtsjahr" });
+  await profile.getByLabel("Ziel").selectOption("lose-0.5");
+  await profile.getByRole("button", { name: "Speichern" }).click();
+  await expect(profile.getByText("Gespeichert.")).toBeVisible();
+  await expect(profile.getByLabel("Ziel")).toHaveValue("lose-0.5");
+  await page.goto("/ernaehrung");
+  await expect(page.locator("main")).toContainText("Kalorienziel folgt");
+  expect(errors).toEqual([]);
+});
+
+test("Wochenrückblick: Karte auf „Heute“ mit Zahlen und Eiweiß-Hinweis", async ({ page }) => {
+  const errors = watchErrors(page);
+  await page.goto("/login");
+  await login(page, "cara@e2e.local");
+  await page.goto("/");
+  const card = page.getByTestId("weekly-review");
+  await expect(card).toContainText("Wochenrückblick");
+  await expect(card).toContainText("0 Trainings");
+  await expect(card).toContainText("Ø 2.100 kcal (4 Tage)");
+  await expect(card).toContainText("Eiweiß an 4 von 4 Tagen unter Ziel");
+  await expect(card).toContainText("Die ganze Woche kein Training.");
+  expect(errors).toEqual([]);
+});
