@@ -389,3 +389,29 @@ test("Profil: Geschlecht bleibt nach dem Speichern ausgewählt", async ({ page }
   await page.reload();
   await expect(page.locator("form", { hasText: "Geburtsjahr" }).getByLabel("Geschlecht")).toHaveValue("f");
 });
+
+test("Ernährung: von Hand eintragen, Summe auf Seite und Startseite, löschen", async ({ page }) => {
+  const errors = watchErrors(page);
+  page.on("dialog", (dialog) => void dialog.accept());
+  await page.goto("/login");
+  await login(page, "ben@e2e.local");
+  await page.goto("/ernaehrung");
+  await expect(page.locator("main")).toContainText("Noch nichts eingetragen");
+  await page.getByText("Von Hand eintragen").click();
+  await page.getByLabel("Was").fill("Skyr mit Beeren");
+  await page.getByLabel("kcal").fill("320");
+  await page.getByLabel("Eiweiß (g)").fill("30");
+  await page.getByRole("button", { name: "Eintragen" }).click();
+  await expect(page.locator("main")).toContainText("Skyr mit Beeren");
+  await expect(page.locator("main")).toContainText("320");
+  await expect(page.locator("main")).toContainText("30 g");
+
+  await page.goto("/");
+  await expect(page.locator("main")).toContainText("Heute gegessen");
+  await expect(page.locator("main")).toContainText("320 kcal");
+
+  await page.goto("/ernaehrung");
+  await page.getByRole("button", { name: "×" }).click();
+  await expect(page.locator("main")).toContainText("Noch nichts eingetragen");
+  expect(errors).toEqual([]);
+});

@@ -71,7 +71,9 @@ export async function POST(request: Request): Promise<Response> {
         "Frage vor einem Satz mit last_performance nach, was beim letzten Mal " +
         "stand. Übungen und Pläne werden über ihren Namen angesprochen; ist " +
         "ein Name mehrdeutig, nennt die Fehlermeldung die Kandidaten – frage " +
-        "dann nach, statt zu raten.",
+        "dann nach, statt zu raten. Schickt der Nutzer ein Foto einer Mahlzeit, " +
+        "schätze kcal und Eiweiß, frag nach Öl, Soßen und Getränken, nenne die " +
+        "Schätzung und trage sie erst nach Bestätigung mit log_meal ein.",
     },
   );
   registerGymTools(server, user);

@@ -749,3 +749,32 @@ export const scaleCaptures = sqliteTable(
   },
   (t) => [index("scale_captures_user_idx").on(t.userId, t.createdAt)],
 );
+
+/**
+ * Mahlzeiten – meist über MCP: Claude schätzt aus einem Foto im Chat, der
+ * Nutzer bestätigt. Fotos werden nicht gespeichert. Schätzungen sind grob;
+ * für die spätere Verbrauchsrechnung zählt, dass sie gleichbleibend sind.
+ */
+export type MealConfidence = "grob" | "mittel" | "gut";
+
+export const meals = sqliteTable(
+  "meals",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** Unix-Sekunden – wann gegessen, nicht wann eingetragen. */
+    eatenAt: integer("eaten_at").notNull(),
+    description: text("description").notNull(),
+    kcal: real("kcal").notNull(),
+    proteinG: real("protein_g"),
+    carbsG: real("carbs_g"),
+    fatG: real("fat_g"),
+    confidence: text("confidence").notNull().$type<MealConfidence>().default("mittel"),
+    /** "chat" (MCP) oder "manuell". */
+    source: text("source").notNull().default("chat"),
+    createdAt: integer("created_at").notNull().default(now),
+  },
+  (t) => [index("meals_user_eaten_idx").on(t.userId, t.eatenAt)],
+);

@@ -158,6 +158,17 @@ Homescreen.
 - Ist auf dem Gerät „Transparenz reduzieren“ oder „Kontrast erhöhen“ an,
   bleibt die Ebene deckend
 
+**Ernährung (erste Etappe)**
+- Mahlzeiten per Foto im Claude-Chat: Claude schätzt kcal und Eiweiß, fragt
+  nach Öl, Soßen und Getränken und trägt nach Bestätigung über MCP ein
+  (`log_meal`, `meals_on`, `delete_meal`, `nutrition_summary`). Fotos speichert
+  GymTracker nicht, nur Beschreibung und Zahlen
+- Seite „Ernährung“ mit den Mahlzeiten des Tages, Summe und Schnitt über die
+  Tage mit Einträgen; Eintragen von Hand geht auch. Tage ohne Eintrag zählen
+  nicht als „nichts gegessen“
+- Schätzungen aus Fotos liegen oft 20–50 % daneben – gleichbleibend schätzen
+  ist wichtiger als genau. Ziele (Eiweiß, Defizit) und Rückmeldung folgen
+
 **Fortschritt sehen**
 - Pro Übung: Verlaufskurve des besten Satzes, schwerstes Gewicht, bestes Training
 - Der Vergleich läuft über das geschätzte 1RM (Epley), damit 60 kg × 10 und
