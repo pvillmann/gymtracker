@@ -47,6 +47,15 @@ Homescreen.
 
 ## Was drin ist
 
+**Aufbau**
+- Unten fünf Tabs für den Alltag: **Heute** (Training starten, gegessen,
+  Gewicht), **Training** (Pläne), **Essen**, **Körper** (Gewicht,
+  Körperfett-Schätzung, Wiegen) und **Mehr**
+- Hinter „Mehr“: Verlauf, Statistik, Übungen, Maschinen, Studios,
+  Einstellungen, Administration und Abmelden
+- Einstellungen in vier Gruppen mit Sprungleiste: Profil & Körper, App,
+  Verbindungen (Claude/MCP, Apple Health, KI), Konto
+
 **Training mitschreiben**
 - Satz für Satz Gewicht und Wiederholungen erfassen – einfach eintippen,
   vorbelegt mit den Werten vom letzten Mal

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { BarChart, LineChart, RankedBars, type BarDatum, type LinePoint } from "@/components/charts";
+import { BarChart, RankedBars, type BarDatum } from "@/components/charts";
 import { Card, EmptyState, PageHeader } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
 import {
@@ -14,9 +14,6 @@ import {
 } from "@/lib/format";
 import { buildFunFacts } from "@/lib/funfacts";
 import { getVolumeByExercise, listWorkingSetsSince, listWorkoutSummaries } from "@/lib/queries";
-import { FORMULA } from "@/lib/body-composition";
-import { bodyFatEstimates, bodyMetricSeries } from "@/lib/services/body-metrics";
-import { BODY_METRICS, bodyMetricSummary } from "@/lib/body-metrics-view";
 import { bucketByWeek, muscleWeeksSince, totals, weekStreak, weeklySetsByMuscle } from "@/lib/stats";
 
 export const metadata: Metadata = { title: "Statistik · GymTracker" };
@@ -28,81 +25,17 @@ const shortDate = new Intl.DateTimeFormat("de-DE", {
 
 export default async function StatsPage() {
   const user = await requireUser();
-  // Server-Komponente: wird pro Anfrage gerendert, die Uhrzeit ist gewollt.
-  // eslint-disable-next-line react-hooks/purity
-  const halfYearAgo = Math.floor(Date.now() / 1000) - 183 * 86_400;
-  const [summaries, volumeByExercise, recentSets, bodySeries, fatEstimates] = await Promise.all([
+  const [summaries, volumeByExercise, recentSets] = await Promise.all([
     listWorkoutSummaries(user.id),
     getVolumeByExercise(user.id),
     listWorkingSetsSince(user.id, muscleWeeksSince()),
-    bodyMetricSeries(user.id, halfYearAgo),
-    bodyFatEstimates(user, halfYearAgo),
   ]);
-  // Körperfett aus dem Widerstand der Waage – eine Schätzung, siehe lib/body-composition.ts.
-  const fatPoints: LinePoint[] = fatEstimates.map(({ t, estimate }) => ({
-    t,
-    value: estimate.fatPercent,
-    label: `~${estimate.fatPercent.toLocaleString("de-DE")} % (Schätzung)`,
-    caption: formatDate(t),
-    axisLabel: shortDate.format(new Date(t * 1000)),
-  }));
-  const lastFat = fatEstimates.at(-1)?.estimate ?? null;
-  const weightPoints: LinePoint[] = (bodySeries.find((s) => s.metric === "weight")?.points ?? []).map((p) => ({
-    t: p.t,
-    value: p.value,
-    label: `${formatKg(p.value)} kg`,
-    caption: formatDate(p.t),
-    axisLabel: shortDate.format(new Date(p.t * 1000)),
-  }));
-  const bodyTiles = bodyMetricSummary(bodySeries);
   const muscleWeeks = weeklySetsByMuscle(recentSets);
-
-  // Körperwerte auch ohne Training zeigen – wer sich nur wiegt, soll sie sehen.
-  const bodySection = weightPoints.length >= 2 || bodyTiles.length > 0 || lastFat ? (
-        <section className="mb-4">
-          <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">Körper</h2>
-          {weightPoints.length >= 2 ? (
-            <Card className="mb-2">
-              <LineChart points={weightPoints} title="Körpergewicht (kg)" valueName="Gewicht" />
-            </Card>
-          ) : null}
-          {lastFat ? (
-            <Card className="mb-2">
-              {fatPoints.length >= 2 ? (
-                <LineChart points={fatPoints} title="Körperfett – Schätzung (%)" valueName="Körperfett" />
-              ) : (
-                <p className="text-sm">
-                  Körperfett (Schätzung):{" "}
-                  <strong className="tnum">~{lastFat.fatPercent.toLocaleString("de-DE")} %</strong>
-                </p>
-              )}
-              <p className="mt-2 text-xs text-faint">
-                Aus dem Widerstand der Waage geschätzt ({FORMULA}). Absolut ± etwa{" "}
-                {lastFat.spreadPercent.toLocaleString("de-DE")} Prozentpunkte – aussagekräftig ist der Verlauf, wenn
-                immer gleich gemessen wird: morgens, barfuß, nüchtern.
-                {lastFat.outsideStudy ? " Alter oder BMI liegen außerhalb der Studie – noch vorsichtiger lesen." : ""}
-              </p>
-            </Card>
-          ) : null}
-          {bodyTiles.length > 0 ? (
-            <ul className="grid grid-cols-2 gap-2">
-              {bodyTiles.map((tile) => (
-                <Card as="li" key={tile.metric}>
-                  <p className="text-xs text-muted">{BODY_METRICS[tile.metric].label}</p>
-                  <p className="mt-0.5 font-bold tnum">{tile.value}</p>
-                  {tile.detail ? <p className="text-xs text-faint tnum">{tile.detail}</p> : null}
-                </Card>
-              ))}
-            </ul>
-          ) : null}
-        </section>
-      ) : null;
 
   if (summaries.length === 0) {
     return (
       <>
         <PageHeader title="Statistik" />
-        {bodySection}
         <EmptyState
           title="Noch kein Training"
           description="Nach deinem ersten abgeschlossenen Training füllt sich diese Seite mit Zahlen, Kurven und ein paar Angebereien."
@@ -252,8 +185,6 @@ export default async function StatsPage() {
           </Card>
         </section>
       ) : null}
-
-      {bodySection}
 
       {muscleWeeks.length > 0 ? (
         <section className="mb-4">
