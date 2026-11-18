@@ -32,14 +32,17 @@ export const isGoal = (value: unknown): value is GoalKey => typeof value === "st
 /**
  * Geglätteter Gewichtstrend (exponentiell, 10 % je Tag – wie „The Hacker's
  * Diet“). Einzelne Messungen schwanken um 1–2 kg durch Wasser und Essen.
- * Eingabe nach Zeit sortiert; Lücken werden tageweise überbrückt.
+ * Eingabe nach Zeit sortiert; Lücken werden tageweise überbrückt. Mehrere
+ * Wiegungen eines Tages (Zeitzone des Servers) zählen als ein Wert, ihr
+ * Mittel – sonst ginge ein Tag mit Doppelwiegung doppelt in den Trend ein.
  */
 export function weightTrend(points: Array<{ t: number; value: number }>, smoothing = 0.1): Array<{ t: number; value: number }> {
-  if (points.length === 0) return [];
+  const days = perDay(points);
+  if (days.length === 0) return [];
   const out: Array<{ t: number; value: number }> = [];
-  let trend = points[0].value;
-  let lastT = points[0].t;
-  for (const point of points) {
+  let trend = days[0].value;
+  let lastT = days[0].t;
+  for (const point of days) {
     const days = Math.max(0, (point.t - lastT) / DAY);
     // Über mehrere Tage ohne Messung: so oft glätten wie Tage vergangen sind.
     const keep = (1 - smoothing) ** Math.max(1, days);
@@ -48,6 +51,25 @@ export function weightTrend(points: Array<{ t: number; value: number }>, smoothi
     lastT = point.t;
   }
   return out;
+}
+
+/** Ein Punkt je Kalendertag: Mittel der Werte, Zeitpunkt der letzten Wiegung. */
+function perDay(points: Array<{ t: number; value: number }>): Array<{ t: number; value: number }> {
+  const out: Array<{ t: number; value: number; key: number; n: number }> = [];
+  for (const point of points) {
+    const day = new Date(point.t * 1000);
+    day.setHours(0, 0, 0, 0);
+    const key = day.getTime();
+    const last = out.at(-1);
+    if (last && last.key === key) {
+      last.value = (last.value * last.n + point.value) / (last.n + 1);
+      last.n += 1;
+      last.t = point.t;
+    } else {
+      out.push({ t: point.t, value: point.value, key, n: 1 });
+    }
+  }
+  return out.map(({ t, value }) => ({ t, value }));
 }
 
 /** Steigung des Trends in kg/Woche über die letzten `days` Tage (lineare Regression). */

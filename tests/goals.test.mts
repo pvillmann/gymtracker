@@ -23,6 +23,23 @@ test("Trend glättet Ausreißer, Rate aus der Steigung", () => {
   assert.equal(weeklyRate(trend.slice(-2), 14, now), null);
 });
 
+test("Trend: mehrere Wiegungen eines Tages zählen als ein Mittelwert", () => {
+  const morning = new Date(2026, 10, 10, 7, 0, 0).getTime() / 1000;
+  const single = weightTrend([
+    { t: morning - DAY, value: 100 },
+    { t: morning, value: 102 },
+  ]);
+  const doubled = weightTrend([
+    { t: morning - DAY, value: 100 },
+    { t: morning, value: 101 },
+    { t: morning + 30, value: 103 },
+  ]);
+  // Gleicher Tagesmittelwert (102) – gleicher Trend, auch bei zwei Wiegungen.
+  assert.equal(doubled.length, 2);
+  assert.equal(doubled.at(-1)!.value, single.at(-1)!.value);
+  assert.equal(doubled.at(-1)!.t, morning + 30);
+});
+
 test("Tempo-Status gegen das Ziel", () => {
   assert.equal(rateStatus(-0.7, "lose-0.75"), "im-ziel");
   assert.equal(rateStatus(-1.4, "lose-0.75"), "zu-schnell");
