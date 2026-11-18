@@ -245,7 +245,8 @@ export function EditPlanItemForm({
   const [state, formAction] = useActionState<FormState, FormData>(action, {});
 
   return (
-    <form action={formAction} className="space-y-3">
+    <form action={formAction} onReset={(e) => e.preventDefault()} className="space-y-3">
+      {/* Beim Bearbeiten nicht zurücksetzen – die Pausen-Auswahl spränge sonst zurück. */}
       <PlanItemFields trackingMode={trackingMode} defaults={defaults} />
       <ErrorMessage>{state.error}</ErrorMessage>
       {state.ok ? <p className="text-sm font-medium text-up">Gespeichert.</p> : null}

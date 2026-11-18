@@ -33,7 +33,10 @@ export function ProfileForm({
   );
 
   return (
-    <form action={formAction} className="space-y-4">
+    <form action={formAction} onReset={(e) => e.preventDefault()} className="space-y-4">
+      {/* Kein Zurücksetzen nach dem Speichern: React übernimmt bei <select> den neuen
+        Startwert nicht – das Geschlecht stünde wieder auf „keine Angabe“ und das
+        nächste Speichern löschte es. Wie in MovementForm. */}
       <Field label="Name">
         <Input name="name" required maxLength={60} defaultValue={name} />
       </Field>
