@@ -177,7 +177,7 @@ test("Wiegen: Testseite mit Anleitung", async ({ page }) => {
   await page.goto("/login");
   await login(page, "ben@e2e.local");
   await page.goto("/wiegen");
-  await expect(page.getByRole("heading", { name: "Wiegen (Test)" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Wiegen", exact: true })).toBeVisible();
   await expect(page.locator("main")).toContainText("Feelfit-App schließen");
   // Chromium kann Web Bluetooth: dann gibt es den Knopf, sonst den Hinweis auf Bluefy.
   await expect(page.getByRole("button", { name: "Waage verbinden" }).or(page.getByText("Dieser Browser kann kein Bluetooth"))).toBeVisible();
@@ -240,7 +240,7 @@ test("Wiegen: simulierte Waage – Pakete landen in der Datenbank", async ({ pag
 
   await page.reload();
   await expect(page.locator("main")).toContainText("QN-Scale");
-  await expect(page.locator("main")).toContainText("5 Messpakete");
+  await expect(page.locator("main")).toContainText("5 Pakete");
   expect(errors).toEqual([]);
 });
 
@@ -351,5 +351,9 @@ test("Wiegen: simulierte QN-Waage – Handshake, Live-Gewicht, Ergebnis", async 
   expect(writes[0]).toBe("FFE3:13 09 15 01 10 00 00 00 42");
   expect(writes[1]).toMatch(/^FFE4:02( [0-9a-f]{2}){4}$/);
   expect(writes.some((w) => w.startsWith("FFE3:20 08 15"))).toBe(true);
+  await expect(page.getByRole("status")).toContainText("gespeichert");
+  await page.reload();
+  await expect(page.locator("main")).toContainText("Letzte Messungen");
+  await expect(page.locator("main")).toContainText("79,8 kg");
   expect(errors).toEqual([]);
 });

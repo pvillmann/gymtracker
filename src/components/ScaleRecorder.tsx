@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { saveScaleCaptureAction } from "@/actions/scale";
-import { Button } from "@/components/ui";
+import { Button, cx } from "@/components/ui";
 import { configFrame, parseFrame, timeFrameFfe4, timeSyncFrame, toHex } from "@/lib/qn-scale";
 
 /*
@@ -80,6 +80,7 @@ export function ScaleRecorder() {
   // Live-Gewicht aus dem QN-Protokoll und das stabile Endergebnis.
   const [liveKg, setLiveKg] = useState<number | null>(null);
   const [finalKg, setFinalKg] = useState<number | null>(null);
+  const [stage, setStage] = useState<"connect" | "answer">("connect");
   const chars = useRef(new Map<string, BtCharacteristic>());
   const qn = useRef<{ protocol: number; divisor: 10 | 100; configSentAt: number; tries: number; acked: boolean; done: boolean }>({
     protocol: 0,
@@ -195,6 +196,7 @@ export function ScaleRecorder() {
     const frame = parseFrame(new Uint8Array(view.buffer, view.byteOffset, view.byteLength), qn.current.divisor);
     const state = qn.current;
     if (frame.kind === "info") {
+      setStage("answer");
       state.protocol = frame.protocol;
       state.divisor = frame.divisor;
       // Höchstens alle 2 s und 5-mal – falls die erste Antwort nicht ankam.
@@ -237,6 +239,7 @@ export function ScaleRecorder() {
     setCount(0);
     setLiveKg(null);
     setFinalKg(null);
+    setStage("connect");
     chars.current.clear();
     qn.current = { protocol: 0, divisor: 100, configSentAt: 0, tries: 0, acked: false, done: false };
     setSaved(null);
@@ -366,66 +369,113 @@ export function ScaleRecorder() {
     );
   }
 
+  const phase: Phase =
+    finalKg !== null ? "saved" : liveKg !== null ? "measure" : stage === "answer" ? "answer" : status === "connected" ? "answer" : "connect";
+  const shownKg = finalKg ?? liveKg;
+  const headline =
+    status === "idle"
+      ? "Waage aufwecken, dann verbinden."
+      : status === "connecting"
+        ? "Waage in der Liste wählen …"
+        : status === "error"
+          ? (message ?? "Fehler.")
+          : finalKg !== null
+            ? "✓ gemessen und gespeichert"
+            : liveKg !== null
+              ? "Stehen bleiben …"
+              : status === "connected"
+                ? "Verbunden – jetzt barfuß draufstellen."
+                : "Fertig. Die Seite kann zu.";
+
   return (
     <div className="space-y-4">
-      {status === "connected" ? (
-        <Button className="w-full" variant="secondary" onClick={() => void finish()}>
-          Fertig
-        </Button>
-      ) : (
-        <>
-          <Button className="w-full" disabled={status === "connecting"} onClick={() => void connect("C")}>
-            {status === "connecting" ? "Verbinde …" : status === "done" ? "Noch mal verbinden" : "Waage verbinden"}
-          </Button>
-          {status === "error" ? (
-            <div className="flex gap-2">
-              {(["A", "B"] as const).map((variant) => (
-                <Button
-                  key={variant}
-                  size="sm"
-                  variant="secondary"
-                  className="flex-1"
-                  onClick={() => void connect(variant)}
-                >
-                  Variante {variant}: {VARIANT_LABEL[variant]}
-                </Button>
-              ))}
-            </div>
-          ) : null}
-        </>
-      )}
-
-      <div className="rounded-xl border border-line bg-surface-2 p-3 text-sm" role="status">
-        <p className="font-semibold">
-          {status === "idle" && "Bereit."}
-          {status === "connecting" && "Waage in der Liste wählen …"}
-          {status === "connected" && "Verbunden – jetzt draufstellen und stehen bleiben, bis die Anzeige fertig ist."}
-          {status === "done" && "Fertig. Danke! Die Seite kann zu."}
-          {status === "error" && (message ?? "Fehler.")}
-        </p>
-        {liveKg !== null ? (
-          <p className="my-2 text-center text-4xl font-bold tnum">
-            {(finalKg ?? liveKg).toLocaleString("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 2 })} kg
-            <span className="block text-sm font-medium text-muted">{finalKg !== null ? "gemessen ✓" : "misst …"}</span>
+      <div role="status" className="space-y-4">
+        {/* Das Display: grau beim Messen, grün sobald die Waage stabil meldet. */}
+        <div
+          className={cx(
+            "rounded-2xl border px-4 py-6 text-center transition-colors",
+            finalKg !== null ? "border-up/40 bg-up/10" : "border-line bg-surface-2",
+          )}
+        >
+          <p
+            className={cx(
+              "text-6xl font-bold tracking-tight tnum",
+              finalKg !== null ? "text-up" : liveKg !== null ? "text-fg" : "text-faint",
+            )}
+          >
+            {shownKg !== null
+              ? shownKg.toLocaleString("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 2 })
+              : "––,–"}{" "}
+            <span className="text-2xl font-semibold">kg</span>
           </p>
-        ) : null}
-        <p className="mt-1 text-faint tnum">
-          {count} Ereignisse{saved ? ` · gespeichert ${saved}` : ""}
-          {deviceLabel ? ` · ${deviceLabel}` : ""}
-        </p>
-        {lines.length > 0 ? (
-          <ul className="mt-2 space-y-0.5 font-mono text-[11px] break-all text-muted">
-            {lines.map((line, i) => (
-              <li key={i}>{line}</li>
+          <p className={cx("mt-2 text-sm font-medium", status === "error" ? "text-down" : "text-muted")}>
+            {headline}
+          </p>
+        </div>
+
+        <ol className="flex items-start justify-between gap-1.5 text-[11px] leading-tight font-semibold">
+          {PHASES.map((step, index) => {
+            const reached = status !== "idle" && status !== "error" && PHASES.findIndex((p) => p.key === phase) >= index;
+            return (
+              <li key={step.key} className="flex flex-1 flex-col items-center gap-1.5 text-center">
+                <span
+                  className={cx(
+                    "h-1.5 w-full rounded-full",
+                    reached ? (phase === "saved" ? "bg-up" : "bg-accent") : "bg-surface-2",
+                  )}
+                />
+                <span className={reached ? "text-fg" : "text-faint"}>{step.label}</span>
+              </li>
+            );
+          })}
+        </ol>
+
+        {status === "connected" ? (
+          <Button className="w-full" variant="secondary" onClick={() => void finish()}>
+            Fertig
+          </Button>
+        ) : (
+          <Button className="w-full" disabled={status === "connecting"} onClick={() => void connect("C")}>
+            {status === "connecting" ? "Verbinde …" : status === "done" ? "Noch mal wiegen" : "Waage verbinden"}
+          </Button>
+        )}
+        {status === "error" ? (
+          <div className="flex gap-2">
+            {(["A", "B"] as const).map((variant) => (
+              <Button key={variant} size="sm" variant="secondary" className="flex-1" onClick={() => void connect(variant)}>
+                Variante {variant}: {VARIANT_LABEL[variant]}
+              </Button>
             ))}
-          </ul>
+          </div>
         ) : null}
-        {status !== "error" && message ? <p className="mt-2 text-down">{message}</p> : null}
+        {status !== "error" && message ? <p className="text-sm text-down">{message}</p> : null}
+
+        <details className="rounded-xl border border-line px-3 py-2 text-xs text-faint">
+          <summary className="cursor-pointer select-none">
+            Technik · {count} Ereignisse{saved ? ` · gespeichert ${saved}` : ""}
+            {deviceLabel ? ` · ${deviceLabel}` : ""}
+          </summary>
+          {lines.length > 0 ? (
+            <ul className="mt-2 space-y-0.5 font-mono text-[11px] break-all text-muted">
+              {lines.map((line, i) => (
+                <li key={i}>{line}</li>
+              ))}
+            </ul>
+          ) : null}
+          <Diagnostics />
+        </details>
       </div>
-      <Diagnostics />
     </div>
   );
 }
+
+type Phase = "connect" | "answer" | "measure" | "saved";
+const PHASES: Array<{ key: Phase; label: string }> = [
+  { key: "connect", label: "Verbinden" },
+  { key: "answer", label: "Antwort" },
+  { key: "measure", label: "Messen" },
+  { key: "saved", label: "Gespeichert" },
+];
 
 /** Was der Browser kann – hilft, wenn „nichts passiert“. */
 function Diagnostics() {
@@ -438,7 +488,7 @@ function Diagnostics() {
     },
     () => "",
   );
-  return info ? <p className="text-xs text-faint">{info}</p> : null;
+  return info ? <p className="mt-2 text-xs text-faint">{info}</p> : null;
 }
 
 /** „FFE1“ aus „0000ffe1-0000-1000-8000-00805f9b34fb“ oder „FFE1“. */
