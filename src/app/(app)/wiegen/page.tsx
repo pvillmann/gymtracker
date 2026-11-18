@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { ScaleRecorder } from "@/components/ScaleRecorder";
 import { Card, PageHeader } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
-import { formatDateTime } from "@/lib/format";
+import { formatDateTime, formatKg } from "@/lib/format";
 import { listScaleCaptures } from "@/lib/services/scale";
 
 export const metadata: Metadata = { title: "Wiegen · GymTracker" };
@@ -18,14 +18,15 @@ export default async function WeighPage() {
 
   return (
     <>
-      <PageHeader title="Wiegen (Test)" subtitle="Schreibt mit, was die Waage per Bluetooth sendet." />
+      <PageHeader title="Wiegen" subtitle="Feelfit-Waage per Bluetooth – in Bluefy öffnen." />
 
       <Card className="mb-4">
         <ScaleRecorder />
       </Card>
 
-      <Card className="mb-4 text-sm">
-        <h2 className="mb-2 font-bold">So geht’s – morgens</h2>
+      <details className="mb-4 rounded-2xl border border-line bg-surface p-4 text-sm" open={captures.length === 0}>
+        <summary className="cursor-pointer font-bold select-none">So geht’s</summary>
+        <div className="mt-2">
         <ol className="list-decimal space-y-1.5 pl-5 text-muted">
           <li>
             <strong className="text-fg">Feelfit-App schließen</strong> (im App-Umschalter nach oben wischen) – sonst
@@ -54,22 +55,30 @@ export default async function WeighPage() {
           Pakete („notify“) an, braucht die Waage vermutlich erst eine Nachricht der App – das sehen wir in den
           Mitschnitten und bauen es dann ein.
         </p>
-      </Card>
+        </div>
+      </details>
 
       {captures.length > 0 ? (
         <section className="mb-6">
-          <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">Letzte Mitschnitte</h2>
-          <ul className="space-y-2">
-            {captures.map((capture) => (
-              <Card as="li" key={capture.id} className="text-sm">
-                <p className="font-semibold">{formatDateTime(capture.createdAt)}</p>
-                <p className="text-faint tnum">
-                  {capture.deviceName ?? "unbekanntes Gerät"} · {capture.events.length} Ereignisse ·{" "}
-                  {capture.events.filter((e) => e.type === "notify").length} Messpakete
-                </p>
-              </Card>
-            ))}
-          </ul>
+          <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">Letzte Messungen</h2>
+          <Card className="divide-y divide-line p-0">
+            {captures.map((capture) => {
+              const measured = capture.events.find((e) => e.type === "measurement");
+              const kg = typeof measured?.kg === "number" ? measured.kg : null;
+              return (
+                <div key={capture.id} className="flex items-baseline justify-between gap-3 px-4 py-3 text-sm">
+                  <span className="text-muted">{formatDateTime(capture.createdAt)}</span>
+                  {kg !== null ? (
+                    <span className="font-bold tnum">{formatKg(kg)} kg</span>
+                  ) : (
+                    <span className="text-xs text-faint">
+                      ohne Gewicht · {capture.events.filter((e) => e.type === "notify").length} Pakete
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </Card>
         </section>
       ) : null}
     </>

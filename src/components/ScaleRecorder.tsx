@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { saveScaleCaptureAction } from "@/actions/scale";
-import { Button } from "@/components/ui";
+import { Button, cx } from "@/components/ui";
+import { configFrame, parseFrame, timeFrameFfe4, timeSyncFrame, toHex } from "@/lib/qn-scale";
 
 /*
  * Testseite für die Bluetooth-Waage: verbindet sich, abonniert alles, was
@@ -20,6 +21,9 @@ type BtCharacteristic = EventTarget & {
   value?: DataView;
   readValue(): Promise<DataView>;
   startNotifications(): Promise<BtCharacteristic>;
+  writeValue?(value: BufferSource): Promise<void>;
+  writeValueWithResponse?(value: BufferSource): Promise<void>;
+  writeValueWithoutResponse?(value: BufferSource): Promise<void>;
 };
 type BtService = { uuid: string; getCharacteristics(): Promise<BtCharacteristic[]> };
 type BtServer = { connected: boolean; connect(): Promise<BtServer>; disconnect(): void; getPrimaryServices(): Promise<BtService[]> };
@@ -73,6 +77,19 @@ export function ScaleRecorder() {
   const [lines, setLines] = useState<string[]>([]);
   const [saved, setSaved] = useState<string | null>(null);
   const [deviceLabel, setDeviceLabel] = useState<string | null>(null);
+  // Live-Gewicht aus dem QN-Protokoll und das stabile Endergebnis.
+  const [liveKg, setLiveKg] = useState<number | null>(null);
+  const [finalKg, setFinalKg] = useState<number | null>(null);
+  const [stage, setStage] = useState<"connect" | "answer">("connect");
+  const chars = useRef(new Map<string, BtCharacteristic>());
+  const qn = useRef<{ protocol: number; divisor: 10 | 100; configSentAt: number; tries: number; acked: boolean; done: boolean }>({
+    protocol: 0,
+    divisor: 100,
+    configSentAt: 0,
+    tries: 0,
+    acked: false,
+    done: false,
+  });
   // Erst im Browser prüfen – auf dem Server gibt es kein navigator.
   const supported = useSyncExternalStore(
     () => () => {},
@@ -148,7 +165,65 @@ export function ScaleRecorder() {
     return () => clearInterval(timer);
   }, [status]);
 
-  const connect = async (variant: Variant = "A") => {
+  const write = async (uuid: string, bytes: Uint8Array) => {
+    const characteristic = chars.current.get(uuid);
+    if (!characteristic) {
+      log("error", { text: `kein Merkmal ${uuid} zum Schreiben` });
+      return;
+    }
+    const value = bytes.slice().buffer;
+    try {
+      if (characteristic.properties.write && characteristic.writeValueWithResponse) {
+        await characteristic.writeValueWithResponse(value);
+      } else if (characteristic.writeValueWithoutResponse) {
+        await characteristic.writeValueWithoutResponse(value);
+      } else {
+        await characteristic.writeValue!(value);
+      }
+      log("write", { c: uuid, hex: toHex(bytes) });
+    } catch (error) {
+      log("error", { c: uuid, text: `write: ${String(error)}` });
+    }
+  };
+
+  /**
+   * QN-Handshake: Die Waage wiederholt ihren Info-Frame (0x12), bis die App
+   * mit Konfiguration (FFE3) und Uhrzeit (FFE4) antwortet; nach der
+   * Bestätigung (0x14) folgt die Zeit-Synchronisation. Erst dann kommen
+   * Gewichtsframes (0x10).
+   */
+  const onQnFrame = async (view: DataView) => {
+    const frame = parseFrame(new Uint8Array(view.buffer, view.byteOffset, view.byteLength), qn.current.divisor);
+    const state = qn.current;
+    if (frame.kind === "info") {
+      setStage("answer");
+      state.protocol = frame.protocol;
+      state.divisor = frame.divisor;
+      // Höchstens alle 2 s und 5-mal – falls die erste Antwort nicht ankam.
+      if (state.acked || state.tries >= 5 || Date.now() - state.configSentAt < 2000) return;
+      if (!chars.current.has("FFE3")) return;
+      state.tries += 1;
+      state.configSentAt = Date.now();
+      log("info", { text: `Handshake ${state.tries}: Protokoll ${frame.protocol.toString(16)}, Teiler ${frame.divisor}` });
+      await write("FFE3", configFrame(frame.protocol));
+      if (chars.current.has("FFE4")) await write("FFE4", timeFrameFfe4());
+    } else if (frame.kind === "configAck") {
+      state.acked = true;
+      await write("FFE3", timeSyncFrame(state.protocol));
+    } else if (frame.kind === "weight") {
+      setLiveKg(frame.kg);
+      if (frame.stable && !state.done) {
+        state.done = true;
+        setFinalKg(frame.kg);
+        log("measurement", { kg: frame.kg, r1: frame.resistance1, r2: frame.resistance2 });
+        void save();
+      }
+    } else if (frame.kind === "invalid") {
+      log("info", { text: `Frame nicht lesbar: ${frame.reason}` });
+    }
+  };
+
+  const connect = async (variant: Variant = "C") => {
     const bluetooth = (navigator as Navigator & { bluetooth?: Bluetooth }).bluetooth;
     if (!bluetooth) {
       // Nie still abbrechen – sonst „passiert nichts“.
@@ -162,6 +237,11 @@ export function ScaleRecorder() {
     start.current = Date.now();
     setLines([]);
     setCount(0);
+    setLiveKg(null);
+    setFinalKg(null);
+    setStage("connect");
+    chars.current.clear();
+    qn.current = { protocol: 0, divisor: 100, configSentAt: 0, tries: 0, acked: false, done: false };
     setSaved(null);
     setMessage(null);
     setStatus("connecting");
@@ -223,9 +303,12 @@ export function ScaleRecorder() {
           const p = characteristic.properties;
           const props = Object.entries(p).filter(([, on]) => on === true).map(([name]) => name);
           log("char", { s: service.uuid, c: characteristic.uuid, props });
+          chars.current.set(shortUuid(characteristic.uuid), characteristic);
           if (p.notify || p.indicate) {
             characteristic.addEventListener("characteristicvaluechanged", () => {
-              if (characteristic.value) log("notify", { c: characteristic.uuid, hex: hex(characteristic.value) });
+              if (!characteristic.value) return;
+              log("notify", { c: characteristic.uuid, hex: hex(characteristic.value) });
+              if (shortUuid(characteristic.uuid) === "FFE1") void onQnFrame(characteristic.value);
             });
             try {
               await characteristic.startNotifications();
@@ -286,60 +369,113 @@ export function ScaleRecorder() {
     );
   }
 
+  const phase: Phase =
+    finalKg !== null ? "saved" : liveKg !== null ? "measure" : stage === "answer" ? "answer" : status === "connected" ? "answer" : "connect";
+  const shownKg = finalKg ?? liveKg;
+  const headline =
+    status === "idle"
+      ? "Waage aufwecken, dann verbinden."
+      : status === "connecting"
+        ? "Waage in der Liste wählen …"
+        : status === "error"
+          ? (message ?? "Fehler.")
+          : finalKg !== null
+            ? "✓ gemessen und gespeichert"
+            : liveKg !== null
+              ? "Stehen bleiben …"
+              : status === "connected"
+                ? "Verbunden – jetzt barfuß draufstellen."
+                : "Fertig. Die Seite kann zu.";
+
   return (
     <div className="space-y-4">
-      {status === "connected" ? (
-        <Button className="w-full" variant="secondary" onClick={() => void finish()}>
-          Fertig
-        </Button>
-      ) : (
-        <>
-          <Button className="w-full" disabled={status === "connecting"} onClick={() => void connect("A")}>
-            {status === "connecting" ? "Verbinde …" : status === "done" ? "Noch mal verbinden" : "Waage verbinden"}
-          </Button>
-          {status === "error" ? (
-            <div className="flex gap-2">
-              {(["B", "C"] as const).map((variant) => (
-                <Button
-                  key={variant}
-                  size="sm"
-                  variant="secondary"
-                  className="flex-1"
-                  onClick={() => void connect(variant)}
-                >
-                  Variante {variant}: {VARIANT_LABEL[variant]}
-                </Button>
-              ))}
-            </div>
-          ) : null}
-        </>
-      )}
+      <div role="status" className="space-y-4">
+        {/* Das Display: grau beim Messen, grün sobald die Waage stabil meldet. */}
+        <div
+          className={cx(
+            "rounded-2xl border px-4 py-6 text-center transition-colors",
+            finalKg !== null ? "border-up/40 bg-up/10" : "border-line bg-surface-2",
+          )}
+        >
+          <p
+            className={cx(
+              "text-6xl font-bold tracking-tight tnum",
+              finalKg !== null ? "text-up" : liveKg !== null ? "text-fg" : "text-faint",
+            )}
+          >
+            {shownKg !== null
+              ? shownKg.toLocaleString("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 2 })
+              : "––,–"}{" "}
+            <span className="text-2xl font-semibold">kg</span>
+          </p>
+          <p className={cx("mt-2 text-sm font-medium", status === "error" ? "text-down" : "text-muted")}>
+            {headline}
+          </p>
+        </div>
 
-      <div className="rounded-xl border border-line bg-surface-2 p-3 text-sm" role="status">
-        <p className="font-semibold">
-          {status === "idle" && "Bereit."}
-          {status === "connecting" && "Waage in der Liste wählen …"}
-          {status === "connected" && "Verbunden – jetzt draufstellen und stehen bleiben, bis die Anzeige fertig ist."}
-          {status === "done" && "Fertig. Danke! Die Seite kann zu."}
-          {status === "error" && (message ?? "Fehler.")}
-        </p>
-        <p className="mt-1 text-faint tnum">
-          {count} Ereignisse{saved ? ` · gespeichert ${saved}` : ""}
-          {deviceLabel ? ` · ${deviceLabel}` : ""}
-        </p>
-        {lines.length > 0 ? (
-          <ul className="mt-2 space-y-0.5 font-mono text-[11px] break-all text-muted">
-            {lines.map((line, i) => (
-              <li key={i}>{line}</li>
+        <ol className="flex items-start justify-between gap-1.5 text-[11px] leading-tight font-semibold">
+          {PHASES.map((step, index) => {
+            const reached = status !== "idle" && status !== "error" && PHASES.findIndex((p) => p.key === phase) >= index;
+            return (
+              <li key={step.key} className="flex flex-1 flex-col items-center gap-1.5 text-center">
+                <span
+                  className={cx(
+                    "h-1.5 w-full rounded-full",
+                    reached ? (phase === "saved" ? "bg-up" : "bg-accent") : "bg-surface-2",
+                  )}
+                />
+                <span className={reached ? "text-fg" : "text-faint"}>{step.label}</span>
+              </li>
+            );
+          })}
+        </ol>
+
+        {status === "connected" ? (
+          <Button className="w-full" variant="secondary" onClick={() => void finish()}>
+            Fertig
+          </Button>
+        ) : (
+          <Button className="w-full" disabled={status === "connecting"} onClick={() => void connect("C")}>
+            {status === "connecting" ? "Verbinde …" : status === "done" ? "Noch mal wiegen" : "Waage verbinden"}
+          </Button>
+        )}
+        {status === "error" ? (
+          <div className="flex gap-2">
+            {(["A", "B"] as const).map((variant) => (
+              <Button key={variant} size="sm" variant="secondary" className="flex-1" onClick={() => void connect(variant)}>
+                Variante {variant}: {VARIANT_LABEL[variant]}
+              </Button>
             ))}
-          </ul>
+          </div>
         ) : null}
-        {status !== "error" && message ? <p className="mt-2 text-down">{message}</p> : null}
+        {status !== "error" && message ? <p className="text-sm text-down">{message}</p> : null}
+
+        <details className="rounded-xl border border-line px-3 py-2 text-xs text-faint">
+          <summary className="cursor-pointer select-none">
+            Technik · {count} Ereignisse{saved ? ` · gespeichert ${saved}` : ""}
+            {deviceLabel ? ` · ${deviceLabel}` : ""}
+          </summary>
+          {lines.length > 0 ? (
+            <ul className="mt-2 space-y-0.5 font-mono text-[11px] break-all text-muted">
+              {lines.map((line, i) => (
+                <li key={i}>{line}</li>
+              ))}
+            </ul>
+          ) : null}
+          <Diagnostics />
+        </details>
       </div>
-      <Diagnostics />
     </div>
   );
 }
+
+type Phase = "connect" | "answer" | "measure" | "saved";
+const PHASES: Array<{ key: Phase; label: string }> = [
+  { key: "connect", label: "Verbinden" },
+  { key: "answer", label: "Antwort" },
+  { key: "measure", label: "Messen" },
+  { key: "saved", label: "Gespeichert" },
+];
 
 /** Was der Browser kann – hilft, wenn „nichts passiert“. */
 function Diagnostics() {
@@ -352,5 +488,11 @@ function Diagnostics() {
     },
     () => "",
   );
-  return info ? <p className="text-xs text-faint">{info}</p> : null;
+  return info ? <p className="mt-2 text-xs text-faint">{info}</p> : null;
+}
+
+/** „FFE1“ aus „0000ffe1-0000-1000-8000-00805f9b34fb“ oder „FFE1“. */
+function shortUuid(uuid: string): string {
+  const value = uuid.toUpperCase();
+  return value.length > 8 ? value.slice(4, 8) : value.padStart(4, "0");
 }
