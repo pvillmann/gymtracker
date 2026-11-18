@@ -372,3 +372,20 @@ test("Wiegen: simulierte QN-Waage – Handshake, Live-Gewicht, Ergebnis", async 
   await expect(page.locator("main")).toContainText("Wu et al. 2015");
   expect(errors).toEqual([]);
 });
+
+test("Profil: Geschlecht bleibt nach dem Speichern ausgewählt", async ({ page }) => {
+  await page.goto("/login");
+  await login(page, "anna@e2e.local");
+  await page.goto("/settings");
+  const profile = page.locator("form", { hasText: "Geburtsjahr" });
+  await profile.getByLabel("Geschlecht").selectOption("f");
+  await profile.getByRole("button", { name: "Speichern" }).click();
+  await expect(profile.getByText("Gespeichert.")).toBeVisible();
+  // Direkt nach dem Speichern – ohne Neuladen – muss die Auswahl stehen bleiben,
+  // sonst schickt das nächste Speichern „keine Angabe“ und löscht den Wert.
+  await expect(profile.getByLabel("Geschlecht")).toHaveValue("f");
+  await profile.getByRole("button", { name: "Speichern" }).click();
+  await expect(profile.getByText("Gespeichert.")).toBeVisible();
+  await page.reload();
+  await expect(page.locator("form", { hasText: "Geburtsjahr" }).getByLabel("Geschlecht")).toHaveValue("f");
+});

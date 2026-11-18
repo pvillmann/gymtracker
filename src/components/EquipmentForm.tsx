@@ -26,7 +26,9 @@ export function EquipmentForm({
 
   return (
     <Card>
-      <form action={formAction} className="space-y-4">
+      {/* Kein Zurücksetzen: beim Bearbeiten sprängen Art, Übersetzung und Einheit
+          sonst auf den alten Wert zurück (siehe MovementForm). */}
+      <form action={formAction} onReset={(e) => e.preventDefault()} className="space-y-4">
         <Field label="Name">
           <Input
             name="name"
