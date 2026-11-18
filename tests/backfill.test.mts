@@ -50,3 +50,24 @@ test("Nachtragen: schon gespeicherte Messungen werden nicht verdoppelt", async (
   const rows = await db.select().from(schema.bodyMetrics).where(eq(schema.bodyMetrics.userId, user.id));
   assert.equal(rows.length, 2);
 });
+
+test("Aufräumen (#64): ausgedachte 80-kg-Punkte weg, echte Werte bleiben", async () => {
+  const fresh = await makeUser("Standard");          // Profil 80, nie geändert
+  const real = await makeUser("Echt");                // Profil geändert auf 95
+  const now = Math.floor(Date.now() / 1000);
+  await db.update(schema.users).set({ bodyweightKg: 95 }).where(eq(schema.users.id, real.id));
+  await db.insert(schema.bodyMetrics).values([
+    { userId: fresh.id, metric: "weight", measuredAt: now, value: 80, source: "manuell" },
+    { userId: fresh.id, metric: "weight", measuredAt: now + 60, value: 80.4, source: "Waage" },
+    { userId: real.id, metric: "weight", measuredAt: now, value: 80, source: "manuell" },
+    { userId: real.id, metric: "weight", measuredAt: now + 60, value: 95, source: "manuell" },
+  ]);
+  const sqlite = new Database(process.env.DATABASE_PATH!);
+  sqlite.exec(readFileSync("drizzle/0030_drop_default_weight_points.sql", "utf8"));
+  sqlite.close();
+  const left = async (id: string) =>
+    (await db.select().from(schema.bodyMetrics).where(eq(schema.bodyMetrics.userId, id))).map((r) => [r.value, r.source]).sort();
+  assert.deepEqual(await left(fresh.id), [[80.4, "Waage"]]);
+  // Profil schon geändert: auch der alte 80-kg-Punkt war echt gesetzt und bleibt.
+  assert.deepEqual(await left(real.id), [[80, "manuell"], [95, "manuell"]]);
+});
