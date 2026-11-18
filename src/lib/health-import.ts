@@ -76,6 +76,9 @@ function convert(metric: BodyMetric, unit: string): ((v: number) => number) | nu
       if (u === "kcal" || u === "cal") return (v) => v;
       if (u === "kj") return (v) => v / 4.184;
       return null;
+    case "impedance":
+      // Kommt nur von der Waage, nie aus Apple Health.
+      return null;
   }
 }
 
@@ -89,6 +92,7 @@ const RANGE: Record<BodyMetric, [number, number]> = {
   sleep: [0, 24],
   steps: [0, 200_000],
   active_energy: [0, 20_000],
+  impedance: [150, 1200],
 };
 
 /** "2024-02-06 14:30:00 -0800" oder ISO 8601 → Unix-Sekunden. */

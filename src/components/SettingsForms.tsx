@@ -10,16 +10,22 @@ import {
 } from "@/actions/profile";
 import { ConfirmSubmitButton } from "@/components/ConfirmSubmitButton";
 import { SubmitButton } from "@/components/SubmitButton";
-import { ErrorMessage, Field, Input } from "@/components/ui";
+import { ErrorMessage, Field, Input, Select } from "@/components/ui";
 import { ACCENTS, GLASS_LEVELS, type AccentName, type GlassLevel } from "@/lib/appearance";
 import type { FormState } from "@/lib/result";
 
 export function ProfileForm({
   name,
   bodyweightKg,
+  heightCm,
+  birthYear,
+  sex,
 }: {
   name: string;
   bodyweightKg: number;
+  heightCm: number | null;
+  birthYear: number | null;
+  sex: "m" | "f" | null;
 }) {
   const [state, formAction] = useActionState<FormState, FormData>(
     updateProfileAction,
@@ -42,6 +48,29 @@ export function ProfileForm({
           defaultValue={String(bodyweightKg).replace(".", ",")}
         />
       </Field>
+      <fieldset className="space-y-3 rounded-xl border border-line p-3">
+        <legend className="px-1 text-sm font-medium text-muted">Für die Körperfett-Schätzung (optional)</legend>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Größe (cm)">
+            <Input
+              name="heightCm"
+              inputMode="decimal"
+              placeholder="z. B. 182"
+              defaultValue={heightCm ? String(heightCm).replace(".", ",") : ""}
+            />
+          </Field>
+          <Field label="Geburtsjahr">
+            <Input name="birthYear" inputMode="numeric" placeholder="z. B. 1990" defaultValue={birthYear ?? ""} />
+          </Field>
+        </div>
+        <Field label="Geschlecht" hint="Die Formel kennt nur Mann/Frau. Ohne Angabe gibt es keine Schätzung.">
+          <Select name="sex" defaultValue={sex ?? ""}>
+            <option value="">keine Angabe</option>
+            <option value="m">Mann</option>
+            <option value="f">Frau</option>
+          </Select>
+        </Field>
+      </fieldset>
       <ErrorMessage>{state.error}</ErrorMessage>
       {state.ok ? <p className="text-sm font-medium text-up">Gespeichert.</p> : null}
       <SubmitButton className="w-full">Speichern</SubmitButton>

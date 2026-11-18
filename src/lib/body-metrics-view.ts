@@ -12,6 +12,7 @@ export const BODY_METRICS: Record<BodyMetric, { label: string; format: (v: numbe
   sleep: { label: "Schlaf", format: (v) => `${Math.floor(v)} h ${String(Math.round((v % 1) * 60)).padStart(2, "0")} min` },
   steps: { label: "Schritte", format: (v) => de(v, 0) },
   active_energy: { label: "Aktive Energie", format: (v) => `${de(v, 0)} kcal` },
+  impedance: { label: "Widerstand (Waage)", format: (v) => `${de(v, 0)} Ω` },
 };
 
 const ORDER: BodyMetric[] = ["weight", "body_fat", "lean_mass", "resting_hr", "hrv", "sleep", "steps", "active_energy"];

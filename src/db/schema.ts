@@ -41,6 +41,11 @@ export const users = sqliteTable(
     anthropicKeyEnc: text("anthropic_key_enc"),
     /** Progressionsvorschläge zusätzlich von Claude Haiku. */
     aiSuggestions: integer("ai_suggestions", { mode: "boolean" }).notNull().default(false),
+    /** Für die Körperfett-Schätzung aus dem Widerstand der Waage. */
+    heightCm: real("height_cm"),
+    birthYear: integer("birth_year"),
+    /** "m" oder "f" – die Formel kennt nur diese beiden; null = keine Angabe. */
+    sex: text("sex").$type<"m" | "f">(),
     /** SHA-256 des Schlüssels für den Apple-Health-Import (nur dieser Endpunkt). */
     healthTokenHash: text("health_token_hash"),
     /** Wann zuletzt Daten aus Apple Health ankamen. */
@@ -700,7 +705,9 @@ export type BodyMetric =
   | "hrv"
   | "sleep"
   | "steps"
-  | "active_energy";
+  | "active_energy"
+  /** Widerstand der Waage in Ohm (Rohwert, 50 kHz Fuß zu Fuß). */
+  | "impedance";
 
 export const bodyMetrics = sqliteTable(
   "body_metrics",
