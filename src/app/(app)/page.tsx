@@ -5,6 +5,7 @@ import { startWorkoutAction } from "@/actions/workouts";
 import { SubmitButton } from "@/components/SubmitButton";
 import { TrendBadge } from "@/components/TrendBadge";
 import { ButtonLink, Card, EmptyState, PageHeader } from "@/components/ui";
+import { WeeklyReviewCard } from "@/components/WeeklyReviewCard";
 import { WorkoutClock } from "@/components/WorkoutClock";
 import { requireUser } from "@/lib/auth";
 import {
@@ -17,6 +18,7 @@ import {
 } from "@/lib/format";
 import { getActiveWorkout, listPlans, listWorkoutSummaries } from "@/lib/queries";
 import { dailyTotals } from "@/lib/services/nutrition";
+import { ensureWeeklyReview } from "@/lib/services/weekly-review";
 import { startOfWeek, weekStreak } from "@/lib/stats";
 import { trendOf } from "@/lib/training";
 
@@ -24,11 +26,12 @@ export const metadata: Metadata = { title: "GymTracker" };
 
 export default async function HomePage() {
   const user = await requireUser();
-  const [active, plans, summaries, food] = await Promise.all([
+  const [active, plans, summaries, food, review] = await Promise.all([
     getActiveWorkout(user.id),
     listPlans(user.id),
     listWorkoutSummaries(user.id),
     dailyTotals(user.id, 1),
+    ensureWeeklyReview(user),
   ]);
   const eatenToday = food[0];
 
@@ -101,6 +104,8 @@ export default async function HomePage() {
           </form>
         </section>
       )}
+
+      <WeeklyReviewCard review={review} />
 
       <div className="mb-5 grid grid-cols-2 gap-3">
         <Card>

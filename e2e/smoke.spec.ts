@@ -463,3 +463,17 @@ test("Ziele: Eiweißziel ohne Daten, Ziel im Profil, Hinweis auf fehlende Daten"
   await expect(page.locator("main")).toContainText("Kalorienziel folgt");
   expect(errors).toEqual([]);
 });
+
+test("Wochenrückblick: Karte auf „Heute“ mit Zahlen und Eiweiß-Hinweis", async ({ page }) => {
+  const errors = watchErrors(page);
+  await page.goto("/login");
+  await login(page, "cara@e2e.local");
+  await page.goto("/");
+  const card = page.getByTestId("weekly-review");
+  await expect(card).toContainText("Wochenrückblick");
+  await expect(card).toContainText("0 Trainings");
+  await expect(card).toContainText("Ø 2.100 kcal (4 Tage)");
+  await expect(card).toContainText("Eiweiß an 4 von 4 Tagen unter Ziel");
+  await expect(card).toContainText("Die ganze Woche kein Training.");
+  expect(errors).toEqual([]);
+});

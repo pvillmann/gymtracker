@@ -8,6 +8,7 @@ import { parseMoment, run } from "@/lib/mcp/shared";
 import { RATE_TEXT, goalLabel, goalsOverview } from "@/lib/services/goals";
 import { averageOfLogged, dailyTotals, deleteMeal, listMeals, logMeal, startOfDay } from "@/lib/services/nutrition";
 import { ServiceError } from "@/lib/services/errors";
+import { ensureWeeklyReview } from "@/lib/services/weekly-review";
 
 const de = (value: number, digits = 0) => value.toLocaleString("de-DE", { maximumFractionDigits: digits });
 const time = (unix: number) =>
@@ -156,6 +157,43 @@ export function registerNutritionTools(server: McpServer, user: User): void {
           average
             ? `Schnitt über ${average.days} abgeschlossene Tage mit Einträgen: ${de(average.kcal)} kcal, ${de(average.proteinG)} g Eiweiß`
             : "Noch kein abgeschlossener Tag mit Einträgen.",
+        ].join("\n");
+      }),
+  );
+
+  server.registerTool(
+    "weekly_review",
+    {
+      title: "Wochenrückblick",
+      description:
+        "Rückblick auf die letzte abgeschlossene Woche (Mo–So): Training, Ernährung, Gewichtstrend, feste " +
+        "Hinweise aus Regeln und – falls vorhanden – die Rückmeldung aus der App. Gut als Grundlage für " +
+        "ein Gespräch über die Woche; die Zahlen sind gerechnet, nicht schätzen.",
+      inputSchema: {},
+    },
+    async () =>
+      run(async () => {
+        const review = await ensureWeeklyReview(user);
+        const { training, nutrition, body } = review.facts;
+        const from = new Date(review.weekStart * 1000).toLocaleDateString("de-DE");
+        if (review.status === "empty") return `Woche ab ${from}: keine Trainings, kein Essen, keine Wiegung eingetragen.`;
+        return [
+          `Woche ab ${from}`,
+          `Training: ${training.sessions} Einheiten (Woche davor ${training.sessionsBefore}), ${training.workingSets} Arbeitssätze, ` +
+            `${de(training.volumeKg)} kg Volumen (davor ${de(training.volumeBeforeKg)} kg)` +
+            (training.stalled.length ? `; ohne Fortschritt: ${training.stalled.join(", ")}` : ""),
+          nutrition.loggedDays
+            ? `Ernährung: ${nutrition.loggedDays} Tage eingetragen, Ø ${de(nutrition.avgKcal ?? 0)} kcal, Ø ${de(nutrition.avgProteinG ?? 0)} g Eiweiß ` +
+              `(Ziel ${nutrition.proteinTargetG} g, ${nutrition.daysBelowProtein} Tage darunter)` +
+              (nutrition.calorieTarget ? `, Kalorienziel ${de(nutrition.calorieTarget)} kcal` : "")
+            : "Ernährung: nichts eingetragen",
+          body.kgPerWeek !== null
+            ? `Gewichtstrend ${de(body.trendStartKg ?? 0, 1)} → ${de(body.trendEndKg ?? 0, 1)} kg (${de(body.pctPerWeek ?? 0, 2)} %)` +
+              (body.rateStatus ? ` – ${RATE_TEXT[body.rateStatus]}` : "")
+            : "Gewichtstrend: zu wenige Wiegungen",
+          `Ziel: ${goalLabel(body.goal)}`,
+          ...(review.hints.length ? ["Hinweise:", ...review.hints.map((h) => `- ${h.text}`)] : []),
+          ...(review.feedback ? [`Rückmeldung: ${review.feedback}`, ...review.actions.map((a) => `→ ${a}`)] : []),
         ].join("\n");
       }),
   );

@@ -780,3 +780,26 @@ export const meals = sqliteTable(
   },
   (t) => [index("meals_user_eaten_idx").on(t.userId, t.eatenAt)],
 );
+
+/**
+ * Wochenrückblick je Konto und Kalenderwoche: Fakten und Regel-Hinweise
+ * (gerechnet) plus optional Rückmeldung von Claude Haiku.
+ * status: empty (nichts zu sagen) · rules (ohne KI) · pending · ok · failed
+ */
+export const weeklyReviews = sqliteTable(
+  "weekly_reviews",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** Montag 00:00 der Woche, Unix-Sekunden. */
+    weekStart: integer("week_start").notNull(),
+    facts: text("facts").notNull(),
+    hints: text("hints").notNull(),
+    status: text("status").notNull().$type<"empty" | "rules" | "pending" | "ok" | "failed">(),
+    feedback: text("feedback"),
+    actions: text("actions"),
+    createdAt: integer("created_at").notNull().default(now),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.weekStart] })],
+);
