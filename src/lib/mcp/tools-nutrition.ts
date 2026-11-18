@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import type { User } from "@/db/schema";
 import { parseMoment, run } from "@/lib/mcp/shared";
+import { RATE_TEXT, goalLabel, goalsOverview } from "@/lib/services/goals";
 import { averageOfLogged, dailyTotals, deleteMeal, listMeals, logMeal, startOfDay } from "@/lib/services/nutrition";
 import { ServiceError } from "@/lib/services/errors";
 
@@ -118,8 +119,9 @@ export function registerNutritionTools(server: McpServer, user: User): void {
     {
       title: "Ernährung im Überblick",
       description:
-        "Tagessummen (kcal, Eiweiß) der letzten Tage und der Schnitt über die Tage mit Einträgen. " +
-        "Tage ohne Eintrag zählen nicht als „nichts gegessen“.",
+        "Tagessummen (kcal, Eiweiß) der letzten Tage, Schnitt über die Tage mit Einträgen, dazu Ziel, " +
+        "Gewichtstrend, Eiweiß- und Kalorienziel und der berechnete Verbrauch. Alle Zahlen sind gerechnet – " +
+        "nutze sie für Rückmeldungen, statt eigene Ziele zu erfinden. Tage ohne Eintrag zählen nicht als „nichts gegessen“.",
       inputSchema: { days: z.number().int().min(1).max(60).optional().describe("Standard 7") },
     },
     async ({ days }) =>
@@ -131,8 +133,26 @@ export function registerNutritionTools(server: McpServer, user: User): void {
             `- ${new Date(t.day * 1000).toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" })}: ` +
             (t.meals ? `${de(t.kcal)} kcal, ${de(t.proteinG)} g Eiweiß (${t.meals})` : "nichts eingetragen"),
         );
+        const goals = await goalsOverview(user);
+        const goalLines = [
+          `Ziel: ${goalLabel(goals.goal)}`,
+          goals.trendKg !== null
+            ? `Gewichtstrend ${de(goals.trendKg, 1)} kg` +
+              (goals.rate
+                ? `, ${de(goals.rate.kgPerWeek, 2)} kg/Woche (${de(goals.rate.pctPerWeek, 2)} %)` +
+                  (goals.rate.status ? ` – ${RATE_TEXT[goals.rate.status]}` : "")
+                : "")
+            : "Noch kein Gewicht.",
+          `Eiweißziel ${goals.protein.grams}–${goals.protein.upper} g/Tag` +
+            (goals.protein.adjusted ? ` (bezogen auf ${de(goals.protein.referenceKg, 1)} kg, Gewicht bei BMI 25)` : ""),
+          "kcal" in goals.expenditure
+            ? `Verbrauch ~${de(goals.expenditure.kcal)} kcal/Tag (aus Essen und Trend, ${goals.expenditure.loggedDays} Tage)`
+            : `Verbrauch: ${goals.expenditure.missing}`,
+          goals.calorieTarget ? `Kalorienziel ${de(goals.calorieTarget)} kcal/Tag` : "Kalorienziel: noch keins",
+        ];
         return [
           ...lines,
+          ...goalLines,
           average
             ? `Schnitt über ${average.days} abgeschlossene Tage mit Einträgen: ${de(average.kcal)} kcal, ${de(average.proteinG)} g Eiweiß`
             : "Noch kein abgeschlossener Tag mit Einträgen.",

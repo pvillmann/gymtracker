@@ -12,6 +12,7 @@ import { ConfirmSubmitButton } from "@/components/ConfirmSubmitButton";
 import { SubmitButton } from "@/components/SubmitButton";
 import { ErrorMessage, Field, Input, Select } from "@/components/ui";
 import { ACCENTS, GLASS_LEVELS, type AccentName, type GlassLevel } from "@/lib/appearance";
+import { GOALS } from "@/lib/goals";
 import type { FormState } from "@/lib/result";
 
 export function ProfileForm({
@@ -20,12 +21,14 @@ export function ProfileForm({
   heightCm,
   birthYear,
   sex,
+  goal,
 }: {
   name: string;
   bodyweightKg: number;
   heightCm: number | null;
   birthYear: number | null;
   sex: "m" | "f" | null;
+  goal: string | null;
 }) {
   const [state, formAction] = useActionState<FormState, FormData>(
     updateProfileAction,
@@ -52,7 +55,7 @@ export function ProfileForm({
         />
       </Field>
       <fieldset className="space-y-3 rounded-xl border border-line p-3">
-        <legend className="px-1 text-sm font-medium text-muted">Für die Körperfett-Schätzung (optional)</legend>
+        <legend className="px-1 text-sm font-medium text-muted">Körper und Ziel (optional)</legend>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Größe (cm)">
             <Input
@@ -71,6 +74,19 @@ export function ProfileForm({
             <option value="">keine Angabe</option>
             <option value="m">Mann</option>
             <option value="f">Frau</option>
+          </Select>
+        </Field>
+        <Field
+          label="Ziel"
+          hint="Tempo nach Helms et al. 2014: 0,5–1 % pro Woche erhält Muskeln besser. Daraus rechnet die App Kalorien- und Eiweißziel."
+        >
+          <Select name="goal" defaultValue={goal ?? ""}>
+            <option value="">keins</option>
+            {Object.entries(GOALS).map(([key, option]) => (
+              <option key={key} value={key}>
+                {option.label}
+              </option>
+            ))}
           </Select>
         </Field>
       </fieldset>

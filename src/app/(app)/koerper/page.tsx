@@ -8,6 +8,7 @@ import { FORMULA } from "@/lib/body-composition";
 import { BODY_METRICS, bodyMetricSummary } from "@/lib/body-metrics-view";
 import { formatDate, formatKg } from "@/lib/format";
 import { bodyFatEstimates, bodyMetricSeries } from "@/lib/services/body-metrics";
+import { RATE_TEXT, goalLabel, goalsOverview } from "@/lib/services/goals";
 
 export const metadata: Metadata = { title: "Körper · GymTracker" };
 
@@ -19,9 +20,10 @@ export default async function BodyPage() {
   // Server-Komponente: wird pro Anfrage gerendert, die Uhrzeit ist gewollt.
   // eslint-disable-next-line react-hooks/purity
   const halfYearAgo = Math.floor(Date.now() / 1000) - 183 * 86_400;
-  const [series, fatEstimates] = await Promise.all([
+  const [series, fatEstimates, goals] = await Promise.all([
     bodyMetricSeries(user.id, halfYearAgo),
     bodyFatEstimates(user, halfYearAgo),
+    goalsOverview(user),
   ]);
 
   const weightPoints: LinePoint[] = (series.find((s) => s.metric === "weight")?.points ?? []).map((p) => ({
@@ -55,6 +57,45 @@ export default async function BodyPage() {
         </div>
         <ButtonLink href="/wiegen">Wiegen</ButtonLink>
       </Card>
+
+      {goals.trendKg !== null ? (
+        <Card className="mb-4">
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="text-sm text-muted">Trend (geglättet)</p>
+            <p className="text-2xl font-bold tnum">{formatKg(goals.trendKg)} kg</p>
+          </div>
+          <p className="mt-1 text-sm tnum">
+            {goals.rate ? (
+              <>
+                {goals.rate.kgPerWeek > 0 ? "+" : ""}
+                {goals.rate.kgPerWeek.toLocaleString("de-DE")} kg/Woche ({goals.rate.pctPerWeek > 0 ? "+" : ""}
+                {goals.rate.pctPerWeek.toLocaleString("de-DE")} %)
+                {goals.rate.status ? (
+                  <strong
+                    className={
+                      goals.rate.status === "im-ziel"
+                        ? "text-up"
+                        : goals.rate.status === "zu-langsam"
+                          ? "text-muted"
+                          : "text-down"
+                    }
+                  >
+                    {" "}
+                    · {RATE_TEXT[goals.rate.status]}
+                  </strong>
+                ) : null}
+              </>
+            ) : (
+              <span className="text-faint">Tempo ab einer Woche mit mehreren Wiegungen.</span>
+            )}
+          </p>
+          <p className="mt-1 text-xs text-faint">
+            Ziel: {goalLabel(goals.goal)}
+            {goals.goal ? "" : " – im Profil einstellbar"}. Der Trend glättet Wasserschwankungen; einzelne Messungen
+            liegen oft 1–2 kg daneben.
+          </p>
+        </Card>
+      ) : null}
 
       {profileMissing && hasImpedance ? (
         <p className="mb-4 rounded-xl border border-line bg-surface-2 px-4 py-3 text-sm text-muted">

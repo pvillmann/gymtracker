@@ -46,6 +46,8 @@ export const users = sqliteTable(
     birthYear: integer("birth_year"),
     /** "m" oder "f" – die Formel kennt nur diese beiden; null = keine Angabe. */
     sex: text("sex").$type<"m" | "f">(),
+    /** Wochenziel fürs Gewicht, Schlüssel aus lib/goals.ts; null = keins gesetzt. */
+    goal: text("goal"),
     /** SHA-256 des Schlüssels für den Apple-Health-Import (nur dieser Endpunkt). */
     healthTokenHash: text("health_token_hash"),
     /** Wann zuletzt Daten aus Apple Health ankamen. */

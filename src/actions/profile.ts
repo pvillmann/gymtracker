@@ -15,6 +15,7 @@ import {
   verifyPassword,
 } from "@/lib/auth";
 import { isAccent, isGlassLevel } from "@/lib/appearance";
+import { isGoal } from "@/lib/goals";
 import { text } from "@/lib/formdata";
 import { fail, type FormState } from "@/lib/result";
 import { setAiSuggestions, setAnthropicKey } from "@/lib/services/ai-suggestions";
@@ -47,6 +48,7 @@ const profileInput = z.object({
       .nullable(),
   ),
   sex: z.preprocess((value) => (value === "m" || value === "f" ? value : null), z.enum(["m", "f"]).nullable()),
+  goal: z.preprocess((value) => (isGoal(value) ? value : null), z.string().nullable()),
 });
 
 export async function updateProfileAction(
@@ -60,6 +62,7 @@ export async function updateProfileAction(
     heightCm: text(formData, "heightCm"),
     birthYear: text(formData, "birthYear"),
     sex: text(formData, "sex"),
+    goal: text(formData, "goal"),
   });
   if (!parsed.success) {
     return fail(parsed.error.issues[0]?.message ?? "Eingaben unvollständig.");
@@ -74,6 +77,9 @@ export async function updateProfileAction(
   revalidatePath("/settings");
   revalidatePath("/stats");
   revalidatePath("/wiegen");
+  revalidatePath("/koerper");
+  revalidatePath("/ernaehrung");
+  revalidatePath("/");
   return { ok: true };
 }
 

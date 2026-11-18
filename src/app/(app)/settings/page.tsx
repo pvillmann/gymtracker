@@ -64,6 +64,7 @@ export default async function SettingsPage() {
             heightCm={user.heightCm}
             birthYear={user.birthYear}
             sex={user.sex}
+            goal={user.goal}
           />
         </Card>
       </section>
