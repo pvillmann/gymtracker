@@ -47,6 +47,15 @@ Homescreen.
 
 ## Was drin ist
 
+**Aufbau**
+- Unten fünf Tabs für den Alltag: **Heute** (Training starten, gegessen,
+  Gewicht), **Training** (Pläne), **Essen**, **Körper** (Gewicht,
+  Körperfett-Schätzung, Wiegen) und **Mehr**
+- Hinter „Mehr“: Verlauf, Statistik, Übungen, Maschinen, Studios,
+  Einstellungen, Administration und Abmelden
+- Einstellungen in vier Gruppen mit Sprungleiste: Profil & Körper, App,
+  Verbindungen (Claude/MCP, Apple Health, KI), Konto
+
 **Training mitschreiben**
 - Satz für Satz Gewicht und Wiederholungen erfassen – einfach eintippen,
   vorbelegt mit den Werten vom letzten Mal
@@ -157,6 +166,17 @@ Homescreen.
   Blau, deckend. Grün und Rot bleiben für besser/schlechter reserviert
 - Ist auf dem Gerät „Transparenz reduzieren“ oder „Kontrast erhöhen“ an,
   bleibt die Ebene deckend
+
+**Ernährung (erste Etappe)**
+- Mahlzeiten per Foto im Claude-Chat: Claude schätzt kcal und Eiweiß, fragt
+  nach Öl, Soßen und Getränken und trägt nach Bestätigung über MCP ein
+  (`log_meal`, `meals_on`, `delete_meal`, `nutrition_summary`). Fotos speichert
+  GymTracker nicht, nur Beschreibung und Zahlen
+- Seite „Ernährung“ mit den Mahlzeiten des Tages, Summe und Schnitt über die
+  Tage mit Einträgen; Eintragen von Hand geht auch. Tage ohne Eintrag zählen
+  nicht als „nichts gegessen“
+- Schätzungen aus Fotos liegen oft 20–50 % daneben – gleichbleibend schätzen
+  ist wichtiger als genau. Ziele (Eiweiß, Defizit) und Rückmeldung folgen
 
 **Fortschritt sehen**
 - Pro Übung: Verlaufskurve des besten Satzes, schwerstes Gewicht, bestes Training

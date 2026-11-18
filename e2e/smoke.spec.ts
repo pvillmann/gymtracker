@@ -55,7 +55,7 @@ test("Training aus dem Plan: Satz speichern, Pause läuft", async ({ page }) => 
   await card.getByRole("button", { name: "Bonus-Satz vorbelegen" }).click();
   await expect(card.locator("input[name=weightKg]")).toHaveValue("105");
 
-  for (const path of ["/", "/plans", "/exercises", "/equipment", "/history", "/stats", "/settings"]) {
+  for (const path of ["/", "/plans", "/exercises", "/equipment", "/history", "/stats", "/settings", "/koerper", "/ernaehrung", "/mehr"]) {
     await page.goto(path);
     await expect(page.locator("main")).toBeVisible();
   }
@@ -165,8 +165,8 @@ test("Apple Health: Schlüssel erzeugen, Export senden, Verlauf in der Statistik
   expect(response.status()).toBe(200);
   expect(await response.json()).toMatchObject({ imported: 3, bodyweightKg: 79.8 });
 
-  await page.goto("/stats");
-  await expect(page.getByRole("heading", { name: "Körper" })).toBeVisible();
+  await page.goto("/koerper");
+  await expect(page.getByRole("heading", { name: "Körper", exact: true })).toBeVisible();
   await expect(page.locator("main")).toContainText("Körpergewicht (kg)");
   await expect(page.locator("main")).toContainText("54 /min");
   expect(errors).toEqual([]);
@@ -367,7 +367,7 @@ test("Wiegen: simulierte QN-Waage – Handshake, Live-Gewicht, Ergebnis", async 
   await expect(page.locator("main")).toContainText("Letzte Messungen");
   await expect(page.locator("main")).toContainText("79,8 kg");
   // In der Statistik: Gewicht im Verlauf und die Schätzung mit Hinweis.
-  await page.goto("/stats");
+  await page.goto("/koerper");
   await expect(page.locator("main")).toContainText("Körperfett (Schätzung)");
   await expect(page.locator("main")).toContainText("Wu et al. 2015");
   expect(errors).toEqual([]);
@@ -388,4 +388,59 @@ test("Profil: Geschlecht bleibt nach dem Speichern ausgewählt", async ({ page }
   await expect(profile.getByText("Gespeichert.")).toBeVisible();
   await page.reload();
   await expect(page.locator("form", { hasText: "Geburtsjahr" }).getByLabel("Geschlecht")).toHaveValue("f");
+});
+
+test("Ernährung: von Hand eintragen, Summe auf Seite und Startseite, löschen", async ({ page }) => {
+  const errors = watchErrors(page);
+  page.on("dialog", (dialog) => void dialog.accept());
+  await page.goto("/login");
+  await login(page, "ben@e2e.local");
+  await page.goto("/ernaehrung");
+  await expect(page.locator("main")).toContainText("Noch nichts eingetragen");
+  await page.getByText("Von Hand eintragen").click();
+  await page.getByLabel("Was").fill("Skyr mit Beeren");
+  await page.getByLabel("kcal").fill("320");
+  await page.getByLabel("Eiweiß (g)").fill("30");
+  await page.getByRole("button", { name: "Eintragen" }).click();
+  await expect(page.locator("main")).toContainText("Skyr mit Beeren");
+  await expect(page.locator("main")).toContainText("320");
+  await expect(page.locator("main")).toContainText("30 g");
+
+  await page.goto("/");
+  await expect(page.locator("main")).toContainText("Heute gegessen");
+  await expect(page.locator("main")).toContainText("320 kcal");
+
+  await page.goto("/ernaehrung");
+  await page.getByRole("button", { name: "×" }).click();
+  await expect(page.locator("main")).toContainText("Noch nichts eingetragen");
+  expect(errors).toEqual([]);
+});
+
+test("Navigation: täglich unten, Rest hinter „Mehr“", async ({ page }) => {
+  const errors = watchErrors(page);
+  await page.goto("/login");
+  await login(page, "ben@e2e.local");
+  const nav = page.getByRole("navigation", { name: "Hauptnavigation" });
+  for (const label of ["Heute", "Training", "Essen", "Körper", "Mehr"]) {
+    await expect(nav.getByRole("link", { name: label })).toBeVisible();
+  }
+  await nav.getByRole("link", { name: "Körper" }).click();
+  await expect(page).toHaveURL("/koerper");
+  await expect(nav.getByRole("link", { name: "Körper" })).toHaveAttribute("aria-current", "page");
+  await page.getByRole("link", { name: "Wiegen", exact: true }).click();
+  await expect(page).toHaveURL("/wiegen");
+  // Wiegen gehört zu „Körper“.
+  await expect(nav.getByRole("link", { name: "Körper" })).toHaveAttribute("aria-current", "page");
+
+  await nav.getByRole("link", { name: "Mehr" }).click();
+  for (const label of ["Verlauf", "Statistik", "Übungen", "Maschinen", "Studios", "Einstellungen"]) {
+    await expect(page.locator("main").getByRole("link", { name: new RegExp(label) })).toBeVisible();
+  }
+  await page.locator("main").getByRole("link", { name: /Statistik/ }).click();
+  await expect(page).toHaveURL("/stats");
+  await expect(nav.getByRole("link", { name: "Mehr" })).toHaveAttribute("aria-current", "page");
+  // Admin-Eintrag nur für Administratoren.
+  await page.goto("/mehr");
+  await expect(page.locator("main")).not.toContainText("Administration");
+  expect(errors).toEqual([]);
 });

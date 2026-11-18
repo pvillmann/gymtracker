@@ -16,6 +16,7 @@ import {
   workoutCount,
 } from "@/lib/format";
 import { getActiveWorkout, listPlans, listWorkoutSummaries } from "@/lib/queries";
+import { dailyTotals } from "@/lib/services/nutrition";
 import { startOfWeek, weekStreak } from "@/lib/stats";
 import { trendOf } from "@/lib/training";
 
@@ -23,11 +24,13 @@ export const metadata: Metadata = { title: "GymTracker" };
 
 export default async function HomePage() {
   const user = await requireUser();
-  const [active, plans, summaries] = await Promise.all([
+  const [active, plans, summaries, food] = await Promise.all([
     getActiveWorkout(user.id),
     listPlans(user.id),
     listWorkoutSummaries(user.id),
+    dailyTotals(user.id, 1),
   ]);
+  const eatenToday = food[0];
 
   const usablePlans = plans.filter(
     (plan) => plan.archivedAt === null && plan.exerciseCount > 0,
@@ -116,6 +119,30 @@ export default async function HomePage() {
           <p className="mt-1 text-2xl font-bold tnum">{summaries.length}</p>
           <Link href="/stats" className="mt-1 block text-xs font-medium text-accent">
             Statistik ansehen →
+          </Link>
+        </Card>
+      </div>
+
+      <div className="mb-5 grid grid-cols-2 gap-3">
+        <Card>
+          <p className="text-xs text-muted">Heute gegessen</p>
+          <p className="mt-1 text-2xl font-bold tnum">
+            {Math.round(eatenToday.kcal).toLocaleString("de-DE")} <span className="text-sm font-semibold">kcal</span>
+          </p>
+          <p className="mt-1 text-xs text-faint tnum">{Math.round(eatenToday.proteinG)} g Eiweiß</p>
+          <Link href="/ernaehrung" className="mt-1 block text-xs font-medium text-accent">
+            Ernährung →
+          </Link>
+        </Card>
+        <Card>
+          <p className="text-xs text-muted">Körpergewicht</p>
+          <p className="mt-1 text-2xl font-bold tnum">
+            {user.bodyweightKg.toLocaleString("de-DE", { maximumFractionDigits: 1 })}{" "}
+            <span className="text-sm font-semibold">kg</span>
+          </p>
+          <p className="mt-1 text-xs text-faint">laut Profil</p>
+          <Link href="/wiegen" className="mt-1 block text-xs font-medium text-accent">
+            Wiegen →
           </Link>
         </Card>
       </div>
