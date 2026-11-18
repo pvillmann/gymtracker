@@ -6,7 +6,9 @@ import { randomBytes } from "node:crypto";
 import { db } from "@/db";
 import { bodyMetrics, users, type BodyMetric, type User } from "@/db/schema";
 import { sha256Hex } from "@/lib/hash";
+import { estimateBodyFat, type FatEstimate } from "@/lib/body-composition";
 import { CUMULATIVE, parseHealthExport, type HealthParseResult } from "@/lib/health-import";
+import { ServiceError } from "@/lib/services/errors";
 
 /**
  * Körperwerte: Gewicht von Hand und alles, was der Apple-Health-Import
@@ -117,4 +119,58 @@ export async function bodyMetricSeries(userId: string, since: number): Promise<M
     byMetric.set(row.metric, list);
   }
   return [...byMetric.entries()].map(([metric, points]) => ({ metric, points }));
+}
+
+/**
+ * Stabile Messung der Bluetooth-Waage: Gewicht und Widerstand mit demselben
+ * Zeitpunkt – so lässt sich die Körperfett-Schätzung später jederzeit aus
+ * beiden neu berechnen (z. B. nach einer Profiländerung).
+ */
+export async function recordScaleMeasurement(
+  user: User,
+  input: { weightKg: number; impedance: number | null },
+): Promise<{ measuredAt: number }> {
+  const { weightKg, impedance } = input;
+  if (!Number.isFinite(weightKg) || weightKg < 20 || weightKg > 400) {
+    throw new ServiceError("Das Gewicht wirkt unplausibel.");
+  }
+  const measuredAt = nowSeconds();
+  const rows: Array<typeof bodyMetrics.$inferInsert> = [
+    { userId: user.id, metric: "weight", measuredAt, value: Math.round(weightKg * 100) / 100, source: "Waage" },
+  ];
+  // 0 heißt: die Waage hat (noch) nicht gemessen, z. B. mit Socken.
+  if (impedance !== null && Number.isFinite(impedance) && impedance >= 150 && impedance <= 1200) {
+    rows.push({ userId: user.id, metric: "impedance", measuredAt, value: Math.round(impedance), source: "Waage" });
+  }
+  db.transaction((tx) => {
+    tx.insert(bodyMetrics).values(rows).onConflictDoNothing().run();
+    tx.update(users).set({ bodyweightKg: rows[0].value }).where(eq(users.id, user.id)).run();
+  });
+  return { measuredAt };
+}
+
+/**
+ * Körperfett-Schätzungen aus Waagen-Messungen: je Widerstand das Gewicht vom
+ * selben Zeitpunkt, gerechnet mit dem aktuellen Profil.
+ */
+export async function bodyFatEstimates(
+  user: User,
+  since: number,
+): Promise<Array<{ t: number; estimate: FatEstimate }>> {
+  const rows = await db
+    .select()
+    .from(bodyMetrics)
+    .where(and(eq(bodyMetrics.userId, user.id), gte(bodyMetrics.measuredAt, since)))
+    .orderBy(asc(bodyMetrics.measuredAt));
+  const weightAt = new Map(rows.filter((r) => r.metric === "weight").map((r) => [r.measuredAt, r.value]));
+  const profile = { heightCm: user.heightCm, birthYear: user.birthYear, sex: user.sex };
+  const out: Array<{ t: number; estimate: FatEstimate }> = [];
+  for (const row of rows) {
+    if (row.metric !== "impedance") continue;
+    const weightKg = weightAt.get(row.measuredAt);
+    if (weightKg === undefined) continue;
+    const estimate = estimateBodyFat({ weightKg, impedance: row.value, at: new Date(row.measuredAt * 1000) }, profile);
+    if (estimate) out.push({ t: row.measuredAt, estimate });
+  }
+  return out;
 }

@@ -343,9 +343,20 @@ test("Wiegen: simulierte QN-Waage – Handshake, Live-Gewicht, Ergebnis", async 
 
   await page.goto("/login");
   await login(page, "ben@e2e.local");
+  // Profil für die Körperfett-Schätzung.
+  await page.goto("/settings");
+  const profile = page.locator("form", { hasText: "Geburtsjahr" });
+  await profile.getByLabel("Größe (cm)").fill("180");
+  await profile.getByLabel("Geburtsjahr").fill("1990");
+  await profile.getByLabel("Geschlecht").selectOption("m");
+  await profile.getByRole("button", { name: "Speichern" }).click();
+  await expect(profile.getByText("Gespeichert.")).toBeVisible();
+
   await page.goto("/wiegen");
   await page.getByRole("button", { name: "Waage verbinden" }).click();
   await expect(page.getByRole("status")).toContainText("79,8 kg");
+  await expect(page.getByRole("status")).toContainText("Körperfett");
+  await expect(page.getByRole("status")).toContainText("Schätzung");
   await expect(page.getByRole("status")).toContainText("gemessen");
   const writes = await page.evaluate(() => (window as unknown as { __writes: string[] }).__writes);
   expect(writes[0]).toBe("FFE3:13 09 15 01 10 00 00 00 42");
@@ -355,5 +366,9 @@ test("Wiegen: simulierte QN-Waage – Handshake, Live-Gewicht, Ergebnis", async 
   await page.reload();
   await expect(page.locator("main")).toContainText("Letzte Messungen");
   await expect(page.locator("main")).toContainText("79,8 kg");
+  // In der Statistik: Gewicht im Verlauf und die Schätzung mit Hinweis.
+  await page.goto("/stats");
+  await expect(page.locator("main")).toContainText("Körperfett (Schätzung)");
+  await expect(page.locator("main")).toContainText("Wu et al. 2015");
   expect(errors).toEqual([]);
 });

@@ -45,7 +45,13 @@ export default async function SettingsPage() {
           Profil
         </h2>
         <Card>
-          <ProfileForm name={user.name} bodyweightKg={user.bodyweightKg} />
+          <ProfileForm
+            name={user.name}
+            bodyweightKg={user.bodyweightKg}
+            heightCm={user.heightCm}
+            birthYear={user.birthYear}
+            sex={user.sex}
+          />
         </Card>
       </section>
 

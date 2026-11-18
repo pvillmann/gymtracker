@@ -176,6 +176,13 @@
       "when": 1794957571403,
       "tag": "0024_scale_captures",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1795004333944,
+      "tag": "0025_body_profile",
+      "breakpoints": true
     }
   ]
 }

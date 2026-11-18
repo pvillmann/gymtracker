@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
-import { saveScaleCaptureAction } from "@/actions/scale";
+import { saveScaleCaptureAction, saveScaleMeasurementAction } from "@/actions/scale";
+import type { FatEstimate } from "@/lib/body-composition";
 import { Button, cx } from "@/components/ui";
 import { configFrame, parseFrame, timeFrameFfe4, timeSyncFrame, toHex } from "@/lib/qn-scale";
 
@@ -81,6 +82,8 @@ export function ScaleRecorder() {
   const [liveKg, setLiveKg] = useState<number | null>(null);
   const [finalKg, setFinalKg] = useState<number | null>(null);
   const [stage, setStage] = useState<"connect" | "answer">("connect");
+  // Ergebnis der Übernahme in den Verlauf.
+  const [result, setResult] = useState<{ estimate: FatEstimate | null; profileMissing: boolean; error?: string } | null>(null);
   const chars = useRef(new Map<string, BtCharacteristic>());
   const qn = useRef<{ protocol: number; divisor: 10 | 100; configSentAt: number; tries: number; acked: boolean; done: boolean }>({
     protocol: 0,
@@ -217,6 +220,14 @@ export function ScaleRecorder() {
         setFinalKg(frame.kg);
         log("measurement", { kg: frame.kg, r1: frame.resistance1, r2: frame.resistance2 });
         void save();
+        // In den Verlauf übernehmen – Widerstand 0 heißt: nicht gemessen.
+        void saveScaleMeasurementAction({
+          weightKg: frame.kg,
+          impedance: frame.resistance1 > 0 ? frame.resistance1 : null,
+        }).then(
+          (r) => setResult({ estimate: r.estimate ?? null, profileMissing: Boolean(r.profileMissing), error: r.error }),
+          (error) => setResult({ estimate: null, profileMissing: false, error: String(error) }),
+        );
       }
     } else if (frame.kind === "invalid") {
       log("info", { text: `Frame nicht lesbar: ${frame.reason}` });
@@ -240,6 +251,7 @@ export function ScaleRecorder() {
     setLiveKg(null);
     setFinalKg(null);
     setStage("connect");
+    setResult(null);
     chars.current.clear();
     qn.current = { protocol: 0, divisor: 100, configSentAt: 0, tries: 0, acked: false, done: false };
     setSaved(null);
@@ -411,6 +423,26 @@ export function ScaleRecorder() {
           <p className={cx("mt-2 text-sm font-medium", status === "error" ? "text-down" : "text-muted")}>
             {headline}
           </p>
+          {result?.error ? <p className="mt-2 text-sm text-down">Nicht übernommen: {result.error}</p> : null}
+          {result?.estimate ? (
+            <p className="mt-3 text-sm text-muted">
+              Körperfett{" "}
+              <strong className="text-fg tnum">
+                ~{result.estimate.fatPercent.toLocaleString("de-DE")} %
+              </strong>{" "}
+              <span className="text-faint">
+                (Schätzung, ± {result.estimate.spreadPercent.toLocaleString("de-DE")} Prozentpunkte)
+              </span>
+            </p>
+          ) : result?.profileMissing ? (
+            <p className="mt-3 text-xs text-faint">
+              Für eine Körperfett-Schätzung Größe, Geburtsjahr und Geschlecht in den{" "}
+              <a href="/settings" className="text-accent">
+                Einstellungen
+              </a>{" "}
+              eintragen.
+            </p>
+          ) : null}
         </div>
 
         <ol className="flex items-start justify-between gap-1.5 text-[11px] leading-tight font-semibold">

@@ -456,7 +456,13 @@ Jahresexport mehrere MB. GymTracker selbst nimmt bis 20 MB an.
 schreibt roh mit, was sie sendet (Tabelle `scale_captures`, per MCP
 `scale_captures`). Noch ohne Auswertung – erst sehen, was ankommt. Auf dem
 iPhone kann Safari kein Web Bluetooth; dort im Browser Bluefy öffnen.
-Getestet ist die Seite nur gegen eine simulierte Waage.
+Feelfit-Waagen (QN-Scale) brauchen einen kurzen Handshake, den die Seite
+selbst führt (`src/lib/qn-scale.ts`). Die stabile Messung landet danach im
+Gewichtsverlauf, zusammen mit dem Widerstand der Waage. Sind im Profil Größe,
+Geburtsjahr und Geschlecht eingetragen, zeigt GymTracker daraus Körperfett als
+**Schätzung** nach Wu et al. 2015 (Fuß-zu-Fuß, 50 kHz, gegen DXA geprüft;
+`src/lib/body-composition.ts`). Die Formel ist für Europäer nicht validiert
+und absolut etwa ± 4 Prozentpunkte unsicher – aussagekräftig ist der Verlauf.
 
 ## Anbindung an Claude (MCP)
 

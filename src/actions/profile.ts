@@ -32,6 +32,21 @@ const profileInput = z.object({
       .min(20, "Das Körpergewicht wirkt zu niedrig.")
       .max(400, "Das Körpergewicht wirkt zu hoch."),
   ),
+  // Optional, nur für die Körperfett-Schätzung der Waage.
+  heightCm: z.preprocess(
+    (value) => (typeof value === "string" && value.trim() ? Number(value.trim().replace(",", ".")) : null),
+    z.number().min(120, "Die Größe wirkt zu klein.").max(230, "Die Größe wirkt zu groß.").nullable(),
+  ),
+  birthYear: z.preprocess(
+    (value) => (typeof value === "string" && value.trim() ? Number(value.trim()) : null),
+    z
+      .number()
+      .int("Bitte nur das Jahr, z. B. 1990.")
+      .min(1920, "Das Geburtsjahr wirkt zu früh.")
+      .max(new Date().getFullYear() - 10, "Das Geburtsjahr wirkt zu spät.")
+      .nullable(),
+  ),
+  sex: z.preprocess((value) => (value === "m" || value === "f" ? value : null), z.enum(["m", "f"]).nullable()),
 });
 
 export async function updateProfileAction(
@@ -42,6 +57,9 @@ export async function updateProfileAction(
   const parsed = profileInput.safeParse({
     name: text(formData, "name"),
     bodyweightKg: text(formData, "bodyweightKg"),
+    heightCm: text(formData, "heightCm"),
+    birthYear: text(formData, "birthYear"),
+    sex: text(formData, "sex"),
   });
   if (!parsed.success) {
     return fail(parsed.error.issues[0]?.message ?? "Eingaben unvollständig.");
@@ -55,6 +73,7 @@ export async function updateProfileAction(
 
   revalidatePath("/settings");
   revalidatePath("/stats");
+  revalidatePath("/wiegen");
   return { ok: true };
 }
 
