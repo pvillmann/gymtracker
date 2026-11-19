@@ -46,8 +46,9 @@ Alles, was GymTracker kann – nach Bereichen. Zurück zum [README](../README.md
   verfeinert (etwa ein Deload nach Stillstand). Der Vorschlag entsteht im
   Hintergrund, bis dahin gilt die Regel; er bleibt höchstens einen Sprung über
   der Regel und zwei unter dem letzten Mal. Gesendet werden je Übung Name,
-  Zielbereich, Plannotiz und die letzten drei Trainings daran – keine Namen
-  oder E-Mail. Der Schlüssel wird vor dem Speichern geprüft, liegt nur
+  Zielbereich, Plannotiz, die letzten drei Trainings an der Maschine und das
+  letzte Training der Übung an einer anderen Maschine (nur als Beleg, dass
+  keine Pause war – die Kilos dort sind andere) – keine Namen oder E-Mail. Der Schlüssel wird vor dem Speichern geprüft, liegt nur
   verschlüsselt in der Datenbank (AES-256-GCM, siehe `SECRET_KEY`) und die
   Kosten laufen über das eigene Anthropic-Konto
 - Scheiben-Rechner: An Scheiben-Maschinen steht unter dem Gewicht, was pro
