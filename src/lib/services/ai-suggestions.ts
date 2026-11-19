@@ -17,8 +17,9 @@ import { ServiceError } from "@/lib/services/errors";
  * seinen eigenen API-Schlüssel mit; ohne Schlüssel oder bei einem Fehler
  * gilt still die Regel aus lib/progression.ts.
  *
- * Datenschutz: Eingeschaltet gehen Name der Übung, Zielbereich und die
- * letzten drei Trainings an der Übung an die Anthropic-API – sonst nichts.
+ * Datenschutz: Eingeschaltet gehen Name der Übung, Zielbereich, die
+ * letzten drei Trainings an der Maschine und das letzte Training der Übung
+ * an einer anderen Maschine an die Anthropic-API – sonst nichts.
  */
 
 export const AI_MODEL = "claude-haiku-5-5";
@@ -94,6 +95,12 @@ export type AiRequest = {
   notes: string | null;
   rule: Suggestion;
   previousWeight: number;
+  /**
+   * Das letzte Training der Übung an einer anderen Maschine, falls jünger
+   * als das letzte hier – zeigt, dass keine Pause war (#68). Die Kilos sind
+   * dort andere und taugen nicht als Vergleich.
+   */
+  elsewhere: { machine: string; performedAt: number; sets: Array<{ weightKg: number; reps: number }> } | null;
 };
 
 const AiAnswer = z.object({
@@ -106,8 +113,11 @@ const SYSTEM = [
   "Du bist ein nüchterner Krafttrainer und schlägst für EINE Übung das heutige Arbeitsgewicht vor.",
   "Grundlage ist doppelte Progression: erst Wiederholungen bis zum oberen Ende des Zielbereichs, dann ein Gewichtssprung.",
   "Der Regelvorschlag ist ein solider Ausgangspunkt. Weiche nur ab, wenn der Verlauf es nahelegt:",
-  "Stillstand über mehrere Trainings (dann Deload um 1–2 Sprünge), lange Pause seit dem letzten Training,",
+  "Stillstand über mehrere Trainings (dann Deload um 1–2 Sprünge), lange Pause in der Übung,",
   "Einschätzung „am Limit“ oder eine Notiz (z. B. Schmerzen).",
+  "Eine Pause zählt nur, wenn die Übung insgesamt lange nicht trainiert wurde: Steht unter",
+  "„zuletzt_an_anderer_maschine“ ein jüngeres Training, war keine Pause – nur die Maschine war eine andere.",
+  "Deren Kilos sind nicht vergleichbar; das Gewicht kommt allein aus dem Verlauf dieser Maschine.",
   "Gewichte nur in ganzen Sprüngen der angegebenen Größe. Bei Gegengewicht ist WENIGER Gewicht die Steigerung.",
   "Antworte ausschließlich im vorgegebenen Format.",
 ].join(" ");
@@ -150,6 +160,14 @@ async function generate(user: User, apiKey: string, workoutId: string, request: 
     ziel: request.target,
     notiz: request.notes,
     letzte_trainings: sessions,
+    zuletzt_an_anderer_maschine: request.elsewhere
+      ? {
+          maschine: request.elsewhere.machine,
+          datum: new Date(request.elsewhere.performedAt * 1000).toISOString().slice(0, 10),
+          saetze: request.elsewhere.sets.map((set) => ({ gewicht: set.weightKg, wdh: set.reps })),
+          hinweis: "andere Maschine – Kilos nicht vergleichbar, zeigt nur, dass trainiert wurde",
+        }
+      : null,
     regelvorschlag: { gewicht: request.rule.weight, wdh: request.rule.reps, grund: request.rule.reason },
   };
 

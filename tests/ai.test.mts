@@ -101,6 +101,7 @@ test("Vorschlag: wird einmal angefragt, geklammert und gespeichert", async () =>
     notes: null,
     rule: { kind: "increase" as const, weight: 102.5, reps: [8, 8, 8], reason: "Regel" },
     previousWeight: 100,
+    elsewhere: { machine: "Beinpresse 2", performedAt: Math.floor(Date.now() / 1000) - 7 * 86_400, sets: [{ weightKg: 140, reps: 10 }] },
   };
   const before = seen.length;
   ai.requestAiSuggestions(keyed, workoutId, [request]);
@@ -114,6 +115,12 @@ test("Vorschlag: wird einmal angefragt, geklammert und gespeichert", async () =>
   assert.equal(cached.status, "ok");
   assert.equal(cached.weight, 105);
   assert.deepEqual(cached.reps, [8, 8, 8]);
+  // Training an anderer Maschine geht mit (#68) – als Beleg gegen „lange Pause“, nicht als Vergleich.
+  const input = JSON.parse((calls[0].body?.messages as Array<{ content: string }>)[0].content);
+  assert.equal(input.zuletzt_an_anderer_maschine.maschine, "Beinpresse 2");
+  assert.deepEqual(input.zuletzt_an_anderer_maschine.saetze, [{ gewicht: 140, wdh: 10 }]);
+  assert.match(input.zuletzt_an_anderer_maschine.hinweis, /nicht vergleichbar/);
+  assert.match(JSON.stringify(calls[0].body?.system), /keine Pause/);
   // Keine persönlichen Daten in der Anfrage.
   const sent = JSON.stringify(calls[0].body);
   assert.ok(!sent.includes(keyed.email));
@@ -138,6 +145,7 @@ test("Vorschlag: kaputte Antwort wird als fehlgeschlagen vermerkt", async () => 
       notes: null,
       rule: { kind: "reps", weight: 50, reps: [10], reason: "Regel" },
       previousWeight: 50,
+      elsewhere: null,
     },
   ]);
   const cached = await waitFor(async () => (await ai.cachedAiSuggestions(workoutId)).get(exerciseId));

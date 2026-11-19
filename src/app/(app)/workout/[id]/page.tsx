@@ -410,6 +410,18 @@ export default async function WorkoutPage({
                         notes: target?.notes ?? null,
                         rule,
                         previousWeight,
+                        elsewhere: elsewhere
+                          ? {
+                              machine: elsewhere.variant.equipmentId
+                                ? (equipmentById.get(elsewhere.variant.equipmentId)?.name ?? elsewhere.variant.name)
+                                : "ohne Gerät",
+                              performedAt: elsewhere.performance.performedAt,
+                              sets: setsOfKind(elsewhere.performance.sets, false).map((set) => ({
+                                weightKg: set.weightKg,
+                                reps: set.reps,
+                              })),
+                            }
+                          : null,
                       },
                     ]);
                     return rule;
