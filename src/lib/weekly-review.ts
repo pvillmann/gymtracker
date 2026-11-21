@@ -22,6 +22,8 @@ export type WeeklyFacts = {
     avgKcal: number | null;
     avgProteinG: number | null;
     proteinTargetG: number;
+    /** Untere Grenze der Spanne; fehlt in Rückblicken vor #70. */
+    proteinMinimumG?: number;
     daysBelowProtein: number;
     calorieTarget: number | null;
   };
@@ -74,9 +76,12 @@ export function weeklyHints(facts: WeeklyFacts): Hint[] {
   }
 
   if (nutrition.loggedDays >= 3 && nutrition.daysBelowProtein >= Math.ceil(nutrition.loggedDays / 2)) {
+    const minimum = nutrition.proteinMinimumG ?? nutrition.proteinTargetG;
     hints.push({
       kind: "nutrition",
-      text: `Eiweiß an ${nutrition.daysBelowProtein} von ${nutrition.loggedDays} Tagen unter Ziel (Ø ${de(nutrition.avgProteinG ?? 0)}\u00a0g statt ${nutrition.proteinTargetG}\u00a0g).`,
+      text:
+        `Eiweiß an ${nutrition.daysBelowProtein} von ${nutrition.loggedDays} Tagen unter dem Minimum von ${minimum}\u00a0g ` +
+        `(Ø ${de(nutrition.avgProteinG ?? 0)}\u00a0g, Ziel ${nutrition.proteinTargetG}\u00a0g).`,
     });
   }
 

@@ -50,9 +50,14 @@ test("Tempo-Status gegen das Ziel", () => {
 });
 
 test("Eiweiß: 1,6 g/kg, ab BMI 30 bezogen auf BMI 25", () => {
-  assert.deepEqual(proteinTarget(80, 180), { grams: 128, upper: 160, referenceKg: 80, adjusted: false });
+  assert.deepEqual(proteinTarget(80, 180), { grams: 128, upper: 160, target: 128, referenceKg: 80, adjusted: false });
   // 105,3 kg bei 178 cm = BMI 33 → Bezug 79,2 kg (BMI 25).
-  assert.deepEqual(proteinTarget(105.3, 178), { grams: 127, upper: 158, referenceKg: 79.2, adjusted: true });
+  assert.deepEqual(proteinTarget(105.3, 178), { grams: 127, upper: 158, target: 127, referenceKg: 79.2, adjusted: true });
+  // Abnehmziel (#70): oberes Ende als Ziel, untere Grenze bleibt Minimum. Halten und Aufbauen: untere Grenze.
+  assert.equal(proteinTarget(105.3, 178, "lose-0.5").target, 158);
+  assert.equal(proteinTarget(105.3, 178, "lose-0.5").grams, 127);
+  assert.equal(proteinTarget(105.3, 178, "maintain").target, 127);
+  assert.equal(proteinTarget(105.3, 178, "gain-0.25").target, 127);
   // Ohne Größe: tatsächliches Gewicht.
   assert.equal(proteinTarget(105.3, null).grams, 168);
 });
