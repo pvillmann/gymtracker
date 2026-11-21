@@ -473,7 +473,7 @@ test("Wochenrückblick: Karte auf „Heute“ mit Zahlen und Eiweiß-Hinweis", a
   await expect(card).toContainText("Wochenrückblick");
   await expect(card).toContainText("0 Trainings");
   await expect(card).toContainText("Ø 2.100 kcal (4 Tage)");
-  await expect(card).toContainText("Eiweiß an 4 von 4 Tagen unter Ziel");
+  await expect(card).toContainText("Eiweiß an 4 von 4 Tagen unter dem Minimum");
   await expect(card).toContainText("Die ganze Woche kein Training.");
   expect(errors).toEqual([]);
 });

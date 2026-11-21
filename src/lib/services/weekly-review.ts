@@ -134,8 +134,9 @@ export async function computeWeeklyFacts(user: User, weekStart: number, now = ne
       loggedDays: logged,
       avgKcal: logged ? Math.round(dayTotals.reduce((s, d) => s + d.kcal, 0) / logged) : null,
       avgProteinG: logged ? Math.round(dayTotals.reduce((s, d) => s + d.proteinG, 0) / logged) : null,
-      proteinTargetG: goals.protein.grams,
-      daysBelowProtein: dayTotals.filter((d) => d.proteinG < goals.protein.grams * 0.9).length,
+      proteinTargetG: goals.protein.target,
+      proteinMinimumG: goals.protein.grams,
+      daysBelowProtein: dayTotals.filter((d) => d.proteinG < goals.protein.grams).length,
       calorieTarget: goals.calorieTarget,
     },
     body: {

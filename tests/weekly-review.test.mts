@@ -41,11 +41,11 @@ test("Zu langsam: weniger essen", () => {
 
 test("Eiweiß, Datenlage, Stillstand und ausgefallenes Training", () => {
   const facts = base();
-  facts.nutrition = { ...facts.nutrition, loggedDays: 3, daysBelowProtein: 3, avgProteinG: 90 };
+  facts.nutrition = { ...facts.nutrition, loggedDays: 3, daysBelowProtein: 3, avgProteinG: 90, proteinTargetG: 158, proteinMinimumG: 127 };
   facts.training = { ...facts.training, sessions: 0, stalled: ["Kniebeuge", "Bankdrücken"] };
   const texts = weeklyHints(facts).map((h) => h.text);
   assert.match(texts[0], /Nur an 3 von 7 Tagen/);
-  assert.ok(texts.some((t) => /Eiweiß an 3 von 3 Tagen unter Ziel \(Ø 90\sg statt 127\sg\)/.test(t)));
+  assert.ok(texts.some((t) => /Eiweiß an 3 von 3 Tagen unter dem Minimum von 127\sg \(Ø 90\sg, Ziel 158\sg\)/.test(t)));
   assert.ok(texts.some((t) => /Kniebeuge, Bankdrücken/.test(t)));
   assert.ok(texts.includes("Die ganze Woche kein Training."));
 });

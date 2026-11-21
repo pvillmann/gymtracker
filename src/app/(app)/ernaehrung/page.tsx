@@ -57,10 +57,14 @@ export default async function NutritionPage() {
         <Progress
           label="Eiweiß heute"
           value={todayTotal.proteinG}
-          target={goals.protein.grams}
+          target={goals.protein.target}
           unit=" g"
           missing={null}
-          note={`Ziel ${goals.protein.grams}–${goals.protein.upper} g: 1,6–2,0 g je kg${
+          note={`${
+            goals.protein.target === goals.protein.upper
+              ? `Ziel ${goals.protein.target} g, mindestens ${goals.protein.grams} g – beim Abnehmen das obere Ende`
+              : `Ziel ${goals.protein.grams}–${goals.protein.upper} g`
+          }: 1,6–2,0 g je kg${
             goals.protein.adjusted ? ` von ${formatKg(goals.protein.referenceKg)} kg (Gewicht bei BMI 25)` : ""
           }.`}
         />

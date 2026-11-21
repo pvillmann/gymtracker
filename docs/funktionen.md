@@ -144,7 +144,8 @@ Waage und Apple Health: [Körperwerte](koerper.md).
 - Ziele aus Regeln (`src/lib/goals.ts`): Wochenziel im Profil (−1 bis
   +0,25 %/Woche, Helms et al. 2014), geglätteter Gewichtstrend und Tempo,
   Eiweiß 1,6–2,0 g/kg (Morton et al. 2018; ab BMI 30 bezogen auf das Gewicht
-  bei BMI 25 – eine Konvention), Verbrauch aus Essen und Trend ab 21 Tagen
+  bei BMI 25 – eine Konvention; beim Abnehmen ist das obere Ende das Ziel
+  und das untere das Minimum), Verbrauch aus Essen und Trend ab 21 Tagen
   mit mindestens drei von vier Tagen eingetragen, daraus das Kalorienziel
 - Wochenrückblick auf „Heute“ (montags für die Vorwoche, einmal berechnet
   und gespeichert): Trainings und Volumen gegen die Vorwoche, Übungen ohne

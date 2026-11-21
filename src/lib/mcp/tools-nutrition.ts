@@ -144,7 +144,8 @@ export function registerNutritionTools(server: McpServer, user: User): void {
                   (goals.rate.status ? ` – ${RATE_TEXT[goals.rate.status]}` : "")
                 : "")
             : "Noch kein Gewicht.",
-          `Eiweißziel ${goals.protein.grams}–${goals.protein.upper} g/Tag` +
+          `Eiweißziel ${goals.protein.target} g/Tag (Minimum ${goals.protein.grams} g, Spanne ${goals.protein.grams}–${goals.protein.upper} g` +
+            (goals.protein.target === goals.protein.upper ? ", im Defizit oberes Ende)" : ")") +
             (goals.protein.adjusted ? ` (bezogen auf ${de(goals.protein.referenceKg, 1)} kg, Gewicht bei BMI 25)` : ""),
           "kcal" in goals.expenditure
             ? `Verbrauch ~${de(goals.expenditure.kcal)} kcal/Tag (aus Essen und Trend, ${goals.expenditure.loggedDays} Tage)`
@@ -184,7 +185,8 @@ export function registerNutritionTools(server: McpServer, user: User): void {
             (training.stalled.length ? `; ohne Fortschritt: ${training.stalled.join(", ")}` : ""),
           nutrition.loggedDays
             ? `Ernährung: ${nutrition.loggedDays} Tage eingetragen, Ø ${de(nutrition.avgKcal ?? 0)} kcal, Ø ${de(nutrition.avgProteinG ?? 0)} g Eiweiß ` +
-              `(Ziel ${nutrition.proteinTargetG} g, ${nutrition.daysBelowProtein} Tage darunter)` +
+              `(Ziel ${nutrition.proteinTargetG} g, ${nutrition.daysBelowProtein} Tage unter dem Minimum` +
+              (nutrition.proteinMinimumG ? ` von ${nutrition.proteinMinimumG} g)` : ")") +
               (nutrition.calorieTarget ? `, Kalorienziel ${de(nutrition.calorieTarget)} kcal` : "")
             : "Ernährung: nichts eingetragen",
           body.kgPerWeek !== null

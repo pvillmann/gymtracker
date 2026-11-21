@@ -108,8 +108,17 @@ export function rateStatus(ratePctPerWeek: number, goal: GoalKey): RateStatus {
   return "im-ziel";
 }
 
-/** Eiweißziel in g/Tag: 1,6 g/kg (Spanne bis 2,0), ab BMI 30 bezogen auf BMI 25. */
-export function proteinTarget(weightKg: number, heightCm: number | null): { grams: number; upper: number; referenceKg: number; adjusted: boolean } {
+/**
+ * Eiweiß in g/Tag: Spanne 1,6–2,0 g/kg, ab BMI 30 bezogen auf BMI 25.
+ * `grams` ist das Minimum (untere Grenze), `target` das Ziel: Beim Abnehmen
+ * das obere Ende – im Defizit erhält mehr Eiweiß eher Muskeln und sättigt
+ * (ISSN, Aragon et al. 2017; #70) –, sonst die untere Grenze.
+ */
+export function proteinTarget(
+  weightKg: number,
+  heightCm: number | null,
+  goal: GoalKey | null = null,
+): { grams: number; upper: number; target: number; referenceKg: number; adjusted: boolean } {
   let referenceKg = weightKg;
   let adjusted = false;
   if (heightCm) {
@@ -119,7 +128,10 @@ export function proteinTarget(weightKg: number, heightCm: number | null): { gram
       adjusted = true;
     }
   }
-  return { grams: Math.round(referenceKg * 1.6), upper: Math.round(referenceKg * 2.0), referenceKg, adjusted };
+  const grams = Math.round(referenceKg * 1.6);
+  const upper = Math.round(referenceKg * 2.0);
+  const deficit = goal !== null && GOALS[goal].ratePct < 0;
+  return { grams, upper, target: deficit ? upper : grams, referenceKg, adjusted };
 }
 
 /**
