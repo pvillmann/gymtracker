@@ -48,7 +48,7 @@ export const config = {
   matcher: [
     {
       // API-Routen liefern kein HTML, statische Dateien brauchen keinen Nonce.
-      source: "/((?!api|_next/static|_next/image|favicon.ico|icon.svg|apple-icon.png|manifest.webmanifest).*)",
+      source: "/((?!api|_next/static|_next/image|favicon.ico|icon.svg|apple-icon.png|apple-touch-icon|manifest.webmanifest).*)",
       missing: [
         { type: "header", key: "next-router-prefetch" },
         { type: "header", key: "purpose", value: "prefetch" },
