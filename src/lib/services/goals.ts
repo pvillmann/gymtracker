@@ -78,7 +78,7 @@ export async function goalsOverview(user: User, now = new Date()): Promise<Goals
     trendKg,
     trend,
     rate,
-    protein: proteinTarget(weightKg, user.heightCm),
+    protein: proteinTarget(weightKg, user.heightCm, goal),
     expenditure,
     calorieTarget: "kcal" in expenditure && goal ? calorieTarget(expenditure.kcal, weightKg, goal, user.sex) : null,
   };
