@@ -477,3 +477,11 @@ test("Wochenrückblick: Karte auf „Heute“ mit Zahlen und Eiweiß-Hinweis", a
   await expect(card).toContainText("Die ganze Woche kein Training.");
   expect(errors).toEqual([]);
 });
+
+test("Icons: feste Pfade von Browsern liefern 200 statt 404 (#72)", async ({ request }) => {
+  for (const path of ["/favicon.ico", "/apple-touch-icon.png", "/apple-touch-icon-precomposed.png"]) {
+    const response = await request.get(path);
+    expect(response.status(), path).toBe(200);
+    expect(response.headers()["content-type"], path).toMatch(/image\//);
+  }
+});
