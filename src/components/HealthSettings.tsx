@@ -84,7 +84,7 @@ export function HealthSettings({
         Der Schlüssel kann nur Körperwerte schreiben, nichts lesen. Ein neuer macht den alten ungültig.
       </p>
       <p className="border-t border-line pt-3 text-muted">
-        Bluetooth-Waage direkt (Test):{" "}
+        Körperwaage per Bluetooth:{" "}
         <a href="/wiegen" className="font-semibold text-accent">
           Wiegen
         </a>{" "}

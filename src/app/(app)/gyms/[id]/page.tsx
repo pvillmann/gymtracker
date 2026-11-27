@@ -70,7 +70,7 @@ export default async function GymPage({ params }: { params: Promise<{ id: string
       />
 
       <section className="mb-6">
-        <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+        <h2 className="mb-2 px-1 text-sm font-semibold text-muted">
           Maschinen hier
         </h2>
         <Card className="p-1">
@@ -147,7 +147,7 @@ export default async function GymPage({ params }: { params: Promise<{ id: string
       </section>
 
       <section className="mb-6">
-        <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+        <h2 className="mb-2 px-1 text-sm font-semibold text-muted">
           Bearbeiten
         </h2>
         <Card>

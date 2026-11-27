@@ -51,7 +51,7 @@ export default async function HistoryPage() {
         <div className="space-y-5">
           {[...byMonth.entries()].map(([month, list]) => (
             <section key={month}>
-              <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+              <h2 className="mb-2 px-1 text-sm font-semibold text-muted">
                 {month}
               </h2>
               <Card className="p-1">

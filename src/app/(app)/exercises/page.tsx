@@ -87,7 +87,7 @@ export default async function ExercisesPage() {
         <div className="space-y-5">
           {[...byGroup.entries()].map(([group, list]) => (
             <section key={group}>
-              <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+              <h2 className="mb-2 px-1 text-sm font-semibold text-muted">
                 {group}
               </h2>
               <Card className="p-1">
@@ -135,7 +135,7 @@ export default async function ExercisesPage() {
 
       {archived.length > 0 ? (
         <details className="mt-6">
-          <summary className="cursor-pointer px-1 text-xs font-bold tracking-wider text-faint uppercase">
+          <summary className="cursor-pointer px-1 text-sm font-semibold text-muted">
             Archiviert ({archived.length})
           </summary>
           <Card className="mt-2 p-1">

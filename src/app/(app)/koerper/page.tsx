@@ -144,19 +144,23 @@ export default async function BodyPage() {
             <Card as="li" key={tile.metric}>
               <p className="text-xs text-muted">{BODY_METRICS[tile.metric].label}</p>
               <p className="mt-0.5 font-bold tnum">{tile.value}</p>
-              {tile.detail ? <p className="text-xs text-faint tnum">{tile.detail}</p> : null}
+              {tile.average ? <p className="mt-1 text-xs text-faint tnum">{tile.average}</p> : null}
+              {tile.change ? <p className="text-xs text-faint tnum">{tile.change}</p> : null}
             </Card>
           ))}
         </ul>
       ) : null}
 
-      <p className="mb-6 px-1 text-xs text-faint">
-        Weitere Werte (Ruhepuls, HRV, Schlaf …) kommen über den{" "}
-        <Link href="/settings#apple-health" className="text-accent">
-          Apple-Health-Import
-        </Link>
-        .
-      </p>
+      {/* Nur solange noch keine Health-Werte da sind – sonst stünde der Hinweis unter genau diesen Werten. */}
+      {tiles.some((tile) => ["resting_hr", "hrv", "sleep", "steps", "active_energy"].includes(tile.metric)) ? null : (
+        <p className="mb-6 px-1 text-xs text-faint">
+          Ruhepuls, HRV, Schlaf und Schritte kommen über den{" "}
+          <Link href="/settings#apple-health" className="text-accent">
+            Apple-Health-Import
+          </Link>
+          .
+        </p>
+      )}
     </>
   );
 }

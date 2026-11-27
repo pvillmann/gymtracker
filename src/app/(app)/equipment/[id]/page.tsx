@@ -89,7 +89,7 @@ export default async function EquipmentDetailPage({
       />
 
       <section className="mb-6">
-        <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+        <h2 className="mb-2 px-1 text-sm font-semibold text-muted">
           Fotos
         </h2>
         <Card className="space-y-4">
@@ -138,7 +138,7 @@ export default async function EquipmentDetailPage({
       </section>
 
       <section className="mb-6">
-        <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+        <h2 className="mb-2 px-1 text-sm font-semibold text-muted">
           Steht in Studios
         </h2>
         <Card className="p-1">
@@ -186,7 +186,7 @@ export default async function EquipmentDetailPage({
       </section>
 
       <section className="mb-6">
-        <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+        <h2 className="mb-2 px-1 text-sm font-semibold text-muted">
           Passt zu Übungen
         </h2>
         <Card className="p-1">
@@ -237,7 +237,7 @@ export default async function EquipmentDetailPage({
       </section>
 
       <section className="mb-6">
-        <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+        <h2 className="mb-2 px-1 text-sm font-semibold text-muted">
           Deine Übungen an diesem Gerät
         </h2>
         <Card className="p-1">
@@ -263,7 +263,7 @@ export default async function EquipmentDetailPage({
       </section>
 
       <section className="mb-6">
-        <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+        <h2 className="mb-2 px-1 text-sm font-semibold text-muted">
           Bearbeiten
         </h2>
         <EquipmentForm

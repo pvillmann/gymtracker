@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { cx } from "@/components/ui";
+import { niceScale } from "@/lib/chart-scale";
 
 /** Misst die tatsächliche Containerbreite, damit Punkte und Linien nicht verzerren. */
 function useContainerWidth<T extends HTMLElement>() {
@@ -339,12 +340,14 @@ export function BarChart({
   const plotHeight = HEIGHT - PAD.top - PAD.bottom;
   // Balken starten immer bei 0 – eine abgeschnittene Achse würde Unterschiede
   // dramatischer aussehen lassen, als sie sind.
-  const max = Math.max(...data.map((d) => d.value), 1);
+  const { max, ticks } = niceScale(
+    Math.max(...data.map((d) => d.value), 0),
+    { integer: data.every((d) => Number.isInteger(d.value)) },
+  );
   const slot = plotWidth / Math.max(data.length, 1);
   // 2px Abstand zwischen den Balken, wie in den Diagramm-Regeln vorgesehen.
   const barWidth = Math.max(4, Math.min(slot - 2, 44));
 
-  const ticks = [max, max / 2, 0];
   const activeDatum = active === null ? null : data[active];
   const xOf = (i: number) => PAD.left + i * slot + slot / 2;
 
@@ -378,7 +381,7 @@ export function BarChart({
                   fill="var(--color-faint)"
                   fontSize={11}
                 >
-                  {Math.round(value)}
+                  {value.toLocaleString("de-DE")}
                 </text>
               </g>
             ))}

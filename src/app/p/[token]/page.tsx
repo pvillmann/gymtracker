@@ -39,7 +39,7 @@ export default async function SharedPlanPage({ params }: { params: Promise<{ tok
 
   return (
     <main className="mx-auto w-full max-w-2xl px-5 py-8">
-      <p className="mb-1 text-xs font-bold tracking-wider text-faint uppercase">
+      <p className="mb-1 text-sm font-semibold text-muted">
         <span aria-hidden="true">🏋️</span> Geteilter Trainingsplan
       </p>
       <h1 className="text-2xl font-bold tracking-tight">{plan.name}</h1>

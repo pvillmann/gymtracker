@@ -73,7 +73,7 @@ export default async function SettingsPage() {
       <div id="app" className="scroll-mt-20">
         <h2 className="mt-2 mb-3 text-lg font-bold">App</h2>
       <section className="mb-6">
-        <h3 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+        <h3 className="mb-2 px-1 text-sm font-semibold text-muted">
           Darstellung
         </h3>
         <Card>
@@ -84,7 +84,7 @@ export default async function SettingsPage() {
         </Card>
       </section>
       <section className="mb-6">
-        <h3 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+        <h3 className="mb-2 px-1 text-sm font-semibold text-muted">
           Benachrichtigungen
         </h3>
         <Card>
@@ -96,7 +96,7 @@ export default async function SettingsPage() {
       <div id="verbindungen" className="scroll-mt-20">
         <h2 className="mt-2 mb-3 text-lg font-bold">Verbindungen</h2>
       <section className="mb-6">
-        <h3 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+        <h3 className="mb-2 px-1 text-sm font-semibold text-muted">
           Zugriff für Claude (MCP)
         </h3>
         <Card>
@@ -114,7 +114,7 @@ export default async function SettingsPage() {
         </Card>
       </section>
       <section id="apple-health" className="mb-6 scroll-mt-20">
-        <h3 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+        <h3 className="mb-2 px-1 text-sm font-semibold text-muted">
           Apple Health
         </h3>
         <Card>
@@ -126,7 +126,7 @@ export default async function SettingsPage() {
         </Card>
       </section>
       <section className="mb-6">
-        <h3 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+        <h3 className="mb-2 px-1 text-sm font-semibold text-muted">
           KI-Vorschläge (Claude Haiku)
         </h3>
         <Card>
@@ -138,7 +138,7 @@ export default async function SettingsPage() {
       <div id="konto" className="scroll-mt-20">
         <h2 className="mt-2 mb-3 text-lg font-bold">Konto</h2>
       <section className="mb-6">
-        <h3 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+        <h3 className="mb-2 px-1 text-sm font-semibold text-muted">
           Passwort
         </h3>
         <Card>
@@ -147,7 +147,7 @@ export default async function SettingsPage() {
       </section>
       {userIsAdmin ? (
         <section className="mb-6">
-          <h3 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+          <h3 className="mb-2 px-1 text-sm font-semibold text-muted">
             Administration
           </h3>
           <Card>
@@ -168,7 +168,7 @@ export default async function SettingsPage() {
         </SubmitButton>
       </form>
       <section>
-        <h3 className="mb-2 px-1 text-xs font-bold tracking-wider text-down/80 uppercase">
+        <h3 className="mb-2 px-1 text-sm font-semibold text-down">
           Konto löschen
         </h3>
         <Card className="border-down/30 bg-down/5">

@@ -139,7 +139,7 @@ export default async function StatsPage() {
       </div>
 
       <section className="mb-4">
-        <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+        <h2 className="mb-2 px-1 text-sm font-semibold text-muted">
           Fakten zum Angeben
         </h2>
         <ul className="space-y-2">
@@ -177,7 +177,7 @@ export default async function StatsPage() {
 
       {topExercises.length > 0 ? (
         <section className="mb-4">
-          <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+          <h2 className="mb-2 px-1 text-sm font-semibold text-muted">
             Top-Übungen nach Volumen
           </h2>
           <Card>
@@ -188,7 +188,7 @@ export default async function StatsPage() {
 
       {muscleWeeks.length > 0 ? (
         <section className="mb-4">
-          <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+          <h2 className="mb-2 px-1 text-sm font-semibold text-muted">
             Arbeitssätze pro Muskelgruppe
           </h2>
           <Card>
@@ -212,7 +212,7 @@ export default async function StatsPage() {
 
       {muscleGroups.length > 1 ? (
         <section className="mb-4">
-          <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+          <h2 className="mb-2 px-1 text-sm font-semibold text-muted">
             Verteilung nach Muskelgruppe
           </h2>
           <Card>

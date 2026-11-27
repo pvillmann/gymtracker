@@ -324,7 +324,7 @@ export function registerReadTools(server: McpServer, user: User): void {
               ]
             : []),
           ...(body.length
-            ? ["Körperwerte (letzter Wert):", ...body.map((b) => `- ${BODY_METRICS[b.metric].label}: ${b.value}${b.detail ? ` (${b.detail})` : ""}`)]
+            ? ["Körperwerte (letzter Wert):", ...body.map((b) => `- ${BODY_METRICS[b.metric].label}: ${b.value}${b.average || b.change ? ` (${[b.average, b.change].filter(Boolean).join(", ")})` : ""}`)]
             : []),
         ].join("\n");
       }),

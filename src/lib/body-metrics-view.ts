@@ -18,7 +18,14 @@ export const BODY_METRICS: Record<BodyMetric, { label: string; format: (v: numbe
 const ORDER: BodyMetric[] = ["weight", "body_fat", "lean_mass", "resting_hr", "hrv", "sleep", "steps", "active_energy"];
 const WEEK = 7 * 86_400;
 
-export type BodyTile = { metric: BodyMetric; value: string; detail: string | null };
+export type BodyTile = {
+  metric: BodyMetric;
+  value: string;
+  /** „Ø 7 Tage 79,9 kg“ */
+  average: string | null;
+  /** „−0,9 kg in 4 Wochen“ – Wochenschnitt gegen den vor vier Wochen. */
+  change: string | null;
+};
 
 /**
  * Kacheln: letzter Wert, darunter der Schnitt der letzten sieben Tage und
@@ -38,12 +45,10 @@ export function bodyMetricSummary(series: MetricSeries[]): BodyTile[] {
     };
     const recent = avg(last.t - WEEK, last.t);
     const before = avg(last.t - 5 * WEEK, last.t - 4 * WEEK);
-    let detail: string | null = recent !== null && points.length > 1 ? `Ø 7 Tage ${format(recent)}` : null;
-    if (recent !== null && before !== null) {
-      const diff = recent - before;
-      detail += ` · ${diff >= 0 ? "+" : "−"}${format(Math.abs(diff))} zu vor 4 Wochen`;
-    }
-    tiles.push({ metric, value: format(last.value), detail });
+    const average = recent !== null && points.length > 1 ? `Ø 7 Tage ${format(recent)}` : null;
+    const diff = recent !== null && before !== null ? recent - before : null;
+    const change = diff !== null ? `${diff >= 0 ? "+" : "−"}${format(Math.abs(diff))} in 4 Wochen` : null;
+    tiles.push({ metric, value: format(last.value), average, change });
   }
   return tiles;
 }

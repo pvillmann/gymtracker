@@ -77,11 +77,12 @@ export default async function NutritionPage() {
       </Card>
 
       <section className="mb-4">
-        <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">Heute</h2>
+        {/* Überschrift nur über einer Liste – über dem leeren Zustand sagt sie nichts. */}
+        {meals.length > 0 ? <h2 className="mb-2 px-1 text-sm font-semibold text-muted">Mahlzeiten heute</h2> : null}
         {meals.length === 0 ? (
           <EmptyState
             title="Noch nichts eingetragen"
-            description="Schick Claude im Chat ein Foto deiner Mahlzeit – mit dem GymTracker-MCP trägt er sie nach deiner Bestätigung ein."
+            description="Schick Claude im Chat ein Foto deiner Mahlzeit oder trag sie unten von Hand ein."
           />
         ) : (
           <Card className="divide-y divide-line p-0">
@@ -115,8 +116,7 @@ export default async function NutritionPage() {
       </details>
 
       <p className="mb-6 px-1 text-xs text-faint">
-        Schätzungen aus Fotos liegen oft 20–50 % daneben. Für den Verlauf zählt, dass gleichbleibend geschätzt wird –
-        Ziele und Rückmeldung kommen in den nächsten Schritten.
+        Schätzungen aus Fotos liegen oft 20–50 % daneben. Für den Verlauf zählt, dass gleichbleibend geschätzt wird.
       </p>
     </>
   );
