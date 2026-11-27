@@ -116,7 +116,7 @@ test("Darstellung: Standard Blau und deckend, pro Konto umstellbar", async ({ pa
   await page.goto("/plans");
   await expect(app).toHaveAttribute("data-glass", "medium");
   expect(await app.evaluate((el) => getComputedStyle(el).getPropertyValue("--color-accent").trim())).toBe("#a78bfa");
-  expect(await page.locator("nav ul").evaluate((el) => getComputedStyle(el).backdropFilter)).toContain("blur");
+  expect(await page.locator("nav ul.glass").evaluate((el) => getComputedStyle(el).backdropFilter)).toContain("blur");
   expect(errors).toEqual([]);
 });
 

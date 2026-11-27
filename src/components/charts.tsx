@@ -204,7 +204,7 @@ export function LineChart({
                   fill="var(--color-faint)"
                   fontSize={11}
                 >
-                  {value.toLocaleString("de-DE")}
+                  {Math.round(value)}
                 </text>
               </g>
             ))}
@@ -381,7 +381,7 @@ export function BarChart({
                   fill="var(--color-faint)"
                   fontSize={11}
                 >
-                  {Math.round(value)}
+                  {value.toLocaleString("de-DE")}
                 </text>
               </g>
             ))}

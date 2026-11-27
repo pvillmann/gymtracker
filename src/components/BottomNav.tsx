@@ -89,6 +89,71 @@ const items: Item[] = [
   },
 ];
 
+// Nur am Desktop zusätzlich sichtbar (#76): Dort ist Platz, und Pläne,
+// Verlauf und Statistik sind die Seiten, für die man am Rechner sitzt.
+const secondary = [
+  { href: "/history", label: "Verlauf" },
+  { href: "/stats", label: "Statistik" },
+  { href: "/exercises", label: "Übungen" },
+  { href: "/settings", label: "Einstellungen" },
+];
+
+const isActive = (pathname: string, match: string[]) =>
+  match.some((path) => (path === "/" ? pathname === "/" : pathname === path || pathname.startsWith(`${path}/`)));
+
+/** Am Desktop (ab lg): feste Seitenleiste links statt der Kapsel unten. */
+export function SideNav() {
+  const pathname = usePathname();
+  return (
+    <nav aria-label="Hauptnavigation" className="fixed inset-y-0 left-0 z-40 hidden w-56 border-r border-line bg-surface lg:block">
+      <div className="flex h-14 items-center px-5">
+        <Link href="/" className="flex items-center gap-2 font-bold tracking-tight">
+          <span aria-hidden="true">🏋️</span> GymTracker
+        </Link>
+      </div>
+      <ul className="space-y-1 px-3 pt-2">
+        {items.map((item) => {
+          const active = isActive(pathname, item.href === "/mehr" ? ["/mehr"] : item.match);
+          return (
+            <li key={item.href}>
+              <Link
+                href={item.href}
+                aria-current={active ? "page" : undefined}
+                className={cx(
+                  "flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors",
+                  active ? "bg-accent/12 text-accent" : "text-muted hover:bg-surface-2 hover:text-fg",
+                )}
+              >
+                {item.icon}
+                {item.label}
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+      <ul className="mt-4 space-y-1 border-t border-line px-3 pt-4">
+        {secondary.map((item) => {
+          const active = isActive(pathname, [item.href]);
+          return (
+            <li key={item.href}>
+              <Link
+                href={item.href}
+                aria-current={active ? "page" : undefined}
+                className={cx(
+                  "block rounded-xl px-3 py-1.5 text-sm transition-colors",
+                  active ? "bg-accent/12 text-accent" : "text-faint hover:bg-surface-2 hover:text-fg",
+                )}
+              >
+                {item.label}
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
+  );
+}
+
 export function BottomNav() {
   const pathname = usePathname();
 
@@ -96,14 +161,13 @@ export function BottomNav() {
     <nav
       aria-label="Hauptnavigation"
       // Schwebende Kapsel über dem Inhalt, mit Abstand zum Home-Indikator.
-      className="fixed inset-x-3 z-40"
+      // Ab lg übernimmt die Seitenleiste.
+      className="fixed inset-x-3 z-40 lg:hidden"
       style={{ bottom: "calc(env(safe-area-inset-bottom) + 0.75rem)" }}
     >
       <ul className="glass mx-auto flex max-w-2xl rounded-full border px-1">
         {items.map((item) => {
-          const active = item.match.some((path) =>
-            path === "/" ? pathname === "/" : pathname === path || pathname.startsWith(`${path}/`),
-          );
+          const active = isActive(pathname, item.match);
 
           return (
             <li key={item.href} className="flex-1">
