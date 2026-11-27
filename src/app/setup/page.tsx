@@ -35,7 +35,7 @@ export default async function SetupPage() {
       {accounts.length > 0 ? (
         <>
           <section className="mb-6">
-            <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+            <h2 className="mb-2 px-1 text-sm font-semibold text-muted">
               Bestehendes Konto übernehmen
             </h2>
             <Card>
@@ -57,7 +57,7 @@ export default async function SetupPage() {
       ) : null}
 
       <section>
-        <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+        <h2 className="mb-2 px-1 text-sm font-semibold text-muted">
           Neues Konto anlegen
         </h2>
         <Card>

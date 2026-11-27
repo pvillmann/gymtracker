@@ -60,7 +60,7 @@ export default async function WeighPage() {
 
       {captures.length > 0 ? (
         <section className="mb-6">
-          <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">Letzte Messungen</h2>
+          <h2 className="mb-2 px-1 text-sm font-semibold text-muted">Letzte Messungen</h2>
           <Card className="divide-y divide-line p-0">
             {captures.map((capture) => {
               const measured = capture.events.find((e) => e.type === "measurement");

@@ -209,7 +209,7 @@ export default async function PlanDetailPage({
       )}
 
       <section className="mt-6">
-        <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+        <h2 className="mb-2 px-1 text-sm font-semibold text-muted">
           Übung hinzufügen
         </h2>
         <Card>
@@ -235,7 +235,7 @@ export default async function PlanDetailPage({
       </section>
 
       <section className="mt-6">
-        <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+        <h2 className="mb-2 px-1 text-sm font-semibold text-muted">
           Studio beim Start
         </h2>
         <Card>
@@ -270,7 +270,7 @@ export default async function PlanDetailPage({
       </section>
 
       <section className="mt-6">
-        <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+        <h2 className="mb-2 px-1 text-sm font-semibold text-muted">
           Teilen
         </h2>
         <Card className="space-y-3">

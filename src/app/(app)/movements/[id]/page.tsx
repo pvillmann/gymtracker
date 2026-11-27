@@ -109,7 +109,7 @@ export default async function MovementPage({ params }: { params: Promise<{ id: s
       <WgerAttribution movement={movement} className="-mt-3 mb-5 px-1 text-xs text-faint" />
 
       <section className="mb-6">
-        <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+        <h2 className="mb-2 px-1 text-sm font-semibold text-muted">
           Maschinen
         </h2>
         <Card className="p-1">
@@ -210,7 +210,7 @@ export default async function MovementPage({ params }: { params: Promise<{ id: s
       </section>
 
       <section className="mb-6">
-        <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+        <h2 className="mb-2 px-1 text-sm font-semibold text-muted">
           Bearbeiten
         </h2>
         <MovementForm

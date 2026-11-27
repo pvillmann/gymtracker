@@ -246,7 +246,7 @@ export default async function WorkoutDetailPage({
       </div>
 
       <section className="mt-6">
-        <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+        <h2 className="mb-2 px-1 text-sm font-semibold text-muted">
           Notiz
         </h2>
         <Card>
@@ -255,7 +255,7 @@ export default async function WorkoutDetailPage({
       </section>
 
       <section className="mb-6">
-        <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+        <h2 className="mb-2 px-1 text-sm font-semibold text-muted">
           Zeiten korrigieren
         </h2>
         <Card>

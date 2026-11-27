@@ -14,7 +14,7 @@ type Entry = { href: string; label: string; hint: string };
 function Group({ title, entries }: { title: string; entries: Entry[] }) {
   return (
     <section className="mb-5">
-      <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">{title}</h2>
+      <h2 className="mb-2 px-1 text-sm font-semibold text-muted">{title}</h2>
       <Card className="divide-y divide-line p-0">
         {entries.map((entry) => (
           <Link

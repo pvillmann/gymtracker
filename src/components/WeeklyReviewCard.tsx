@@ -24,7 +24,7 @@ export function WeeklyReviewCard({ review }: { review: WeeklyReview }) {
 
   return (
     <section className="mb-6" data-testid="weekly-review">
-      <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+      <h2 className="mb-2 px-1 text-sm font-semibold text-muted">
         Wochenrückblick {weekLabel(review.weekStart)}
       </h2>
       <Card>

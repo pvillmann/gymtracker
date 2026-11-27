@@ -82,7 +82,7 @@ export default async function EquipmentPage() {
 
       {archived.length > 0 ? (
         <details className="mt-6">
-          <summary className="cursor-pointer px-1 text-xs font-bold tracking-wider text-faint uppercase">
+          <summary className="cursor-pointer px-1 text-sm font-semibold text-muted">
             Archiviert ({archived.length})
           </summary>
           <Card className="mt-2 p-1">

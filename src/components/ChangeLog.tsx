@@ -10,7 +10,7 @@ export function ChangeLog({ entries }: { entries: ChangeEntry[] }) {
   if (entries.length === 0) return null;
   return (
     <details className="mb-6">
-      <summary className="cursor-pointer px-1 text-xs font-bold tracking-wider text-faint uppercase">
+      <summary className="cursor-pointer px-1 text-sm font-semibold text-muted">
         Änderungen ({entries.length})
       </summary>
       <Card className="mt-2 p-1">

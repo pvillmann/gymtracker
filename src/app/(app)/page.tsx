@@ -71,7 +71,7 @@ export default async function HomePage() {
         </Card>
       ) : (
         <section className="mb-6">
-          <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+          <h2 className="mb-2 px-1 text-sm font-semibold text-muted">
             Training starten
           </h2>
           {usablePlans.length === 0 ? (
@@ -123,7 +123,7 @@ export default async function HomePage() {
           <p className="text-xs text-muted">Trainings gesamt</p>
           <p className="mt-1 text-2xl font-bold tnum">{summaries.length}</p>
           <Link href="/stats" className="mt-1 block text-xs font-medium text-accent">
-            Statistik ansehen →
+            Statistik ansehen
           </Link>
         </Card>
       </div>
@@ -136,7 +136,7 @@ export default async function HomePage() {
           </p>
           <p className="mt-1 text-xs text-faint tnum">{Math.round(eatenToday.proteinG)} g Eiweiß</p>
           <Link href="/ernaehrung" className="mt-1 block text-xs font-medium text-accent">
-            Ernährung →
+            Ernährung
           </Link>
         </Card>
         <Card>
@@ -148,14 +148,14 @@ export default async function HomePage() {
           {/* Dieselbe Zahl wie auf „Körper“: der geglättete Trend, ohne Wiegung das Profil. */}
           <p className="mt-1 text-xs text-faint">{goals.trendKg !== null ? "Trend" : "laut Profil"}</p>
           <Link href="/wiegen" className="mt-1 block text-xs font-medium text-accent">
-            Wiegen →
+            Wiegen
           </Link>
         </Card>
       </div>
 
       {last ? (
         <section>
-          <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+          <h2 className="mb-2 px-1 text-sm font-semibold text-muted">
             Letztes Training
           </h2>
           <Card>

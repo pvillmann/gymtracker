@@ -169,7 +169,7 @@ export default async function ExerciseDetailPage({
 
       {exercise.machineSetup ? (
         <Card className="mb-4">
-          <p className="text-xs font-bold tracking-wider text-faint uppercase">
+          <p className="text-sm font-semibold text-muted">
             Einstellung
           </p>
           <p className="mt-1 whitespace-pre-line">{exercise.machineSetup}</p>
@@ -246,7 +246,7 @@ export default async function ExerciseDetailPage({
           ) : null}
 
           <section className="mb-6">
-            <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+            <h2 className="mb-2 px-1 text-sm font-semibold text-muted">
               Verlauf
             </h2>
             <Card className="p-1">
@@ -277,7 +277,7 @@ export default async function ExerciseDetailPage({
 
       {movement ? (
         <section className="mb-6">
-          <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+          <h2 className="mb-2 px-1 text-sm font-semibold text-muted">
             Andere Geräte für {movement.name}
           </h2>
           <WgerAttribution movement={movement} className="mb-2 px-1 text-xs text-faint" />
@@ -316,7 +316,7 @@ export default async function ExerciseDetailPage({
 
       {gyms.length > 0 ? (
         <section className="mb-6">
-          <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+          <h2 className="mb-2 px-1 text-sm font-semibold text-muted">
             Pro Studio
           </h2>
           <div className="space-y-2">
@@ -354,7 +354,7 @@ export default async function ExerciseDetailPage({
       ) : null}
 
       <section className="mb-6">
-        <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+        <h2 className="mb-2 px-1 text-sm font-semibold text-muted">
           Bearbeiten
         </h2>
         <VariantForm

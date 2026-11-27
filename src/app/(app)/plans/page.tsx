@@ -56,7 +56,7 @@ export default async function PlansPage() {
       )}
 
       <section className="mt-6">
-        <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+        <h2 className="mb-2 px-1 text-sm font-semibold text-muted">
           Neuer Plan
         </h2>
         <Card>

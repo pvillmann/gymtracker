@@ -473,7 +473,7 @@ export default async function WorkoutPage({
       {aiPending ? <AiRefresh /> : null}
 
       <section className="mt-6">
-        <h2 className="mb-2 px-1 text-xs font-bold tracking-wider text-faint uppercase">
+        <h2 className="mb-2 px-1 text-sm font-semibold text-muted">
           Übung ergänzen
         </h2>
         <Card>
