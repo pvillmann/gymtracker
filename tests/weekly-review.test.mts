@@ -47,6 +47,9 @@ test("Eiweiß, Datenlage, Stillstand und ausgefallenes Training", () => {
   assert.match(texts[0], /Nur an 3 von 7 Tagen/);
   assert.ok(texts.some((t) => /Eiweiß an 3 von 3 Tagen unter dem Minimum von 127\sg \(Ø 90\sg, Ziel 158\sg\)/.test(t)));
   assert.ok(texts.some((t) => /Kniebeuge, Bankdrücken/.test(t)));
+  // Ohne Abnehmziel ist das Ziel das Minimum – dann nicht doppelt nennen (#74).
+  const same = weeklyHints({ ...facts, nutrition: { ...facts.nutrition, proteinTargetG: 127, proteinMinimumG: 127 } }).map((h) => h.text);
+  assert.ok(same.some((t) => /unter dem Minimum von 127\sg \(Ø 90\sg\)\./.test(t)));
   assert.ok(texts.includes("Die ganze Woche kein Training."));
 });
 

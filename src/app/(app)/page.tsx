@@ -3,7 +3,6 @@ import Link from "next/link";
 
 import { startWorkoutAction } from "@/actions/workouts";
 import { SubmitButton } from "@/components/SubmitButton";
-import { TrendBadge } from "@/components/TrendBadge";
 import { ButtonLink, Card, EmptyState, PageHeader } from "@/components/ui";
 import { WeeklyReviewCard } from "@/components/WeeklyReviewCard";
 import { WorkoutClock } from "@/components/WorkoutClock";
@@ -17,21 +16,22 @@ import {
   workoutCount,
 } from "@/lib/format";
 import { getActiveWorkout, listPlans, listWorkoutSummaries } from "@/lib/queries";
+import { goalsOverview } from "@/lib/services/goals";
 import { dailyTotals } from "@/lib/services/nutrition";
 import { ensureWeeklyReview } from "@/lib/services/weekly-review";
 import { startOfWeek, weekStreak } from "@/lib/stats";
-import { trendOf } from "@/lib/training";
 
 export const metadata: Metadata = { title: "GymTracker" };
 
 export default async function HomePage() {
   const user = await requireUser();
-  const [active, plans, summaries, food, review] = await Promise.all([
+  const [active, plans, summaries, food, review, goals] = await Promise.all([
     getActiveWorkout(user.id),
     listPlans(user.id),
     listWorkoutSummaries(user.id),
     dailyTotals(user.id, 1),
     ensureWeeklyReview(user),
+    goalsOverview(user),
   ]);
   const eatenToday = food[0];
 
@@ -142,10 +142,11 @@ export default async function HomePage() {
         <Card>
           <p className="text-xs text-muted">Körpergewicht</p>
           <p className="mt-1 text-2xl font-bold tnum">
-            {user.bodyweightKg.toLocaleString("de-DE", { maximumFractionDigits: 1 })}{" "}
+            {(goals.trendKg ?? user.bodyweightKg).toLocaleString("de-DE", { maximumFractionDigits: 1 })}{" "}
             <span className="text-sm font-semibold">kg</span>
           </p>
-          <p className="mt-1 text-xs text-faint">laut Profil</p>
+          {/* Dieselbe Zahl wie auf „Körper“: der geglättete Trend, ohne Wiegung das Profil. */}
+          <p className="mt-1 text-xs text-faint">{goals.trendKg !== null ? "Trend" : "laut Profil"}</p>
           <Link href="/wiegen" className="mt-1 block text-xs font-medium text-accent">
             Wiegen →
           </Link>
@@ -170,18 +171,13 @@ export default async function HomePage() {
                 <div className="shrink-0 text-right">
                   <p className="font-bold tnum">{formatVolume(last.volumeKg)}</p>
                   {beforeLast && beforeLast.volumeKg > 0 ? (
-                    <div className="mt-1">
-                      <TrendBadge
-                        trend={trendOf(last.volumeKg, beforeLast.volumeKg)}
-                        label={`${last.volumeKg >= beforeLast.volumeKg ? "+" : "−"}${Math.round(
-                          Math.abs(
-                            ((last.volumeKg - beforeLast.volumeKg) /
-                              beforeLast.volumeKg) *
-                              100,
-                          ),
-                        )} %`}
-                      />
-                    </div>
+                    // Neutral, nicht rot/grün: Volumen ist keine Leistungsbewertung –
+                    // ein leichter Tag oder weniger Übungen sind kein Rückschritt.
+                    <p className="mt-1 text-xs text-muted tnum">
+                      {`${last.volumeKg >= beforeLast.volumeKg ? "+" : "−"}${Math.round(
+                        Math.abs(((last.volumeKg - beforeLast.volumeKg) / beforeLast.volumeKg) * 100),
+                      )} % zum Training davor`}
+                    </p>
                   ) : null}
                 </div>
               </div>

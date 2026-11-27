@@ -115,8 +115,7 @@ export default async function NutritionPage() {
       </details>
 
       <p className="mb-6 px-1 text-xs text-faint">
-        Schätzungen aus Fotos liegen oft 20–50 % daneben. Für den Verlauf zählt, dass gleichbleibend geschätzt wird –
-        Ziele und Rückmeldung kommen in den nächsten Schritten.
+        Schätzungen aus Fotos liegen oft 20–50 % daneben. Für den Verlauf zählt, dass gleichbleibend geschätzt wird.
       </p>
     </>
   );

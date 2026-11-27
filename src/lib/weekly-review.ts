@@ -81,7 +81,9 @@ export function weeklyHints(facts: WeeklyFacts): Hint[] {
       kind: "nutrition",
       text:
         `Eiweiß an ${nutrition.daysBelowProtein} von ${nutrition.loggedDays} Tagen unter dem Minimum von ${minimum}\u00a0g ` +
-        `(Ø ${de(nutrition.avgProteinG ?? 0)}\u00a0g, Ziel ${nutrition.proteinTargetG}\u00a0g).`,
+        `(Ø ${de(nutrition.avgProteinG ?? 0)}\u00a0g` +
+        // Ohne Abnehmziel sind Minimum und Ziel dasselbe – dann nicht doppelt nennen.
+        (nutrition.proteinTargetG !== minimum ? `, Ziel ${nutrition.proteinTargetG}\u00a0g).` : ")."),
     });
   }
 
